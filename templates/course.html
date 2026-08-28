@@ -28,8 +28,8 @@
                 <iframe class="w-full h-[600px] bg-white" src="https://view.officeapps.live.com/op/embed.aspx?src={{ request.host_url.rstrip('/') }}{{ course.content_url }}" title="{{ course.name }}"></iframe>
                 {% else %}
                 <div class="p-12 bg-slate-50/50 dark:bg-slate-900/50 text-center">
-                    <a href="{{ course.content_url }}" target="_blank" rel="noopener" class="btn-secondary inline-block">
-                        Open external resource <span aria-hidden="true">&nearr;</span>
+                    <a href="{{ course.content_url }}" target="_blank" rel="noopener" class="btn-secondary flex items-center justify-center w-12 h-12 mx-auto" title="Open external resource">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                     </a>
                 </div>
                 {% endif %}
@@ -43,9 +43,8 @@
                 </div>
                 {% else %}
                 <form method="post" action="{{ url_for('complete_course', course_id=course.id) }}">
-                    <button class="btn-primary flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                        Mark as completed
+                    <button class="btn-primary flex items-center justify-center w-12 h-12" title="Mark as completed">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
                     </button>
                 </form>
                 {% endif %}

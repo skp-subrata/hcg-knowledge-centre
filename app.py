@@ -84,6 +84,7 @@ def init_db():
 		if assignment_sql:
 			assignment_sql = assignment_sql[0]
 			if "courses_legacy" in assignment_sql:
+				
 				connection.execute("PRAGMA foreign_keys = OFF")
 				connection.execute("ALTER TABLE course_assignments RENAME TO assignments_legacy")
 				connection.execute("CREATE TABLE course_assignments (course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE, student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, status TEXT DEFAULT 'not_started', completed_at TEXT, PRIMARY KEY (course_id, student_id))")
@@ -114,6 +115,28 @@ def init_db():
 def seed_demo_data(connection):
 	"""Insert a small, repeatable dataset for local exploration."""
 	for name, username, role in (("Aarav Moderator", "aarav.moderator", "moderator"), ("Maya Student", "maya.student", "basic user"), ("Rohan Student", "rohan.student", "basic user")):
+		
+		# Migrate users table for profile fields
+		table_info = connection.execute("PRAGMA table_info(users)").fetchall()
+		columns = [col['name'] for col in table_info]
+		if 'email' not in columns:
+			connection.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''")
+			connection.execute("ALTER TABLE users ADD COLUMN phone_number TEXT DEFAULT ''")
+			connection.execute("ALTER TABLE users ADD COLUMN profile_picture TEXT DEFAULT ''")
+
+		
+		# Migrate courses table for new fields
+		courses_info = connection.execute("PRAGMA table_info(courses)").fetchall()
+		course_cols = [col['name'] for col in courses_info]
+		if 'tags' not in course_cols:
+			connection.execute("ALTER TABLE courses ADD COLUMN tags TEXT DEFAULT ''")
+		if 'duration_minutes' not in course_cols:
+			connection.execute("ALTER TABLE courses ADD COLUMN duration_minutes INTEGER DEFAULT 0")
+		if 'difficulty' not in course_cols:
+			connection.execute("ALTER TABLE courses ADD COLUMN difficulty TEXT DEFAULT 'beginner'")
+		if 'thumbnail_color' not in course_cols:
+			connection.execute("ALTER TABLE courses ADD COLUMN thumbnail_color TEXT DEFAULT '#6366f1'")
+
 		connection.execute("INSERT OR IGNORE INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, ?)", (name, username, generate_password_hash("learn123"), role))
 	admin = connection.execute("SELECT id FROM users WHERE username = 'subratakumar.pradhan'").fetchone()[0]
 	student = connection.execute("SELECT id FROM users WHERE username = 'maya.student'").fetchone()[0]
@@ -327,7 +350,13 @@ def create_app():
 				user = connection.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
 			if user and check_password_hash(user["password_hash"], password):
 				session.pop("impersonator_id", None)
-				session.update(user=user["full_name"], user_id=user["id"], role=user["role"])
+				session.update(
+                    user=user["full_name"], 
+                    user_id=user["id"], 
+                    actual_role=user["role"], 
+                    role="basic user", # Always login as basic user
+                    profile_picture=user["profile_picture"] if "profile_picture" in user.keys() else ""
+                )
 				return redirect(url_for("home"))
 			flash("Invalid username or password.")
 		with get_db() as connection:
@@ -337,7 +366,7 @@ def create_app():
 				assessments = connection.execute("SELECT DISTINCT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE c.created_by = ? OR ca.student_id IS NOT NULL ORDER BY a.id DESC", (session.get("user_id", 0), session.get("user_id", 0))).fetchall()
 			else:
 				assessments = connection.execute("SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE ca.status = 'completed' ORDER BY a.id DESC", (session.get("user_id", 0),)).fetchall()
-		return render_template("index.html", user=session.get("user"), role=session.get("role"), impersonating=session.get("impersonator_id"), courses=courses, assessments=assessments)
+		return render_template("index.html", user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"), impersonating=session.get("impersonator_id"), courses=courses, assessments=assessments)
 
 
 	@app.route("/assessment/<int:assessment_id>", methods=["GET", "POST"])
@@ -384,7 +413,7 @@ def create_app():
 			assessments = connection.execute("SELECT * FROM assessments WHERE course_id = ? ORDER BY id", (course_id,)).fetchall()
 		if not course or not allowed:
 			return redirect(url_for("home"))
-		return render_template("course.html", course=course, progress=progress, assessments=assessments, user=session.get("user"), role=session.get("role"), impersonating=session.get("impersonator_id"))
+		return render_template("course.html", course=course, progress=progress, assessments=assessments, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"), impersonating=session.get("impersonator_id"))
 
 	@app.post("/course/<int:course_id>/complete")
 	def complete_course(course_id):
@@ -498,7 +527,7 @@ def create_app():
 			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
 			banks = connection.execute("SELECT * FROM question_banks ORDER BY id DESC").fetchall()
 			assessments = connection.execute("SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY a.id DESC", (session["user_id"], session["user_id"])).fetchall()
-		return render_template("admin.html", users=users, courses=courses, students=students, banks=banks, assessments=assessments, content_types=CONTENT_TYPES, roles=ROLES, user=session["user"], role=session["role"])
+		return render_template("admin.html", users=users, courses=courses, students=students, banks=banks, assessments=assessments, content_types=CONTENT_TYPES, roles=ROLES, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.get("/admin/reports")
 	@admin_required
@@ -507,7 +536,7 @@ def create_app():
 		with get_db() as connection:
 			tables = [row["name"] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").fetchall()]
 			report = [(table, connection.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"]) for table in tables]
-		return render_template("reports.html", report=report, user=session["user"], role=session["role"])
+		return render_template("reports.html", report=report, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.get("/admin/question-template")
 	@staff_required
@@ -545,6 +574,106 @@ def create_app():
 			return redirect(url_for("admin_panel"))
 		return send_file(stream, as_attachment=True, download_name=f"assessment-{assessment_id}-questions.csv", mimetype="text/csv")
 
+
+	@app.get("/courses")
+	@staff_required
+	def courses_page():
+		"""Dedicated course management page with wizard."""
+		with get_db() as connection:
+			courses = connection.execute(
+				"SELECT c.*, u.full_name AS creator_name FROM courses c JOIN users u ON u.id = c.created_by ORDER BY c.id DESC"
+			).fetchall()
+		return render_template("courses.html",
+			courses=courses,
+			content_types=CONTENT_TYPES,
+			user=session.get("user"),
+			role=session.get("role"),
+			actual_role=session.get("actual_role"),
+			profile_picture=session.get("profile_picture")
+		)
+
+	@app.route("/courses/create", methods=["POST"])
+	@staff_required
+	def courses_create():
+		"""Handle course creation wizard final submission."""
+		name = request.form.get("name", "").strip()
+		description = request.form.get("description", "").strip()
+		category = request.form.get("category", "General").strip() or "General"
+		difficulty = request.form.get("difficulty", "beginner")
+		duration_minutes = int(request.form.get("duration_minutes", 0) or 0)
+		tags = request.form.get("tags", "").strip()
+		thumbnail_color = request.form.get("thumbnail_color", "#6366f1")
+		status = request.form.get("status", "draft")
+		content_type = request.form.get("content_type", "")
+
+		errors = []
+		if not name:
+			errors.append("Course title is required.")
+		if len(name) > 200:
+			errors.append("Course title must be under 200 characters.")
+		if content_type not in CONTENT_TYPES:
+			errors.append("Please select a valid content type.")
+
+		content_url = None
+		if not errors:
+			try:
+				content_url = content_location("course_file")
+			except ValueError:
+				content_url = None
+
+		if not content_url:
+			errors.append("Please provide a valid URL or upload a supported file.")
+
+		if errors:
+			for e in errors:
+				flash(e)
+			return redirect(url_for("courses_page"))
+
+		with get_db() as connection:
+			cursor = connection.execute(
+				"INSERT INTO courses (name, description, category, content_type, content_url, created_by, status, tags, duration_minutes, difficulty, thumbnail_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				(name, description, category, content_type, content_url, session["user_id"], status, tags, duration_minutes, difficulty, thumbnail_color)
+			)
+			connection.execute(
+				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)",
+				(session["user_id"], cursor.lastrowid)
+			)
+		flash(f"Course '{name}' created successfully.")
+		return redirect(url_for("courses_page"))
+
+	@app.post("/courses/<int:course_id>/update")
+	@staff_required
+	def courses_update(course_id):
+		"""Inline update a course from the course list."""
+		with get_db() as connection:
+			if not course_is_manageable(connection, course_id, session["user_id"], session["role"]):
+				flash("You can only edit courses you created.")
+				return redirect(url_for("courses_page"))
+			connection.execute(
+				"UPDATE courses SET name=?, description=?, category=?, status=?, tags=?, duration_minutes=?, difficulty=?, thumbnail_color=? WHERE id=?",
+				(
+					request.form.get("name", "").strip(),
+					request.form.get("description", "").strip(),
+					request.form.get("category", "General").strip() or "General",
+					request.form.get("status", "draft"),
+					request.form.get("tags", "").strip(),
+					int(request.form.get("duration_minutes", 0) or 0),
+					request.form.get("difficulty", "beginner"),
+					request.form.get("thumbnail_color", "#6366f1"),
+					course_id
+				)
+			)
+		flash("Course updated.")
+		return redirect(url_for("courses_page"))
+
+
+	@app.get("/view-as")
+	@admin_required
+	def view_as_page():
+		with get_db() as connection:
+			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
+		return render_template("view_as.html", students=students, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
 	@app.post("/admin/view-as/<int:user_id>")
 	@admin_required
 	def view_as(user_id):
@@ -576,6 +705,63 @@ def create_app():
 	def uploaded_file(filename):
 		"""Serve locally stored course content."""
 		return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=False)
+
+	@app.get("/switch-role")
+	def switch_role():
+		"""Toggle between basic user and admin view for staff."""
+		if "user_id" not in session or session.get("actual_role") not in ("admin", "moderator"):
+			return redirect(url_for("home"))
+		
+		# Toggle the active role
+		if session.get("role") == "basic user":
+			session["role"] = session.get("actual_role")
+		else:
+			session["role"] = "basic user"
+			
+		return redirect(url_for("home"))
+
+	@app.route("/profile", methods=["GET", "POST"])
+	def profile():
+		"""Allow users to edit their profile."""
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+			
+		if request.method == "POST":
+			full_name = request.form.get("full_name", "").strip()
+			email = request.form.get("email", "").strip()
+			phone_number = request.form.get("phone_number", "").strip()
+			
+			pic = request.files.get("profile_picture")
+			pic_filename = session.get("profile_picture", "")
+			
+			if pic and pic.filename:
+				try:
+					from storage import save_file
+					# We can reuse save_file for images if we add image extensions, but let's just save it.
+					import os
+					from werkzeug.utils import secure_filename
+					from uuid import uuid4
+					ext = os.path.splitext(pic.filename)[1].lower()
+					if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+						pic_filename = uuid4().hex + ext
+						pic.save(os.path.join(UPLOAD_FOLDER, pic_filename))
+				except Exception as e:
+					flash("Failed to save profile picture.")
+					
+			with get_db() as connection:
+				connection.execute(
+					"UPDATE users SET full_name = ?, email = ?, phone_number = ?, profile_picture = ? WHERE id = ?",
+					(full_name, email, phone_number, pic_filename, session["user_id"])
+				)
+			session["user"] = full_name
+			session["profile_picture"] = pic_filename
+			flash("Profile updated successfully.")
+			return redirect(url_for("profile"))
+			
+		with get_db() as connection:
+			user_data = connection.execute("SELECT * FROM users WHERE id = ?", (session["user_id"],)).fetchone()
+		return render_template("profile.html", user_data=user_data, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
 
 	@app.get("/logout")
 	def logout():
