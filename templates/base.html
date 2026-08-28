@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}HCG Knowledge Centre{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#f8fafc',
+                        darkBackground: '#020817',
+                        primary: '#0f172a',
+                        darkPrimary: '#f8fafc',
+                        muted: '#64748b',
+                        darkMuted: '#94a3b8',
+                        border: '#e2e8f0',
+                        darkBorder: '#1e293b'
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .glass-panel {
+                @apply bg-white/60 dark:bg-slate-950/50 border border-white/20 dark:border-slate-800/50 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] backdrop-blur-xl backdrop-saturate-150;
+            }
+            .glass-panel-hover {
+                @apply hover:bg-white/80 dark:hover:bg-slate-900/60 transition-all duration-300;
+            }
+            .btn-primary {
+                @apply inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-slate-50 shadow hover:bg-slate-900/90 dark:bg-slate-50 dark:text-slate-900 dark:hover:bg-slate-50/90 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:pointer-events-none disabled:opacity-50;
+            }
+            .btn-secondary {
+                @apply inline-flex items-center justify-center rounded-md border border-slate-200 bg-white/50 px-4 py-2 text-sm font-medium shadow-sm hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950/50 dark:hover:bg-slate-800 dark:text-slate-50 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:pointer-events-none disabled:opacity-50 backdrop-blur-sm;
+            }
+            .form-input {
+                @apply flex h-9 w-full rounded-md border border-slate-200 bg-white/50 dark:bg-slate-950/50 px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:placeholder:text-slate-400 dark:focus-visible:ring-slate-300 backdrop-blur-sm text-slate-900 dark:text-slate-50;
+            }
+            .form-label {
+                @apply text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-slate-900 dark:text-slate-100 mb-2 block;
+            }
+            .eyebrow {
+                @apply text-muted dark:text-darkMuted text-[10px] font-semibold tracking-widest uppercase;
+            }
+        }
+        
+        body {
+            background-color: #f8fafc;
+            /* Subtle mesh gradient for glassmorphism to pop */
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,0.03) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0.03) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,0.03) 0, transparent 50%);
+        }
+        
+        .dark body {
+            background-color: #020817;
+            /* Dark mode mesh gradient */
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0.1) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,0.1) 0, transparent 50%);
+        }
+    </style>
+</head>
+<body class="bg-background dark:bg-darkBackground text-slate-900 dark:text-slate-50 transition-colors duration-200 min-h-screen">
+    <!-- Navbar -->
+    <header class="sticky top-0 z-50 w-full border-b border-border/40 dark:border-darkBorder/40 bg-background/95 dark:bg-darkBackground/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 dark:supports-[backdrop-filter]:bg-darkBackground/60">
+        <nav class="max-w-6xl mx-auto px-6 h-14 flex justify-between items-center">
+            <a class="text-xl font-bold tracking-tight flex items-center gap-2" href="{{ url_for('home') }}">
+                <span class="text-slate-900 dark:text-slate-50">HCG</span>
+                <span class="text-slate-600 dark:text-slate-400 font-medium">Knowledge Centre</span>
+            </a>
+            <div class="flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-400">
+                <a href="{{ url_for('home') }}" class="transition-colors hover:text-slate-900 dark:hover:text-slate-50">Home</a>
+                {% if user and role in ('admin','moderator') and not impersonating %}
+                <a href="{{ url_for('admin_panel') }}" class="transition-colors hover:text-slate-900 dark:hover:text-slate-50">Staff</a>
+                {% endif %}
+                
+                {% if user %}
+                <a href="{{ url_for('logout') }}" class="transition-colors hover:text-slate-900 dark:hover:text-slate-50">Log out</a>
+                {% endif %}
+                
+                <button id="themeToggle" type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border dark:border-darkBorder bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden dark:block"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="block dark:hidden"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                    <span class="sr-only">Toggle theme</span>
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto px-6 pb-12 pt-4">
+        {% if impersonating %}
+        <div class="glass-panel p-4 mb-6 flex justify-between items-center bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700">
+            <span>Viewing as <strong class="font-bold">{{ user }}</strong></span>
+            <a href="{{ url_for('exit_view') }}" class="text-primary hover:underline font-semibold">Exit view</a>
+        </div>
+        {% endif %}
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="mb-8 space-y-3">
+                {% for message in messages %}
+                    <div class="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-5 py-4 rounded-xl border border-green-200 dark:border-green-800 font-medium">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        // Dark mode setup
+        const html = document.documentElement;
+        const themeToggle = document.getElementById('themeToggle');
+        const themeKey = 'learnly-theme';
+        
+        // Initial load
+        if (localStorage.getItem(themeKey) === 'dark' || (!localStorage.getItem(themeKey) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            html.classList.add('dark');
+        } else {
+            html.classList.remove('dark');
+        }
+
+        // Toggle
+        themeToggle.addEventListener('click', () => {
+            html.classList.toggle('dark');
+            localStorage.setItem(themeKey, html.classList.contains('dark') ? 'dark' : 'light');
+        });
+    </script>
+</body>
+</html>
+

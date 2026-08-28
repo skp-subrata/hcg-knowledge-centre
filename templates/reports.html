@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Reports | HCG knowledge centre{% endblock %}
+{% block content %}
+<div class="mb-8"><h1 class="font-serif text-4xl md:text-5xl font-bold mb-3">Reports</h1><p class="text-muted dark:text-darkMuted text-lg">Record counts across every LMS table.</p></div>
+<section class="glass-panel p-6"><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{% for table, count in report %}<div class="p-5 rounded-2xl bg-white/30 dark:bg-black/20 border border-line dark:border-darkLine"><p class="text-muted dark:text-darkMuted text-sm uppercase tracking-wider">{{ table|replace('_', ' ') }}</p><p class="text-4xl font-bold text-primary mt-2">{{ count }}</p></div>{% endfor %}</div></section>
+{% endblock %}

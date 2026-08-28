@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block title %}Staff Workspace | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-3">HCG knowledge centre</h1>
+    <p class="text-slate-500 dark:text-slate-400 text-lg">Manage content, assessments, assignments, and users.</p>
+</div>
+
+<section class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
+    <!-- Create Course -->
+    <form class="glass-panel p-6 flex flex-col" method="post" enctype="multipart/form-data">
+        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Create course</h2>
+        <input type="hidden" name="action" value="add_course">
+        
+        <div class="space-y-4 flex-grow">
+            <div>
+                <label class="form-label">Course name</label>
+                <input name="course_name" class="form-input" required>
+            </div>
+            <div>
+                <label class="form-label">Description</label>
+                <input name="description" class="form-input">
+            </div>
+            <div>
+                <label class="form-label">Category</label>
+                <input name="category" class="form-input" placeholder="General">
+            </div>
+            <div>
+                <label class="form-label">Content type</label>
+                <select name="content_type" class="form-input">
+                    {% for item in content_types %}
+                    <option>{{ item }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Content URL or file</label>
+                <input name="content_url" type="url" class="form-input mb-2" placeholder="https://...">
+                <input name="course_file" type="file" class="form-input text-sm" accept=".pdf,.mp4,.webm,.mov,.avi,.mkv,.ppt,.pptx">
+            </div>
+        </div>
+        
+        <button class="btn-primary w-full mt-6">Create course</button>
+    </form>
+
+    <div class="space-y-6 flex flex-col">
+        <!-- Assign Course -->
+        <form class="glass-panel p-6" method="post">
+            <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Assign course</h2>
+            <input type="hidden" name="action" value="assign_course">
+            <div class="space-y-4">
+                <div>
+                    <label class="form-label">Course</label>
+                    <select name="course_id" class="form-input" required>
+                        {% for item in courses %}
+                        <option value="{{ item.id }}">#{{ item.id }} - {{ item.name }}</option>
+                        {% else %}
+                        <option disabled>No courses</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Student</label>
+                    <select name="student_id" class="form-input" required>
+                        {% for item in students %}
+                        <option value="{{ item.id }}">{{ item.full_name }}</option>
+                        {% else %}
+                        <option disabled>No students</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <button class="btn-primary w-full mt-6">Assign course</button>
+        </form>
+    </div>
+</section>
+<!-- Additional Forms Section -->
+<section class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
+    <!-- Add Assessment -->
+    <form class="glass-panel p-6" method="post">
+        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Create Assessment</h2>
+        <input type="hidden" name="action" value="add_assessment">
+        <div class="space-y-4">
+            <div>
+                <label class="form-label">Course</label>
+                <select name="course_id" class="form-input">
+                    {% for item in courses %}
+                    <option value="{{ item.id }}">{{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Title</label>
+                <input name="assessment_title" class="form-input" required>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="form-label">Type</label>
+                    <select name="assessment_type" class="form-input">
+                        <option value="pre">Pre-assessment</option>
+                        <option value="post">Post-assessment</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Pass %</label>
+                    <input name="pass_percentage" type="number" min="1" max="100" value="60" class="form-input">
+                </div>
+            </div>
+        </div>
+        <button class="btn-primary w-full mt-6">Create assessment</button>
+    </form>
+
+    
+    <!-- Manual Question Add -->
+    <form class="glass-panel p-6 flex flex-col" method="post">
+        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Add Question</h2>
+        <input type="hidden" name="action" value="add_question">
+        <div class="space-y-4 flex-grow">
+            <div>
+                <label class="form-label">Assessment</label>
+                <select name="assessment_id" class="form-input" required>
+                    {% for item in assessments %}
+                    <option value="{{ item.id }}">{{ item.title }} ({{ item.course_name }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Question Text</label>
+                <input name="question_text" class="form-input" required>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div><label class="form-label text-xs">Option A</label><input name="option_a" class="form-input" required></div>
+                <div><label class="form-label text-xs">Option B</label><input name="option_b" class="form-input" required></div>
+                <div><label class="form-label text-xs">Option C</label><input name="option_c" class="form-input" required></div>
+                <div><label class="form-label text-xs">Option D</label><input name="option_d" class="form-input" required></div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="form-label">Correct</label>
+                    <select name="correct_option" class="form-input" required>
+                        <option value="a">A</option><option value="b">B</option>
+                        <option value="c">C</option><option value="d">D</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Marks</label>
+                    <input name="marks" type="number" value="1" min="1" class="form-input">
+                </div>
+            </div>
+        </div>
+        <button class="btn-primary w-full mt-6">Add question</button>
+    </form>
+
+    <!-- Excel Question Import -->
+    <form class="glass-panel p-6" method="post" enctype="multipart/form-data">
+        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Import questions</h2>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Use course ID to connect every question to its assessment.</p>
+        <input type="hidden" name="action" value="import_questions">
+        <a href="{{ url_for('download_question_template') }}" class="text-slate-900 dark:text-slate-100 font-medium font-semibold hover:underline">Download Excel template</a>
+        <div class="mt-5"><label class="form-label">Completed .xlsx file</label><input name="question_file" type="file" accept=".xlsx" class="form-input" required></div>
+        <button class="btn-primary w-full mt-6">Upload questions</button>
+    </form>
+
+    {% if role == 'admin' %}
+    <!-- Add User -->
+    <form class="glass-panel p-6" method="post">
+        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Add User</h2>
+        <input type="hidden" name="action" value="add_user">
+        <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="form-label">Full name</label>
+                    <input name="full_name" class="form-input" required>
+                </div>
+                <div>
+                    <label class="form-label">Username</label>
+                    <input name="username" class="form-input" required>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="form-label">Password</label>
+                    <input name="password" type="password" minlength="6" class="form-input" required>
+                </div>
+                <div>
+                    <label class="form-label">Role</label>
+                    <select name="role" class="form-input">
+                        {% for item in roles %}
+                        <option value="{{ item }}">{{ item|title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+        <button class="btn-primary w-full mt-6">Add user</button>
+    </form>
+
+    {% endif %}
+</section>
+
+<!-- Tables Section -->
+<div class="space-y-8">
+    <section class="glass-panel p-6 overflow-hidden">
+        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5">Courses</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-800">
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">ID</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Course Name</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Category</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Type</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Status</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-line dark:divide-darkLine">
+                    {% for item in courses %}
+                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
+                        <td class="p-3 font-bold text-slate-900 dark:text-slate-100 font-medium">#{{ item.id }}</td>
+                        <td class="p-3 font-bold">{{ item.name }}</td>
+                        <td class="p-3 text-slate-500 dark:text-slate-400">{{ item.category or 'General' }}</td>
+                        <td class="p-3 text-slate-500 dark:text-slate-400">{{ item.content_type }}</td>
+                        <td class="p-3">
+                            <span class="px-3 py-1 bg-primary/10 text-slate-900 dark:text-slate-100 font-medium rounded-full text-xs font-bold uppercase tracking-wider">
+                                {{ item.status or 'published' }}
+                            </span>
+                        </td>
+                        <td class="p-3 text-right"><form method="post" action="{{ url_for('delete_record', resource='course', record_id=item.id) }}" onsubmit="return confirm('Delete this course and its content?')"><button type="submit" class="text-red-600 font-bold hover:underline">Delete</button></form><form method="post" class="mt-2 flex gap-1 justify-end"><input type="hidden" name="action" value="update_course"><input type="hidden" name="record_id" value="{{ item.id }}"><input name="name" value="{{ item.name }}" class="form-input w-32" required><input name="category" value="{{ item.category or 'General' }}" class="form-input w-24"><input name="description" value="{{ item.description or '' }}" class="form-input w-40"><select name="status" class="form-input w-24"><option {% if item.status == 'published' %}selected{% endif %}>published</option><option {% if item.status == 'draft' %}selected{% endif %}>draft</option></select><button type="submit" class="text-slate-900 dark:text-slate-100 font-medium font-bold">Update</button></form></td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="p-6 text-center text-slate-500">No courses created yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="glass-panel p-6 overflow-hidden">
+        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5">Users</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-800">
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Name</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Username</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Course IDs</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Role</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-line dark:divide-darkLine">
+                    {% for item in users %}
+                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
+                        <td class="p-3 font-bold">{{ item.full_name }}</td>
+                        <td class="p-3 text-slate-500 dark:text-slate-400">{{ item.username }}</td>
+                        <td class="p-3 text-slate-500 dark:text-slate-400">{{ item.course_ids or '-' }}</td>
+                        <td class="p-3">
+                            <span class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full text-xs font-bold uppercase tracking-wider">
+                                {{ item.role }}
+                            </span>
+                        </td>
+                        <td class="p-3 text-right">
+                            {% if role == 'admin' %}
+                            <form method="post" action="{{ url_for('view_as', user_id=item.id) }}" class="inline-block">
+                                <button type="submit" class="text-sm font-bold text-slate-900 dark:text-slate-100 font-medium hover:underline px-3 py-1.5 rounded-lg hover:bg-primary/10 transition">
+                                    Preview as
+                                </button>
+                            </form>
+                            <form method="post" action="{{ url_for('delete_record', resource='user', record_id=item.id) }}" class="inline-block" onsubmit="return confirm('Delete this user?')">
+                                <button type="submit" class="text-sm font-bold text-red-600 hover:underline px-3 py-1.5">Delete</button>
+                            </form>
+                            <form method="post" class="mt-2 flex gap-1 justify-end"><input type="hidden" name="action" value="update_user"><input type="hidden" name="record_id" value="{{ item.id }}"><input name="full_name" value="{{ item.full_name }}" class="form-input w-32" required><input name="username" value="{{ item.username }}" class="form-input w-32" required><select name="role" class="form-input w-28">{% for option in roles %}<option value="{{ option }}" {% if option == item.role %}selected{% endif %}>{{ option }}</option>{% endfor %}</select><button type="submit" class="text-slate-900 dark:text-slate-100 font-medium font-bold">Update</button></form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="glass-panel p-6 overflow-hidden">
+        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5">Assessments</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead><tr class="border-b border-slate-200 dark:border-slate-800"><th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">ID</th><th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Assessment</th><th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Course</th><th class="p-3 text-right font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Questions</th></tr></thead>
+                <tbody class="divide-y divide-line dark:divide-darkLine">
+                {% for item in assessments %}<tr><td class="p-3 font-bold text-slate-900 dark:text-slate-100 font-medium">#{{ item.id }}</td><td class="p-3 font-bold">{{ item.title }}</td><td class="p-3 text-slate-500 dark:text-slate-400">{{ item.course_name }}</td><td class="p-3 text-right"><a class="text-slate-900 dark:text-slate-100 font-medium font-bold hover:underline mr-4" href="{{ url_for('download_assessment_questions', assessment_id=item.id) }}">Download CSV</a><form class="inline" method="post" action="{{ url_for('delete_record', resource='assessment', record_id=item.id) }}" onsubmit="return confirm('Delete this assessment?')"><button type="submit" class="text-red-600 font-bold hover:underline">Delete</button></form><form class="mt-2" method="post"><input type="hidden" name="action" value="update_assessment"><input type="hidden" name="record_id" value="{{ item.id }}"><input class="form-input inline-block w-36" name="title" value="{{ item.title }}" required><input class="form-input inline-block w-20" name="pass_percentage" type="number" value="{{ item.pass_percentage }}" min="1" max="100"><input type="hidden" name="type" value="{{ item.type }}"><input type="hidden" name="max_attempts" value="{{ item.max_attempts }}"><button class="text-slate-900 dark:text-slate-100 font-medium font-bold" type="submit">Update</button></form></td></tr>{% else %}<tr><td colspan="4" class="p-6 text-center text-slate-500">No assessments available.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

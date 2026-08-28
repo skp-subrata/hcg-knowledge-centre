@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}{{ assessment.title }} | HCG knowledge centre{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto glass-panel p-8 md:p-10">
+    <a href="{{ url_for('home') }}" class="text-slate-900 dark:text-slate-100 font-medium font-bold hover:underline flex items-center gap-2 mb-6">
+        &larr; Dashboard
+    </a>
+    
+    <div class="mb-10 pb-8 border-b border-slate-200 dark:border-slate-800">
+        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-3">{{ assessment.title }}</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-lg font-medium">
+            {{ assessment.course_name }} <span class="mx-2">&middot;</span> <span class="capitalize">{{ assessment.type }}</span> assessment
+        </p>
+    </div>
+
+    {% if result %}
+    <div class="text-center py-10">
+        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full mb-6 {% if result == 'pass' %}bg-green-100 text-green-600{% else %}bg-red-100 text-red-600{% endif %}">
+            {% if result == 'pass' %}
+            <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            {% else %}
+            <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            {% endif %}
+        </div>
+        <h2 class="text-3xl font-bold mb-2 capitalize {{ 'text-green-600' if result == 'pass' else 'text-red-600' }}">{{ result }}</h2>
+        <p class="text-2xl font-bold text-slate-500 dark:text-slate-400 mb-2">
+            {{ "%.0f"|format(percentage) }}%
+        </p>
+        <p class="text-lg text-slate-500 dark:text-slate-400">
+            You scored {{ score }} points.
+        </p>
+    </div>
+    {% elif questions %}
+    <form method="post" class="space-y-10">
+        {% for q in questions %}
+        <section class="p-6 bg-white/40 dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <h3 class="font-bold text-lg mb-4 flex gap-3">
+                <span class="text-slate-900 dark:text-slate-100 font-medium">{{ loop.index }}.</span> 
+                {{ q.question_text }}
+            </h3>
+            <div class="space-y-3 pl-7">
+                {% for key, option in [('a',q.option_a),('b',q.option_b),('c',q.option_c),('d',q.option_d)] %}
+                <label class="flex items-start gap-3 p-3 rounded-xl hover:bg-white/60 dark:hover:bg-white/5 cursor-pointer transition">
+                    <input type="radio" name="q{{ q.id }}" value="{{ key }}" required class="mt-1 w-4 h-4 text-slate-900 dark:text-slate-100 font-medium bg-gray-100 border-gray-300 focus:ring-primary focus:ring-2"> 
+                    <span>{{ option }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+        
+        <div class="pt-6 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+            <button class="btn-primary text-lg px-8">Submit assessment</button>
+        </div>
+    </form>
+    {% else %}
+    <div class="text-center py-12 text-slate-500 dark:text-slate-400">
+        <p class="text-lg">No questions have been linked yet.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

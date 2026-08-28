@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}HCG Knowledge Centre - Dashboard{% endblock %}
+
+{% block content %}
+{% if not user %}
+<section class="grid grid-cols-1 md:grid-cols-[1.25fr_380px] gap-12 items-center py-10 md:py-16">
+    <div>
+        <div class="eyebrow mb-3">A clearer way to learn</div>
+        <h1 class="font-bold text-5xl md:text-7xl leading-tight mb-6 tracking-tighter">
+            Make progress.<br>
+            <span class="text-slate-900 dark:text-slate-50">Every day.</span>
+        </h1>
+        <p class="text-slate-600 dark:text-slate-400 text-lg md:text-xl max-w-xl">
+            One focused place for courses, content, assessments, and measurable growth.
+        </p>
+    </div>
+    
+    <form class="glass-panel p-8" method="post">
+        <div class="eyebrow mb-6">Welcome in</div>
+        
+        <label class="form-label">Username</label>
+        <input name="username" class="form-input mb-4" required placeholder="subratakumar.pradhan">
+        
+        <label class="form-label">Password</label>
+        <input name="password" type="password" class="form-input mb-6" required>
+        
+        <button class="btn-primary w-full">Enter classroom</button>
+    </form>
+</section>
+{% else %}
+<section class="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 mt-6 gap-4">
+    <div>
+        <div class="eyebrow mb-2">Your learning space</div>
+        <h2 class="font-bold text-3xl tracking-tight">Welcome back, {{ user }}.</h2>
+    </div>
+    <span class="eyebrow">{{ courses|length }} courses assigned</span>
+</section>
+
+<section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {% for course in courses %}
+    <article class="glass-panel glass-panel-hover p-6 flex flex-col h-full hover:-translate-y-1">
+        <div class="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-extrabold flex items-center justify-center mb-6 shadow-sm border border-slate-200 dark:border-slate-700/50">
+            {{ course.content_type[:1] }}
+        </div>
+        <h3 class="font-semibold tracking-tight text-xl mb-2">{{ course.name }}</h3>
+        <p class="text-slate-600 dark:text-slate-400 flex-grow mb-6 line-clamp-2 text-sm">
+            {{ course.description or 'Course content is ready to explore.' }}
+        </p>
+        <div class="flex items-center justify-between mt-auto">
+            <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                #{{ course.id }} · {{ course.category or 'General' }}
+            </span>
+            <a class="text-slate-900 dark:text-slate-100 font-medium text-sm hover:underline" href="{{ url_for('course_detail', course_id=course.id) }}">
+                Open &rarr;
+            </a>
+        </div>
+    </article>
+    {% else %}
+    <div class="col-span-full py-12 text-center text-slate-500 dark:text-slate-400 bg-white/30 dark:bg-slate-900/30 rounded-xl border border-slate-200 dark:border-slate-800 border-dashed backdrop-blur-sm">
+        <p class="text-sm font-medium">No courses are assigned to your account yet.</p>
+    </div>
+    {% endfor %}
+</section>
+
+{% if role == 'basic user' and assessments %}
+<section class="mt-12">
+    <div class="eyebrow mb-6">Assessments</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for item in assessments %}
+        <a class="glass-panel px-6 py-5 glass-panel-hover group flex flex-col justify-center" href="{{ url_for('assessment', assessment_id=item.id) }}">
+            <span class="block font-semibold tracking-tight text-lg mb-1">{{ item.title }}</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">{{ item.course_name }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}
