@@ -202,8 +202,29 @@
 
 <!-- Tables Section -->
 <div class="space-y-8">
-    <section class="glass-panel p-6 overflow-hidden">
-        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5">Courses</h2>
+
+    <!-- ═══ COURSES TABLE ═══ -->
+    <section class="glass-panel p-6 overflow-hidden" id="courses-section">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+            <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">Courses</h2>
+            <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                <!-- Search -->
+                <div class="relative">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
+                    <input id="courseSearch" type="text" placeholder="Search name, category…" class="form-input pl-9 h-9 text-sm w-full sm:w-56" oninput="filterTable('courses-tbody','courseSearch',['courseFilterBtns'])">
+                </div>
+                <!-- Filter chips -->
+                <div class="flex gap-1.5 flex-wrap" id="courseFilterBtns">
+                    <button class="adm-chip active" data-col="4" data-val="">All</button>
+                    <button class="adm-chip" data-col="4" data-val="published">Published</button>
+                    <button class="adm-chip" data-col="4" data-val="draft">Draft</button>
+                    <button class="adm-chip" data-col="3" data-val="URL">URL</button>
+                    <button class="adm-chip" data-col="3" data-val="Video">Video</button>
+                    <button class="adm-chip" data-col="3" data-val="PDF">PDF</button>
+                    <button class="adm-chip" data-col="3" data-val="PPT">PPT</button>
+                </div>
+            </div>
+        </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
                 <thead>
@@ -216,32 +237,66 @@
                         <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-line dark:divide-darkLine">
+                <tbody id="courses-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
                     {% for item in courses %}
-                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
-                        <td class="p-3 font-bold text-slate-900 dark:text-slate-100 font-medium">#{{ item.id }}</td>
-                        <td class="p-3 font-bold">{{ item.name }}</td>
+                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition course-row"
+                        data-search="{{ item.id }} {{ item.name|lower }} {{ (item.category or 'general')|lower }} {{ item.content_type|lower }} {{ (item.status or 'published')|lower }}">
+                        <td class="p-3 font-bold text-slate-500 font-medium">#{{ item.id }}</td>
+                        <td class="p-3 font-semibold">{{ item.name }}</td>
                         <td class="p-3 text-slate-500 dark:text-slate-400">{{ item.category or 'General' }}</td>
-                        <td class="p-3 text-slate-500 dark:text-slate-400">{{ item.content_type }}</td>
                         <td class="p-3">
-                            <span class="px-3 py-1 bg-primary/10 text-slate-900 dark:text-slate-100 font-medium rounded-full text-xs font-bold uppercase tracking-wider">
+                            <span class="px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 text-[10px] font-bold uppercase tracking-wider">{{ item.content_type }}</span>
+                        </td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                                {% if item.status == 'draft' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
+                                {% else %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% endif %}">
                                 {{ item.status or 'published' }}
                             </span>
                         </td>
-                        <td class="p-3 text-right"><form method="post" action="{{ url_for('delete_record', resource='course', record_id=item.id) }}" onsubmit="return confirm('Delete this course and its content?')"><button type="submit" class="text-red-600 font-bold hover:underline">Delete</button></form><form method="post" class="mt-2 flex gap-1 justify-end"><input type="hidden" name="action" value="update_course"><input type="hidden" name="record_id" value="{{ item.id }}"><input name="name" value="{{ item.name }}" class="form-input w-32" required><input name="category" value="{{ item.category or 'General' }}" class="form-input w-24"><input name="description" value="{{ item.description or '' }}" class="form-input w-40"><select name="status" class="form-input w-24"><option {% if item.status == 'published' %}selected{% endif %}>published</option><option {% if item.status == 'draft' %}selected{% endif %}>draft</option></select><button type="submit" class="text-slate-900 dark:text-slate-100 font-medium font-bold">Update</button></form></td>
+                        <td class="p-3 text-right space-y-1">
+                            <form method="post" action="{{ url_for('delete_record', resource='course', record_id=item.id) }}" onsubmit="return confirm('Delete this course?')" class="inline">
+                                <button type="submit" class="text-xs text-red-500 font-semibold hover:underline">Delete</button>
+                            </form>
+                            <form method="post" class="flex gap-1 justify-end flex-wrap mt-1">
+                                <input type="hidden" name="action" value="update_course">
+                                <input type="hidden" name="record_id" value="{{ item.id }}">
+                                <input name="name" value="{{ item.name }}" class="form-input h-8 w-32 text-xs" required>
+                                <input name="category" value="{{ item.category or 'General' }}" class="form-input h-8 w-24 text-xs">
+                                <select name="status" class="form-input h-8 w-24 text-xs">
+                                    <option {% if item.status == 'published' %}selected{% endif %}>published</option>
+                                    <option {% if item.status == 'draft' %}selected{% endif %}>draft</option>
+                                </select>
+                                <button type="submit" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2">Update</button>
+                            </form>
+                        </td>
                     </tr>
                     {% else %}
-                    <tr>
-                        <td colspan="6" class="p-6 text-center text-slate-500">No courses created yet.</td>
-                    </tr>
+                    <tr><td colspan="6" class="p-8 text-center text-slate-400 text-sm">No courses yet.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        <p id="courses-empty" class="hidden text-center text-slate-400 text-sm py-6">No courses match your search or filter.</p>
     </section>
 
-    <section class="glass-panel p-6 overflow-hidden">
-        <h2 id="users" class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 pt-8 -mt-8">Users</h2>
+    <!-- ═══ USERS TABLE ═══ -->
+    <section class="glass-panel p-6 overflow-hidden" id="users-section">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+            <h2 id="users" class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 pt-8 -mt-8">Users</h2>
+            <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                <div class="relative">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
+                    <input id="userSearch" type="text" placeholder="Search name, username…" class="form-input pl-9 h-9 text-sm w-full sm:w-56" oninput="filterTable('users-tbody','userSearch',['userFilterBtns'])">
+                </div>
+                <div class="flex gap-1.5 flex-wrap" id="userFilterBtns">
+                    <button class="adm-chip active" data-col="3" data-val="">All Roles</button>
+                    <button class="adm-chip" data-col="3" data-val="admin">Admin</button>
+                    <button class="adm-chip" data-col="3" data-val="moderator">Moderator</button>
+                    <button class="adm-chip" data-col="3" data-val="basic user">Student</button>
+                </div>
+            </div>
+        </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
                 <thead>
@@ -253,28 +308,41 @@
                         <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-line dark:divide-darkLine">
+                <tbody id="users-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
                     {% for item in users %}
-                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
-                        <td class="p-3 font-bold">{{ item.full_name }}</td>
-                        <td class="p-3 text-slate-500 dark:text-slate-400">{{ item.username }}</td>
-                        <td class="p-3 text-slate-500 dark:text-slate-400">{{ item.course_ids or '-' }}</td>
+                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition user-row"
+                        data-search="{{ item.full_name|lower }} {{ item.username|lower }} {{ item.role|lower }} {{ item.course_ids or '' }}">
+                        <td class="p-3 font-semibold">{{ item.full_name }}</td>
+                        <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">{{ item.username }}</td>
+                        <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">{{ item.course_ids or '—' }}</td>
                         <td class="p-3">
-                            <span class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full text-xs font-bold uppercase tracking-wider">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                                {% if item.role == 'admin' %}bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400
+                                {% elif item.role == 'moderator' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
+                                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}">
                                 {{ item.role }}
                             </span>
                         </td>
-                        <td class="p-3 text-right">
+                        <td class="p-3 text-right space-y-1">
                             {% if role == 'admin' %}
-                            <form method="post" action="{{ url_for('view_as', user_id=item.id) }}" class="inline-block">
-                                <button type="submit" class="text-sm font-bold text-slate-900 dark:text-slate-100 font-medium hover:underline px-3 py-1.5 rounded-lg hover:bg-primary/10 transition">
-                                    Preview as
-                                </button>
+                            <div class="flex gap-2 justify-end">
+                                <form method="post" action="{{ url_for('view_as', user_id=item.id) }}" class="inline">
+                                    <button type="submit" class="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline">Preview as</button>
+                                </form>
+                                <form method="post" action="{{ url_for('delete_record', resource='user', record_id=item.id) }}" class="inline" onsubmit="return confirm('Delete this user?')">
+                                    <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Delete</button>
+                                </form>
+                            </div>
+                            <form method="post" class="flex gap-1 justify-end flex-wrap mt-1">
+                                <input type="hidden" name="action" value="update_user">
+                                <input type="hidden" name="record_id" value="{{ item.id }}">
+                                <input name="full_name" value="{{ item.full_name }}" class="form-input h-8 w-32 text-xs" required>
+                                <input name="username" value="{{ item.username }}" class="form-input h-8 w-32 text-xs" required>
+                                <select name="role" class="form-input h-8 w-28 text-xs">
+                                    {% for option in roles %}<option value="{{ option }}" {% if option == item.role %}selected{% endif %}>{{ option }}</option>{% endfor %}
+                                </select>
+                                <button type="submit" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2">Update</button>
                             </form>
-                            <form method="post" action="{{ url_for('delete_record', resource='user', record_id=item.id) }}" class="inline-block" onsubmit="return confirm('Delete this user?')">
-                                <button type="submit" class="text-sm font-bold text-red-600 hover:underline px-3 py-1.5">Delete</button>
-                            </form>
-                            <form method="post" class="mt-2 flex gap-1 justify-end"><input type="hidden" name="action" value="update_user"><input type="hidden" name="record_id" value="{{ item.id }}"><input name="full_name" value="{{ item.full_name }}" class="form-input w-32" required><input name="username" value="{{ item.username }}" class="form-input w-32" required><select name="role" class="form-input w-28">{% for option in roles %}<option value="{{ option }}" {% if option == item.role %}selected{% endif %}>{{ option }}</option>{% endfor %}</select><button type="submit" class="text-slate-900 dark:text-slate-100 font-medium font-bold">Update</button></form>
                             {% endif %}
                         </td>
                     </tr>
@@ -282,18 +350,143 @@
                 </tbody>
             </table>
         </div>
+        <p id="users-empty" class="hidden text-center text-slate-400 text-sm py-6">No users match your search or filter.</p>
     </section>
 
-    <section class="glass-panel p-6 overflow-hidden">
-        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5">Assessments</h2>
+    <!-- ═══ ASSESSMENTS TABLE ═══ -->
+    <section class="glass-panel p-6 overflow-hidden" id="assessments-section">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+            <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">Assessments</h2>
+            <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                <div class="relative">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
+                    <input id="assessSearch" type="text" placeholder="Search title, course…" class="form-input pl-9 h-9 text-sm w-full sm:w-56" oninput="filterTable('assess-tbody','assessSearch',['assessFilterBtns'])">
+                </div>
+                <div class="flex gap-1.5 flex-wrap" id="assessFilterBtns">
+                    <button class="adm-chip active" data-col="3" data-val="">All Types</button>
+                    <button class="adm-chip" data-col="3" data-val="pre">Pre-assessment</button>
+                    <button class="adm-chip" data-col="3" data-val="post">Post-assessment</button>
+                </div>
+            </div>
+        </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
-                <thead><tr class="border-b border-slate-200 dark:border-slate-800"><th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">ID</th><th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Assessment</th><th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Course</th><th class="p-3 text-right font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Questions</th></tr></thead>
-                <tbody class="divide-y divide-line dark:divide-darkLine">
-                {% for item in assessments %}<tr><td class="p-3 font-bold text-slate-900 dark:text-slate-100 font-medium">#{{ item.id }}</td><td class="p-3 font-bold">{{ item.title }}</td><td class="p-3 text-slate-500 dark:text-slate-400">{{ item.course_name }}</td><td class="p-3 text-right"><a class="text-slate-900 dark:text-slate-100 font-medium font-bold hover:underline mr-4" href="{{ url_for('download_assessment_questions', assessment_id=item.id) }}">Download CSV</a><form class="inline" method="post" action="{{ url_for('delete_record', resource='assessment', record_id=item.id) }}" onsubmit="return confirm('Delete this assessment?')"><button type="submit" class="text-red-600 font-bold hover:underline">Delete</button></form><form class="mt-2" method="post"><input type="hidden" name="action" value="update_assessment"><input type="hidden" name="record_id" value="{{ item.id }}"><input class="form-input inline-block w-36" name="title" value="{{ item.title }}" required><input class="form-input inline-block w-20" name="pass_percentage" type="number" value="{{ item.pass_percentage }}" min="1" max="100"><input type="hidden" name="type" value="{{ item.type }}"><input type="hidden" name="max_attempts" value="{{ item.max_attempts }}"><button class="text-slate-900 dark:text-slate-100 font-medium font-bold" type="submit">Update</button></form></td></tr>{% else %}<tr><td colspan="4" class="p-6 text-center text-slate-500">No assessments available.</td></tr>{% endfor %}
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-800">
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">ID</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Assessment Title</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Course</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Type</th>
+                        <th class="p-3 text-right font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="assess-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for item in assessments %}
+                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition assess-row"
+                        data-search="#{{ item.id }} {{ item.title|lower }} {{ item.course_name|lower }} {{ item.type|lower }}">
+                        <td class="p-3 font-bold text-slate-500 font-medium">#{{ item.id }}</td>
+                        <td class="p-3 font-semibold">{{ item.title }}</td>
+                        <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">{{ item.course_name }}</td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                                {% if item.type == 'pre' %}bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400
+                                {% else %}bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400{% endif %}">
+                                {{ 'Pre' if item.type == 'pre' else 'Post' }}
+                            </span>
+                        </td>
+                        <td class="p-3 text-right space-y-1">
+                            <div class="flex gap-2 justify-end">
+                                <a href="{{ url_for('download_assessment_questions', assessment_id=item.id) }}" class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:underline">CSV</a>
+                                <form class="inline" method="post" action="{{ url_for('delete_record', resource='assessment', record_id=item.id) }}" onsubmit="return confirm('Delete this assessment?')">
+                                    <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Delete</button>
+                                </form>
+                            </div>
+                            <form class="mt-1 flex gap-1 justify-end flex-wrap" method="post">
+                                <input type="hidden" name="action" value="update_assessment">
+                                <input type="hidden" name="record_id" value="{{ item.id }}">
+                                <input type="hidden" name="type" value="{{ item.type }}">
+                                <input type="hidden" name="max_attempts" value="{{ item.max_attempts }}">
+                                <input class="form-input h-8 w-36 text-xs" name="title" value="{{ item.title }}" required>
+                                <input class="form-input h-8 w-20 text-xs" name="pass_percentage" type="number" value="{{ item.pass_percentage }}" min="1" max="100" title="Pass %">
+                                <button class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2" type="submit">Update</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="p-8 text-center text-slate-400 text-sm">No assessments yet.</td></tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
+        <p id="assess-empty" class="hidden text-center text-slate-400 text-sm py-6">No assessments match your search or filter.</p>
     </section>
 </div>
+
+<style>
+.adm-chip {
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border: 1.5px solid #e2e8f0;
+    color: #64748b;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+}
+.dark .adm-chip { border-color: #334155; color: #94a3b8; }
+.adm-chip:hover { border-color: #818cf8; color: #6366f1; }
+.adm-chip.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+</style>
+
+<script>
+// ── Generic search + chip filter for any table ──────────────────────────────
+// activeFilters[tbodyId] = { col, val }
+const activeFilters = {};
+
+function filterTable(tbodyId, searchId, chipGroupIds) {
+    const tbody    = document.getElementById(tbodyId);
+    const search   = document.getElementById(searchId)?.value.toLowerCase().trim() || '';
+    const filter   = activeFilters[tbodyId] || { col: null, val: '' };
+    const rows     = tbody.querySelectorAll('tr[data-search]');
+    const emptyMsg = document.getElementById(tbodyId.replace('-tbody','') + '-empty')
+                  || document.getElementById(tbodyId.replace('tbody','empty'));
+    let visible = 0;
+
+    rows.forEach(row => {
+        const text   = row.dataset.search || '';
+        const cells  = row.querySelectorAll('td');
+        const colVal = filter.col !== null && cells[filter.col]
+                       ? cells[filter.col].textContent.toLowerCase().trim()
+                       : '';
+        const matchSearch = !search || text.includes(search);
+        const matchFilter = !filter.val || colVal.includes(filter.val.toLowerCase());
+        const show = matchSearch && matchFilter;
+        row.classList.toggle('hidden', !show);
+        if (show) visible++;
+    });
+
+    if (emptyMsg) emptyMsg.classList.toggle('hidden', visible > 0 || rows.length === 0);
+}
+
+// Wire up chip buttons
+document.querySelectorAll('.adm-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+        // Find the sibling group
+        const group = chip.closest('[id$="FilterBtns"]');
+        if (!group) return;
+        group.querySelectorAll('.adm-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+
+        // Find which table this group belongs to
+        const section = group.closest('section');
+        const tbody   = section.querySelector('tbody[id]');
+        const searchEl = section.querySelector('input[type="text"]');
+        if (!tbody) return;
+
+        activeFilters[tbody.id] = { col: parseInt(chip.dataset.col), val: chip.dataset.val };
+        filterTable(tbody.id, searchEl?.id, []);
+    });
+});
+</script>
 {% endblock %}

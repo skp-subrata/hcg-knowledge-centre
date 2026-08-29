@@ -1,0 +1,525 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Courses | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex justify-between items-end">
+    <div>
+        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-3">Courses</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-lg">Create, edit, and manage educational content.</p>
+    </div>
+    <button onclick="document.getElementById('wizard-modal').classList.remove('hidden')" class="btn-primary px-6 py-3 rounded-full flex items-center gap-2 font-bold shadow-lg hover:shadow-xl transition-all">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        Create Course
+    </button>
+</div>
+
+<!-- Search and Filter Bar -->
+<div class="glass-panel p-4 mb-8 flex flex-col sm:flex-row gap-4 justify-between items-center">
+    <div class="relative w-full sm:w-96">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
+        <input id="course-search" type="text" placeholder="Search courses by name, category, or tags..." class="form-input pl-10 w-full" onkeyup="filterCourses()">
+    </div>
+    <div class="flex gap-2" id="filter-chips">
+        <button class="chip active" data-filter="all">All</button>
+        <button class="chip" data-filter="published">Published</button>
+        <button class="chip" data-filter="draft">Draft</button>
+    </div>
+</div>
+
+<!-- Course Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" id="course-grid">
+    {% for item in courses %}
+    <div class="glass-panel p-6 flex flex-col course-card transition-all hover:-translate-y-1 hover:shadow-xl" 
+         data-name="{{ item.name|lower }}" 
+         data-category="{{ (item.category or '')|lower }}" 
+         data-tags="{{ (item.tags or '')|lower }}"
+         data-status="{{ item.status or 'published' }}">
+        
+        <div class="flex justify-between items-start mb-4">
+            <div class="flex gap-2">
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                    {{ item.content_type }}
+                </span>
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider {% if item.status == 'draft' %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300{% else %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300{% endif %}">
+                    {{ item.status or 'published' }}
+                </span>
+            </div>
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm" style="background-color: {{ item.thumbnail_color or '#6366f1' }}">
+                {{ item.name[:2]|upper }}
+            </div>
+        </div>
+        
+        <h3 class="text-xl font-bold text-slate-900 dark:text-slate-50 mb-2">{{ item.name }}</h3>
+        <p class="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 mb-4 flex-grow">{{ item.description or 'No description provided.' }}</p>
+        
+        <div class="flex flex-wrap gap-2 mb-6">
+            {% if item.difficulty %}
+            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> {{ item.difficulty|title }}</span>
+            {% endif %}
+            {% if item.duration_minutes %}
+            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> {{ item.duration_minutes }} min</span>
+            {% endif %}
+            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg> {{ item.category or 'General' }}</span>
+        </div>
+        
+        <div class="flex gap-2 mt-auto pt-4 border-t border-slate-100 dark:border-slate-800">
+            <button onclick="openEditPanel({{ item.id }}, '{{ item.name|escape }}', '{{ (item.description or '')|escape }}', '{{ (item.category or '')|escape }}', '{{ item.status or 'published' }}', '{{ item.difficulty or 'beginner' }}', {{ item.duration_minutes or 0 }}, '{{ (item.tags or '')|escape }}')" class="flex-1 btn-secondary py-2 text-sm font-semibold flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                Edit
+            </button>
+            <a href="{{ url_for('course_detail', course_id=item.id) }}" target="_blank" class="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg py-2 text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                Preview
+            </a>
+            <form method="post" action="{{ url_for('delete_record', resource='course', record_id=item.id) }}" onsubmit="return confirm('Delete this course permanently?')" class="flex">
+                <button type="submit" class="w-10 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors" title="Delete">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-span-full py-12 text-center text-slate-500 dark:text-slate-400">
+        <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"></path></svg>
+        <p class="text-lg font-medium">No courses found</p>
+        <p class="text-sm mt-1">Get started by creating your first course.</p>
+    </div>
+    {% endfor %}
+</div>
+<div id="no-results" class="hidden py-12 text-center text-slate-500 dark:text-slate-400">
+    <p class="text-lg font-medium">No matches found</p>
+    <p class="text-sm mt-1">Try adjusting your search or filters.</p>
+</div>
+
+<!-- ================= WIZARD MODAL ================= -->
+<div id="wizard-modal" class="fixed inset-0 z-[100] hidden">
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeWizard()"></div>
+    <div class="absolute inset-4 md:inset-x-auto md:inset-y-10 md:w-[600px] md:left-1/2 md:-translate-x-1/2 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-800">
+            <h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Create New Course</h2>
+            <button onclick="closeWizard()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Progress Steps -->
+        <div class="bg-slate-50 dark:bg-slate-900/50 px-6 py-4 flex justify-between relative border-b border-slate-100 dark:border-slate-800">
+            <div class="absolute top-1/2 left-10 right-10 h-0.5 bg-slate-200 dark:bg-slate-700 -translate-y-1/2 z-0"></div>
+            <div id="progress-bar" class="absolute top-1/2 left-10 h-0.5 bg-indigo-600 -translate-y-1/2 z-0 transition-all duration-300" style="width: 0%;"></div>
+            
+            <div class="step-indicator z-10 flex flex-col items-center gap-2 active" data-step="1">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-indigo-600 text-white shadow-md transition-colors">1</div>
+                <span class="text-[10px] font-bold uppercase text-indigo-600 tracking-wider">Basics</span>
+            </div>
+            <div class="step-indicator z-10 flex flex-col items-center gap-2" data-step="2">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors">2</div>
+                <span class="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Details</span>
+            </div>
+            <div class="step-indicator z-10 flex flex-col items-center gap-2" data-step="3">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors">3</div>
+                <span class="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Content</span>
+            </div>
+            <div class="step-indicator z-10 flex flex-col items-center gap-2" data-step="4">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors">4</div>
+                <span class="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Review</span>
+            </div>
+        </div>
+
+        <form id="wizard-form" action="{{ url_for('courses_create') }}" method="post" enctype="multipart/form-data" class="flex flex-col flex-grow overflow-hidden">
+            <div class="flex-grow overflow-y-auto p-6 relative">
+                
+                <!-- STEP 1: BASICS -->
+                <div class="wizard-step active" id="step-1">
+                    <h3 class="text-lg font-bold mb-4 text-slate-900 dark:text-slate-50">Basic Information</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="form-label flex justify-between">
+                                Course Title <span id="title-counter" class="text-xs text-slate-400 font-normal">0/200</span>
+                            </label>
+                            <input name="name" id="wiz-name" class="form-input" required maxlength="200" oninput="document.getElementById('title-counter').textContent = this.value.length + '/200'">
+                        </div>
+                        <div>
+                            <label class="form-label">Description</label>
+                            <textarea name="description" id="wiz-desc" class="form-input h-24 resize-none" placeholder="Brief summary of what this course covers..."></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">Category</label>
+                                <input name="category" id="wiz-cat" class="form-input" placeholder="e.g. Compliance, Technical">
+                            </div>
+                            <div>
+                                <label class="form-label">Thumbnail Accent</label>
+                                <div class="flex items-center gap-3">
+                                    <input type="color" name="thumbnail_color" id="wiz-color" value="#6366f1" class="w-10 h-10 rounded cursor-pointer border-0 p-0 bg-transparent">
+                                    <span class="text-xs text-slate-500">Brand colour</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2: DETAILS -->
+                <div class="wizard-step hidden" id="step-2">
+                    <h3 class="text-lg font-bold mb-4 text-slate-900 dark:text-slate-50">Course Details</h3>
+                    <div class="space-y-5">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">Difficulty</label>
+                                <select name="difficulty" id="wiz-diff" class="form-input">
+                                    <option value="beginner">Beginner</option>
+                                    <option value="intermediate">Intermediate</option>
+                                    <option value="advanced">Advanced</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Est. Duration (mins)</label>
+                                <input name="duration_minutes" id="wiz-dur" type="number" min="0" class="form-input" placeholder="e.g. 45">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">Tags (comma separated)</label>
+                            <input name="tags" id="wiz-tags" class="form-input" placeholder="e.g. safety, 2026, required">
+                        </div>
+                        <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-sm text-slate-900 dark:text-slate-50">Publish Status</h4>
+                                <p class="text-xs text-slate-500">Drafts are hidden from students.</p>
+                            </div>
+                            <select name="status" id="wiz-status" class="form-input w-32 font-semibold">
+                                <option value="published">Published</option>
+                                <option value="draft">Draft</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3: CONTENT -->
+                <div class="wizard-step hidden" id="step-3">
+                    <h3 class="text-lg font-bold mb-4 text-slate-900 dark:text-slate-50">Course Content</h3>
+                    <div class="space-y-5">
+                        <div>
+                            <label class="form-label">Content Type</label>
+                            <select name="content_type" id="wiz-type" class="form-input font-bold" onchange="toggleContentInput()">
+                                {% for item in content_types %}
+                                <option value="{{ item }}">{{ item }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div id="content-url-div">
+                            <label class="form-label">External URL</label>
+                            <input name="content_url" id="wiz-url" type="url" class="form-input" placeholder="https://...">
+                            <p class="text-xs text-slate-500 mt-2">Paste a link to a YouTube video, external PDF, or webpage.</p>
+                        </div>
+                        
+                        <div id="content-file-div" class="hidden">
+                            <label class="form-label">Upload File</label>
+                            <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 dark:border-slate-700 border-dashed rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                <div class="space-y-1 text-center">
+                                    <svg class="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                    <div class="flex text-sm text-slate-600 dark:text-slate-400 justify-center">
+                                        <label for="wiz-file" class="relative cursor-pointer rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                                            <span>Upload a file</span>
+                                            <input id="wiz-file" name="course_file" type="file" class="sr-only" onchange="document.getElementById('file-name').textContent = this.files[0].name">
+                                        </label>
+                                        <p class="pl-1">or drag and drop</p>
+                                    </div>
+                                    <p class="text-xs text-slate-500" id="file-hints">PDF, PPTX, MP4 up to 100MB</p>
+                                    <p class="text-xs font-bold text-indigo-600 mt-2" id="file-name"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 4: REVIEW -->
+                <div class="wizard-step hidden" id="step-4">
+                    <h3 class="text-lg font-bold mb-4 text-slate-900 dark:text-slate-50">Review &amp; Finish</h3>
+                    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 space-y-4 text-sm">
+                        <div class="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+                            <div><p class="text-slate-500 text-xs font-bold uppercase">Course Name</p><p class="font-bold text-base" id="rev-name">-</p></div>
+                            <button type="button" onclick="goToStep(1)" class="text-indigo-600 font-semibold text-xs hover:underline">Edit</button>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+                            <div><p class="text-slate-500 text-xs font-bold uppercase">Details</p><p id="rev-details">-</p></div>
+                            <button type="button" onclick="goToStep(2)" class="text-indigo-600 font-semibold text-xs hover:underline">Edit</button>
+                        </div>
+                        <div class="flex justify-between">
+                            <div><p class="text-slate-500 text-xs font-bold uppercase">Content</p><p id="rev-content" class="font-semibold">-</p></div>
+                            <button type="button" onclick="goToStep(3)" class="text-indigo-600 font-semibold text-xs hover:underline">Edit</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer / Navigation -->
+            <div class="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between mt-auto">
+                <button type="button" id="wiz-prev" onclick="changeStep(-1)" class="px-5 py-2.5 font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors hidden">Back</button>
+                <div class="flex-grow"></div>
+                <button type="button" id="wiz-next" onclick="changeStep(1)" class="btn-primary px-8 py-2.5">Next</button>
+                <button type="submit" id="wiz-submit" class="btn-primary px-8 py-2.5 hidden bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white shadow-emerald-600/30">Create Course</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================= EDIT SLIDE-IN PANEL ================= -->
+<div id="edit-panel-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] hidden opacity-0 transition-opacity duration-300" onclick="closeEditPanel()"></div>
+<div id="edit-panel" class="fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white dark:bg-slate-900 shadow-2xl z-[100] transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-200 dark:border-slate-800">
+    <div class="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+        <h2 class="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Edit Course</h2>
+        <button onclick="closeEditPanel()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+    
+    <form method="post" class="flex flex-col flex-grow overflow-hidden" action="" id="edit-form">
+        <div class="flex-grow overflow-y-auto p-6 space-y-5">
+            <input type="hidden" name="action" value="update_course">
+            
+            <div>
+                <label class="form-label">Course Name</label>
+                <input name="name" id="edit-name" class="form-input font-semibold" required>
+            </div>
+            
+            <div>
+                <label class="form-label">Description</label>
+                <textarea name="description" id="edit-desc" class="form-input h-24 resize-none"></textarea>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="form-label">Category</label>
+                    <input name="category" id="edit-cat" class="form-input">
+                </div>
+                <div>
+                    <label class="form-label">Status</label>
+                    <select name="status" id="edit-status" class="form-input">
+                        <option value="published">Published</option>
+                        <option value="draft">Draft</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="form-label">Difficulty</label>
+                    <select name="difficulty" id="edit-diff" class="form-input">
+                        <option value="beginner">Beginner</option>
+                        <option value="intermediate">Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Duration (m)</label>
+                    <input name="duration_minutes" id="edit-dur" type="number" class="form-input">
+                </div>
+            </div>
+            
+            <div>
+                <label class="form-label">Tags</label>
+                <input name="tags" id="edit-tags" class="form-input">
+            </div>
+            
+            <div class="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl mt-4">
+                <p class="text-xs text-amber-800 dark:text-amber-400 font-medium">Note: To change course content (PDF, Video, etc.), please create a new course and delete this one, to preserve assessment integrity.</p>
+            </div>
+        </div>
+        
+        <div class="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <button type="submit" class="btn-primary w-full py-3">Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<style>
+.chip { padding: 0.35rem 1rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1.5px solid #e2e8f0; color: #64748b; cursor: pointer; transition: all .15s; }
+.dark .chip { border-color: #334155; color: #94a3b8; }
+.chip:hover { border-color: #818cf8; color: #6366f1; }
+.chip.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+</style>
+
+<script>
+// Filter & Search Logic
+let currentFilter = 'all';
+
+document.querySelectorAll('.chip').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        e.target.classList.add('active');
+        currentFilter = e.target.dataset.filter;
+        filterCourses();
+    });
+});
+
+function filterCourses() {
+    const query = document.getElementById('course-search').value.toLowerCase();
+    const cards = document.querySelectorAll('.course-card');
+    let visible = 0;
+    
+    cards.forEach(card => {
+        const name = card.dataset.name;
+        const cat = card.dataset.category;
+        const tags = card.dataset.tags;
+        const status = card.dataset.status;
+        
+        const matchesQuery = name.includes(query) || cat.includes(query) || tags.includes(query);
+        const matchesFilter = currentFilter === 'all' || status === currentFilter;
+        
+        if (matchesQuery && matchesFilter) {
+            card.classList.remove('hidden');
+            visible++;
+        } else {
+            card.classList.add('hidden');
+        }
+    });
+    
+    const noResults = document.getElementById('no-results');
+    if (visible === 0) {
+        noResults.classList.remove('hidden');
+    } else {
+        noResults.classList.add('hidden');
+    }
+}
+
+// Wizard Logic
+let currentStep = 1;
+const totalSteps = 4;
+
+function closeWizard() {
+    document.getElementById('wizard-modal').classList.add('hidden');
+    // reset
+    currentStep = 1;
+    updateWizardUI();
+    document.getElementById('wizard-form').reset();
+}
+
+function changeStep(dir) {
+    if (dir === 1 && !validateStep(currentStep)) return;
+    
+    currentStep += dir;
+    if (currentStep < 1) currentStep = 1;
+    if (currentStep > totalSteps) currentStep = totalSteps;
+    
+    if (currentStep === 4) populateReview();
+    
+    updateWizardUI();
+}
+
+function goToStep(step) {
+    currentStep = step;
+    updateWizardUI();
+}
+
+function validateStep(step) {
+    const name = document.getElementById('wiz-name').value.trim();
+    if (step === 1 && !name) {
+        alert("Course Title is required.");
+        return false;
+    }
+    return true;
+}
+
+function updateWizardUI() {
+    // Show/hide steps
+    for(let i=1; i<=totalSteps; i++) {
+        document.getElementById(`step-${i}`).classList.toggle('hidden', i !== currentStep);
+    }
+    
+    // Update progress bar
+    document.getElementById('progress-bar').style.width = ((currentStep - 1) / (totalSteps - 1)) * 100 + '%';
+    
+    // Update indicators
+    document.querySelectorAll('.step-indicator').forEach(ind => {
+        const step = parseInt(ind.dataset.step);
+        const circle = ind.querySelector('div');
+        const text = ind.querySelector('span');
+        
+        if (step <= currentStep) {
+            circle.className = 'w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-indigo-600 text-white shadow-md transition-colors';
+            text.className = 'text-[10px] font-bold uppercase text-indigo-600 tracking-wider';
+        } else {
+            circle.className = 'w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors';
+            text.className = 'text-[10px] font-bold uppercase text-slate-500 tracking-wider';
+        }
+    });
+    
+    // Buttons
+    document.getElementById('wiz-prev').classList.toggle('hidden', currentStep === 1);
+    document.getElementById('wiz-next').classList.toggle('hidden', currentStep === totalSteps);
+    document.getElementById('wiz-submit').classList.toggle('hidden', currentStep !== totalSteps);
+}
+
+function toggleContentInput() {
+    const type = document.getElementById('wiz-type').value;
+    const isUrl = type === 'URL';
+    document.getElementById('content-url-div').classList.toggle('hidden', !isUrl);
+    document.getElementById('content-file-div').classList.toggle('hidden', isUrl);
+    
+    const hints = document.getElementById('file-hints');
+    if (type === 'PDF') hints.textContent = 'Upload .pdf file';
+    else if (type === 'Video') hints.textContent = 'Upload .mp4, .webm, .mov';
+    else if (type === 'PPT') hints.textContent = 'Upload .ppt, .pptx';
+}
+
+function populateReview() {
+    document.getElementById('rev-name').textContent = document.getElementById('wiz-name').value || 'Untitled';
+    
+    const diff = document.getElementById('wiz-diff').value;
+    const dur = document.getElementById('wiz-dur').value || '0';
+    const cat = document.getElementById('wiz-cat').value || 'General';
+    document.getElementById('rev-details').textContent = `${diff} • ${dur} mins • ${cat}`;
+    
+    const type = document.getElementById('wiz-type').value;
+    let contentStr = type + " • ";
+    if (type === 'URL') {
+        contentStr += document.getElementById('wiz-url').value || "No URL provided";
+    } else {
+        const file = document.getElementById('wiz-file').files[0];
+        contentStr += file ? file.name : "No file selected";
+    }
+    document.getElementById('rev-content').textContent = contentStr;
+}
+
+// Edit Panel Logic
+function openEditPanel(id, name, desc, cat, status, diff, dur, tags) {
+    document.getElementById('edit-form').action = `/courses/${id}/update`;
+    document.getElementById('edit-name').value = name;
+    document.getElementById('edit-desc').value = desc;
+    document.getElementById('edit-cat').value = cat;
+    document.getElementById('edit-status').value = status;
+    document.getElementById('edit-diff').value = diff;
+    document.getElementById('edit-dur').value = dur;
+    document.getElementById('edit-tags').value = tags;
+    
+    const panel = document.getElementById('edit-panel');
+    const overlay = document.getElementById('edit-panel-overlay');
+    
+    overlay.classList.remove('hidden');
+    setTimeout(() => {
+        overlay.classList.remove('opacity-0');
+        panel.classList.remove('translate-x-full');
+    }, 10);
+    document.body.style.overflow = 'hidden';
+}
+
+function closeEditPanel() {
+    const panel = document.getElementById('edit-panel');
+    const overlay = document.getElementById('edit-panel-overlay');
+    
+    overlay.classList.add('opacity-0');
+    panel.classList.add('translate-x-full');
+    
+    setTimeout(() => {
+        overlay.classList.add('hidden');
+    }, 300);
+    document.body.style.overflow = '';
+}
+</script>
+{% endblock %}
+

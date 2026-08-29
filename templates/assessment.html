@@ -24,13 +24,21 @@
             <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             {% endif %}
         </div>
-        <h2 class="text-3xl font-bold mb-2 capitalize {{ 'text-green-600' if result == 'pass' else 'text-red-600' }}">{{ result }}</h2>
-        <p class="text-2xl font-bold text-slate-500 dark:text-slate-400 mb-2">
-            {{ "%.0f"|format(percentage) }}%
-        </p>
-        <p class="text-lg text-slate-500 dark:text-slate-400">
-            You scored {{ score }} points.
-        </p>
+        {% if result == 'pass' %}
+        <h2 class="text-3xl font-bold mb-3 text-green-600">Assessment Passed</h2>
+        <p class="text-lg text-slate-600 dark:text-slate-300 mb-6">Congratulations! You have successfully completed the course. We value your feedback. Please share your feedback on this course and submit it to collect your certificate.</p>
+        <div class="flex justify-center">
+            <a href="{{ url_for('feedback_form', course_id=assessment.course_id) }}" class="btn-primary px-6 py-3 rounded-full">Give Feedback &amp; Collect Certificate</a>
+        </div>
+        {% else %}
+        <h2 class="text-3xl font-bold mb-3 text-red-600">Assessment Not Passed</h2>
+        <p class="text-lg text-slate-600 dark:text-slate-300 mb-4">You have not achieved the required pass mark for this course. Please review the course material again and try the assessment for another chance.</p>
+        <p class="text-2xl font-bold text-slate-500 dark:text-slate-400 mb-6">{{ "%.0f"|format(percentage) }}%</p>
+        <div class="flex flex-col sm:flex-row justify-center gap-4">
+            <a href="{{ url_for('course_detail', course_id=assessment.course_id) }}" class="btn-secondary px-6 py-3 rounded-full">Go Through Course Again</a>
+            <a href="{{ url_for('assessment', assessment_id=assessment.id) }}" class="btn-primary px-6 py-3 rounded-full">Try Assessment Again</a>
+        </div>
+        {% endif %}
     </div>
     {% elif questions %}
     <form method="post" class="space-y-10">

@@ -63,6 +63,53 @@
     {% endfor %}
 </section>
 
+{% if role == 'basic user' and user_certifications %}
+<section class="mt-12">
+    <div class="eyebrow mb-6">My Achievements</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for cert in user_certifications %}
+        <div class="glass-panel p-5 border border-amber-200 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-yellow-100 dark:from-slate-900 dark:to-slate-800">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <div>
+                    <div class="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Badge</div>
+                    <div class="font-bold text-lg">{{ cert.badge }}</div>
+                </div>
+                <div class="w-14 h-14 rounded-full shadow-lg overflow-hidden">
+                    {% if cert.badge == 'PLATINUM' %}
+                    <svg viewBox="0 0 100 100" class="w-full h-full" aria-label="Platinum badge">
+                        <circle cx="50" cy="50" r="46" fill="#dfe7ef"/>
+                        <circle cx="50" cy="50" r="38" fill="#f8fafc" stroke="#94a3b8" stroke-width="4"/>
+                        <path d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="#cbd5e1"/>
+                    </svg>
+                    {% elif cert.badge == 'GOLD' %}
+                    <svg viewBox="0 0 100 100" class="w-full h-full" aria-label="Gold badge">
+                        <circle cx="50" cy="50" r="46" fill="#fbbf24"/>
+                        <circle cx="50" cy="50" r="38" fill="#fef3c7" stroke="#f59e0b" stroke-width="4"/>
+                        <path d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="#fbbf24"/>
+                    </svg>
+                    {% elif cert.badge == 'SILVER' %}
+                    <svg viewBox="0 0 100 100" class="w-full h-full" aria-label="Silver badge">
+                        <circle cx="50" cy="50" r="46" fill="#cbd5e1"/>
+                        <circle cx="50" cy="50" r="38" fill="#f8fafc" stroke="#94a3b8" stroke-width="4"/>
+                        <path d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="#cbd5e1"/>
+                    </svg>
+                    {% else %}
+                    <svg viewBox="0 0 100 100" class="w-full h-full" aria-label="Bronze badge">
+                        <circle cx="50" cy="50" r="46" fill="#fdba74"/>
+                        <circle cx="50" cy="50" r="38" fill="#fff7ed" stroke="#c2410c" stroke-width="4"/>
+                        <path d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="#f59e0b"/>
+                    </svg>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="text-sm font-medium text-slate-700 dark:text-slate-200">{{ cert.course_name }}</div>
+            <div class="mt-3 text-xs text-slate-500 dark:text-slate-400">Certified on {{ cert.certificate_generated_at or cert.feedback_submitted_at or 'recently' }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
 {% if role == 'basic user' and assessments %}
 <section class="mt-12">
     <div class="eyebrow mb-6">Assessments</div>

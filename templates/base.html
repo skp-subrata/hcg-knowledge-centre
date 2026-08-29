@@ -79,7 +79,7 @@
 </head>
 <body class="text-slate-900 dark:text-slate-50 transition-colors duration-500 min-h-screen">
     <!-- Navbar -->
-    <header class="sticky top-0 z-50 w-full border-b border-white/30 dark:border-white/10 bg-white/20 dark:bg-black/20 backdrop-blur supports-[backdrop-filter]:bg-background/60 dark:supports-[backdrop-filter]:bg-darkBackground/60">
+    <header class="relative z-50 w-full border-b border-white/30 dark:border-white/10 bg-white/20 dark:bg-black/20 backdrop-blur supports-[backdrop-filter]:bg-background/60 dark:supports-[backdrop-filter]:bg-darkBackground/60">
         <nav class="max-w-6xl mx-auto px-6 h-16 flex justify-between items-center relative">
             
             <div class="flex items-center gap-4">
@@ -106,6 +106,62 @@
             </div>
 
             <div class="flex items-center gap-3 sm:gap-4 text-sm font-medium text-slate-600 dark:text-slate-400">
+                <!-- Version Badge with Release Notes -->
+                <div class="relative group">
+                    <button class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50/80 text-indigo-600 border border-indigo-200/50 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-all cursor-pointer">
+                        <span>v1.2.0</span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </button>
+                    <!-- Release Notes Hover Card -->
+                    <div class="absolute right-0 mt-2 w-80 bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-5 z-[70] hidden group-hover:block transition-all duration-200 backdrop-blur-md">
+                        <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
+                            <div class="p-1.5 rounded-lg bg-indigo-500 text-white">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-sm text-slate-900 dark:text-slate-50">Release Notes</h4>
+                                <p class="text-[10px] text-slate-400 font-medium">Version 1.2.0 • Latest Update</p>
+                            </div>
+                        </div>
+                        <div class="space-y-3.5 text-xs text-slate-600 dark:text-slate-400 max-h-[300px] overflow-y-auto pr-1">
+                            <div>
+                                <h5 class="font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1.5 mb-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                    New Features
+                                </h5>
+                                <ul class="list-disc pl-4 space-y-1">
+                                    <li><strong>Wizard-based Course Creation:</strong> A full 4-step wizard (Basics, Details, Content, Review) to design courses easily.</li>
+                                    <li><strong>Course Management Center:</strong> Access and filter all courses, edit properties, and preview courses instantly.</li>
+                                    <li><strong>Impersonation / "View As":</strong> Admins can switch views to preview student experiences.</li>
+                                    <li><strong>Global & Sectional Search:</strong> Individual search inputs and filter chips in Admin workspace.</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h5 class="font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1.5 mb-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                    Content Protection
+                                </h5>
+                                <ul class="list-disc pl-4 space-y-1">
+                                    <li>Disabled PPT/PDF downloads and printing options.</li>
+                                    <li>Blocked right-click inspect & text selection across course content.</li>
+                                    <li>Disabled native video context menus/downloads.</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h5 class="font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1.5 mb-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                    Bug Fixes & UX Fixes
+                                </h5>
+                                <ul class="list-disc pl-4 space-y-1">
+                                    <li>Fixed crash on localhost when viewing uploaded PPT files.</li>
+                                    <li>Fixed top navigation bar overlay z-index bug during course wizard.</li>
+                                    <li>Resolved duplicate endpoint crash and role-switching errors.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <button id="themeToggle" type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 dark:border-slate-800 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden dark:block"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="block dark:hidden"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
@@ -171,7 +227,7 @@
         
     </header>
     <!-- Main Content -->
-    <main class="max-w-6xl mx-auto px-6 pb-12 pt-4 relative z-10 flex-grow w-full">
+    <main class="max-w-6xl mx-auto px-6 pb-12 pt-4 relative flex-grow w-full">
         {% if impersonating %}
         <div class="glass-panel p-4 mb-6 flex justify-between items-center bg-yellow-50/20 dark:bg-yellow-900/20 border-yellow-200/50 dark:border-yellow-700/50">
             <span class="text-slate-800 dark:text-slate-200">Viewing as <strong class="font-bold">{{ user }}</strong></span>
@@ -231,6 +287,12 @@
                         <a href="{{ url_for('courses_page') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium transition-colors">
                             <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25"></path></svg>
                             Courses
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('groups_page') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium transition-colors">
+                            <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            Groups
                         </a>
                     </li>
                     

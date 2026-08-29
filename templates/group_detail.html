@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}{{ group.name }} | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+    <div>
+        <div class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 mb-2">Group</div>
+        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50">{{ group.name }}</h1>
+    </div>
+    <a href="{{ url_for('groups_page') }}" class="btn-secondary px-5 py-3 rounded-full">Back to Groups</a>
+</div>
+
+<section class="grid md:grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
+    <div class="glass-panel p-5">
+        <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Status</div>
+        <div class="text-xl font-bold text-slate-900 dark:text-slate-50">{{ group.status|title }}</div>
+    </div>
+    <div class="glass-panel p-5">
+        <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Created By</div>
+        <div class="text-xl font-bold text-slate-900 dark:text-slate-50">{{ group.creator_name }}</div>
+    </div>
+    <div class="glass-panel p-5">
+        <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Members</div>
+        <div class="text-xl font-bold text-slate-900 dark:text-slate-50">{{ user_count or 0 }}</div>
+    </div>
+    <div class="glass-panel p-5">
+        <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Courses</div>
+        <div class="text-xl font-bold text-slate-900 dark:text-slate-50">{{ course_count or 0 }}</div>
+    </div>
+    <div class="glass-panel p-5">
+        <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Certifications</div>
+        <div class="text-xl font-bold text-slate-900 dark:text-slate-50">{{ certified_count or 0 }}</div>
+    </div>
+</section>
+
+<section class="glass-panel p-6 mb-8">
+    <div class="grid md:grid-cols-2 gap-6">
+        <div>
+            <div class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-[0.18em] mb-2">Group Details</div>
+            <dl class="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+                <div class="flex justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2"><dt>Type</dt><dd>{{ group.group_type or 'General' }}</dd></div>
+                <div class="flex justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2"><dt>Created</dt><dd>{{ group.created_at }}</dd></div>
+                <div class="flex justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2"><dt>Overall access</dt><dd>{{ overall_progress or 0 }}</dd></div>
+            </dl>
+        </div>
+        <div>
+            <div class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-[0.18em] mb-2">Description</div>
+            <p class="text-slate-700 dark:text-slate-300 leading-7">{{ group.description or 'No description has been added for this group yet.' }}</p>
+        </div>
+    </div>
+</section>
+
+<section class="glass-panel p-6 mb-8">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-5">
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-slate-50">Assign Course</h2>
+    </div>
+    <form method="post" action="{{ url_for('assign_group_course', group_id=group.id) }}" class="space-y-4">
+        <div>
+            <label class="form-label">Select Course</label>
+            <select name="course_id" class="form-input" required>
+                <option value="">Choose a course</option>
+                {% for course in all_courses %}
+                <option value="{{ course.id }}">{{ course.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn-primary px-6 py-3 rounded-full">Assign Course to Group</button>
+    </form>
+</section>
+
+<section class="glass-panel p-6">
+    <h2 class="text-2xl font-semibold mb-5 text-slate-900 dark:text-slate-50">Members</h2>
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b border-slate-200 dark:border-slate-800">
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">User Name</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Employee ID</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Email</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Role</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Department</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Location</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Status</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for member in members %}
+                <tr class="border-b border-slate-200 dark:border-slate-800">
+                    <td class="p-3 text-slate-800 dark:text-slate-200">{{ member.full_name }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ member.employee_id or 'N/A' }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ member.email or 'N/A' }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ member.role }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ member.department or 'N/A' }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ member.location or 'N/A' }}</td>
+                    <td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ member.user_status or member.is_active }}</span></td>
+                    <td class="p-3">
+                        <form method="post" action="{{ url_for('remove_group_member', group_id=group.id) }}">
+                            <input type="hidden" name="user_id" value="{{ member.user_id }}">
+                            <button class="text-red-600 dark:text-red-400 font-medium">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" class="p-5 text-center text-slate-500 dark:text-slate-400">No members are currently assigned to this group.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="glass-panel p-6 mt-8">
+    <h2 class="text-2xl font-semibold mb-5 text-slate-900 dark:text-slate-50">Assigned Courses</h2>
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b border-slate-200 dark:border-slate-800">
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Course</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Assigned Date</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Assigned By</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Members</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Completed</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Certified</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for course in assigned_courses %}
+                <tr class="border-b border-slate-200 dark:border-slate-800">
+                    <td class="p-3 text-slate-800 dark:text-slate-200 font-medium">{{ course.course_name }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ course.assigned_at }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ course.assigned_by_name or 'Admin' }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ course.member_access or 0 }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ course.completed_count or 0 }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ course.certified_count or 0 }}</td>
+                    <td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">{{ course.status or 'Active' }}</span></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="p-5 text-center text-slate-500 dark:text-slate-400">No courses have been assigned to this group yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
