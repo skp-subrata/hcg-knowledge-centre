@@ -52,6 +52,29 @@
                     <!-- Public PPT embedded using Office Online viewer -->
                     <iframe class="w-full h-[600px] bg-white" src="https://view.officeapps.live.com/op/embed.aspx?src={{ (request.host_url.rstrip('/') ~ course.content_url) | urlencode }}" title="{{ course.name }}" oncontextmenu="return false;"></iframe>
                     {% endif %}
+                {% elif course.content_type == 'URL' %}
+                    {% if 'youtube.com' in course.content_url or 'youtu.be' in course.content_url or 'vimeo.com' in course.content_url %}
+                    <!-- Render external video URL using the video embedder -->
+                    <iframe class="w-full aspect-video bg-black" src="{{ embed_url(course.content_url) }}" title="{{ course.name }}" allowfullscreen oncontextmenu="return false;"></iframe>
+                    {% elif course.content_url.lower().endswith('.pdf') %}
+                    <!-- Render external PDF URL -->
+                    <iframe class="w-full h-[600px] bg-white" src="{{ course.content_url }}#toolbar=0&navpanes=0&messages=0" title="{{ course.name }}" oncontextmenu="return false;"></iframe>
+                    {% else %}
+                    <!-- Generic website or material link -->
+                    <div class="p-10 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col items-center gap-4 text-center border border-slate-200 dark:border-slate-800 rounded-xl">
+                        <div class="w-16 h-16 rounded-2xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-slate-900 dark:text-slate-50 mb-1">External Educational Material</p>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-4">This course content is located on an external website. Click the button below to open the educational material in a new tab securely.</p>
+                            <a href="{{ course.content_url }}" target="_blank" rel="noopener noreferrer" class="btn-primary px-6 py-2.5 rounded-full inline-flex items-center gap-2">
+                                Open Material
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
                 {% endif %}
             </div>
 

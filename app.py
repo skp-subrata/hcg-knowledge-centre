@@ -1263,6 +1263,28 @@ def create_app():
 		flash("Course updated.")
 		return redirect(url_for("courses_page"))
 
+	@app.post("/courses/<int:course_id>/publish")
+	@staff_required
+	def courses_publish(course_id):
+		"""Quick publish a course."""
+		with get_db() as connection:
+			if not course_is_manageable(connection, course_id, session["user_id"], session["role"]):
+				flash("You can only publish courses you created.")
+				return redirect(url_for("courses_page"))
+			
+			course = connection.execute("SELECT content_url, content_type FROM courses WHERE id = ?", (course_id,)).fetchone()
+			if not course or course["content_url"] == "#" or not course["content_url"]:
+				flash("Please upload educational material or add a URL before publishing this course.")
+				return redirect(url_for("courses_page"))
+
+			connection.execute("UPDATE courses SET status = 'published' WHERE id = ?", (course_id,))
+			connection.execute(
+				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'publish', 'course', ?)",
+				(session["user_id"], course_id)
+			)
+		flash("Course published successfully!")
+		return redirect(url_for("courses_page"))
+
 
 	@app.get("/view-as")
 	@admin_required
