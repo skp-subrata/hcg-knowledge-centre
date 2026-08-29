@@ -1152,7 +1152,16 @@ def create_app():
 			errors.append("Course title is required.")
 		if len(name) > 200:
 			errors.append("Course title must be under 200 characters.")
-		if content_type not in CONTENT_TYPES:
+
+		is_draft = (status == "draft")
+		
+		# If it's a draft and no content type is selected, default to URL
+		if not content_type:
+			if is_draft:
+				content_type = "URL"
+			else:
+				errors.append("Please select a valid content type.")
+		elif content_type not in CONTENT_TYPES:
 			errors.append("Please select a valid content type.")
 
 		content_url = None
@@ -1162,8 +1171,16 @@ def create_app():
 			except ValueError:
 				content_url = None
 
+		# If no file uploaded, look for URL input
 		if not content_url:
-			errors.append("Please provide a valid URL or upload a supported file.")
+			content_url = request.form.get("content_url", "").strip()
+
+		# If still no content_url, and it is a draft, default to '#'
+		if not content_url:
+			if is_draft:
+				content_url = "#"
+			else:
+				errors.append("Please provide a valid URL or upload a supported file.")
 
 		if errors:
 			for e in errors:
@@ -1190,19 +1207,58 @@ def create_app():
 			if not course_is_manageable(connection, course_id, session["user_id"], session["role"]):
 				flash("You can only edit courses you created.")
 				return redirect(url_for("courses_page"))
+			
+			# Get existing course to check current content
+			existing = connection.execute("SELECT content_url, content_type FROM courses WHERE id = ?", (course_id,)).fetchone()
+			if not existing:
+				flash("Course not found.")
+				return redirect(url_for("courses_page"))
+
+			content_type = request.form.get("content_type", existing["content_type"])
+			status = request.form.get("status", "draft")
+
+			new_url = None
+			if content_type == "URL":
+				new_url = request.form.get("content_url", "").strip()
+			else:
+				# Check if new file uploaded
+				try:
+					new_url = content_location("course_file")
+				except ValueError:
+					new_url = None
+				
+				# Keep existing URL if file unchanged
+				if not new_url and content_type == existing["content_type"]:
+					new_url = existing["content_url"]
+
+			# Skip content checks for drafts, but require them for published courses
+			is_draft = (status == "draft")
+			if not new_url:
+				if is_draft:
+					new_url = existing["content_url"] or "#"
+				else:
+					flash("Please provide a valid URL or file for publication.")
+					return redirect(url_for("courses_page"))
+
 			connection.execute(
-				"UPDATE courses SET name=?, description=?, category=?, status=?, tags=?, duration_minutes=?, difficulty=?, thumbnail_color=? WHERE id=?",
+				"UPDATE courses SET name=?, description=?, category=?, status=?, tags=?, duration_minutes=?, difficulty=?, thumbnail_color=?, content_type=?, content_url=? WHERE id=?",
 				(
 					request.form.get("name", "").strip(),
 					request.form.get("description", "").strip(),
 					request.form.get("category", "General").strip() or "General",
-					request.form.get("status", "draft"),
+					status,
 					request.form.get("tags", "").strip(),
 					int(request.form.get("duration_minutes", 0) or 0),
 					request.form.get("difficulty", "beginner"),
 					request.form.get("thumbnail_color", "#6366f1"),
+					content_type,
+					new_url,
 					course_id
 				)
+			)
+			connection.execute(
+				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'update', 'course', ?)",
+				(session["user_id"], course_id)
 			)
 		flash("Course updated.")
 		return redirect(url_for("courses_page"))

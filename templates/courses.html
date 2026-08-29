@@ -64,7 +64,7 @@
         </div>
         
         <div class="flex gap-2 mt-auto pt-4 border-t border-slate-100 dark:border-slate-800">
-            <button onclick="openEditPanel({{ item.id }}, '{{ item.name|escape }}', '{{ (item.description or '')|escape }}', '{{ (item.category or '')|escape }}', '{{ item.status or 'published' }}', '{{ item.difficulty or 'beginner' }}', {{ item.duration_minutes or 0 }}, '{{ (item.tags or '')|escape }}')" class="flex-1 btn-secondary py-2 text-sm font-semibold flex items-center justify-center gap-2">
+            <button onclick="openEditPanel({{ item.id }}, '{{ item.name|escape }}', '{{ (item.description or '')|escape }}', '{{ (item.category or '')|escape }}', '{{ item.status or 'published' }}', '{{ item.difficulty or 'beginner' }}', {{ item.duration_minutes or 0 }}, '{{ (item.tags or '')|escape }}', '{{ item.content_type }}', '{{ (item.content_url or '')|escape }}')" class="flex-1 btn-secondary py-2 text-sm font-semibold flex items-center justify-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                 Edit
             </button>
@@ -258,11 +258,14 @@
             </div>
 
             <!-- Footer / Navigation -->
-            <div class="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between mt-auto">
+            <div class="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between mt-auto items-center">
                 <button type="button" id="wiz-prev" onclick="changeStep(-1)" class="px-5 py-2.5 font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors hidden">Back</button>
                 <div class="flex-grow"></div>
-                <button type="button" id="wiz-next" onclick="changeStep(1)" class="btn-primary px-8 py-2.5">Next</button>
-                <button type="submit" id="wiz-submit" class="btn-primary px-8 py-2.5 hidden bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white shadow-emerald-600/30">Create Course</button>
+                <div class="flex gap-2">
+                    <button type="button" id="wiz-draft" onclick="saveAsDraft()" class="px-5 py-2.5 font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors border border-slate-200 dark:border-slate-700">Save as Draft</button>
+                    <button type="button" id="wiz-next" onclick="changeStep(1)" class="btn-primary px-8 py-2.5">Next</button>
+                    <button type="submit" id="wiz-submit" class="btn-primary px-8 py-2.5 hidden bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white shadow-emerald-600/30">Create Course</button>
+                </div>
             </div>
         </form>
     </div>
@@ -278,7 +281,7 @@
         </button>
     </div>
     
-    <form method="post" class="flex flex-col flex-grow overflow-hidden" action="" id="edit-form">
+    <form method="post" enctype="multipart/form-data" class="flex flex-col flex-grow overflow-hidden" action="" id="edit-form">
         <div class="flex-grow overflow-y-auto p-6 space-y-5">
             <input type="hidden" name="action" value="update_course">
             
@@ -326,8 +329,33 @@
                 <input name="tags" id="edit-tags" class="form-input">
             </div>
             
+            <div class="border-t border-slate-100 dark:border-slate-800 pt-4 mt-4">
+                <h4 class="font-bold text-sm text-slate-900 dark:text-slate-50 mb-3">Course Content</h4>
+                
+                <div class="mb-4">
+                    <label class="form-label">Content Type</label>
+                    <select name="content_type" id="edit-type" class="form-input font-bold" onchange="toggleEditContentInput()">
+                        {% for item in content_types %}
+                        <option value="{{ item }}">{{ item }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div id="edit-content-url-div">
+                    <label class="form-label">External URL</label>
+                    <input name="content_url" id="edit-url" type="url" class="form-input" placeholder="https://...">
+                </div>
+                
+                <div id="edit-content-file-div" class="hidden">
+                    <label class="form-label">Upload File</label>
+                    <input type="file" name="course_file" id="edit-file" class="form-input pt-2">
+                    <p class="text-xs text-slate-500 mt-2" id="edit-file-hints">Upload .pdf, .ppt, .pptx, or .mp4</p>
+                    <p class="text-xs text-indigo-600 font-bold mt-1" id="edit-current-file"></p>
+                </div>
+            </div>
+            
             <div class="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl mt-4">
-                <p class="text-xs text-amber-800 dark:text-amber-400 font-medium">Note: To change course content (PDF, Video, etc.), please create a new course and delete this one, to preserve assessment integrity.</p>
+                <p class="text-xs text-amber-800 dark:text-amber-400 font-medium">Note: Changing content of a published course may affect progress tracking for existing students. Update with care.</p>
             </div>
         </div>
         
@@ -453,6 +481,7 @@ function updateWizardUI() {
     document.getElementById('wiz-prev').classList.toggle('hidden', currentStep === 1);
     document.getElementById('wiz-next').classList.toggle('hidden', currentStep === totalSteps);
     document.getElementById('wiz-submit').classList.toggle('hidden', currentStep !== totalSteps);
+    document.getElementById('wiz-draft').classList.toggle('hidden', currentStep === totalSteps);
 }
 
 function toggleContentInput() {
@@ -487,7 +516,7 @@ function populateReview() {
 }
 
 // Edit Panel Logic
-function openEditPanel(id, name, desc, cat, status, diff, dur, tags) {
+function openEditPanel(id, name, desc, cat, status, diff, dur, tags, contentType, contentUrl) {
     document.getElementById('edit-form').action = `/courses/${id}/update`;
     document.getElementById('edit-name').value = name;
     document.getElementById('edit-desc').value = desc;
@@ -496,6 +525,18 @@ function openEditPanel(id, name, desc, cat, status, diff, dur, tags) {
     document.getElementById('edit-diff').value = diff;
     document.getElementById('edit-dur').value = dur;
     document.getElementById('edit-tags').value = tags;
+    
+    // Set content fields
+    document.getElementById('edit-type').value = contentType || 'URL';
+    toggleEditContentInput();
+    
+    if (contentType === 'URL') {
+        document.getElementById('edit-url').value = contentUrl || '';
+        document.getElementById('edit-current-file').textContent = '';
+    } else {
+        document.getElementById('edit-url').value = '';
+        document.getElementById('edit-current-file').textContent = contentUrl ? 'Current file: ' + contentUrl.split('/').pop() : '';
+    }
     
     const panel = document.getElementById('edit-panel');
     const overlay = document.getElementById('edit-panel-overlay');
@@ -520,6 +561,30 @@ function closeEditPanel() {
     }, 300);
     document.body.style.overflow = '';
 }
+
+function toggleEditContentInput() {
+    const type = document.getElementById('edit-type').value;
+    const isUrl = type === 'URL';
+    document.getElementById('edit-content-url-div').classList.toggle('hidden', !isUrl);
+    document.getElementById('edit-content-file-div').classList.toggle('hidden', isUrl);
+}
+
+function saveAsDraft() {
+    // Set status to draft
+    document.getElementById('wiz-status').value = 'draft';
+    // Validate Step 1 (Title must be filled)
+    if (!validateStep(1)) return;
+    
+    // Submit form
+    document.getElementById('wizard-form').submit();
+}
+
+// Prevent Enter key from submitting the wizard form
+document.getElementById('wizard-form').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+    }
+});
 </script>
 {% endblock %}
 
