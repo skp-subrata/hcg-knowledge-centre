@@ -344,6 +344,57 @@ def content_location(field_name):
 	return None
 
 
+def detect_content_type(value):
+	"""Auto-detect the content type ('PDF', 'Video', 'PPT', 'URL') from a URL or filename."""
+	import urllib.request
+	val = (value or "").strip()
+	if not val:
+		return "URL"
+	
+	val_lower = val.lower()
+
+	# If it's a URL, attempt a quick HTTP request to inspect headers
+	if val_lower.startswith("http://") or val_lower.startswith("https://"):
+		if any(domain in val_lower for domain in ("youtube.com", "youtu.be", "vimeo.com")):
+			return "Video"
+		try:
+			req = urllib.request.Request(
+				val, 
+				headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
+				method='HEAD'
+			)
+			with urllib.request.urlopen(req, timeout=1.0) as resp:
+				mime = (resp.headers.get_content_type() or "").lower()
+		except Exception:
+			try:
+				req = urllib.request.Request(
+					val, 
+					headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+				)
+				with urllib.request.urlopen(req, timeout=1.0) as resp:
+					mime = (resp.headers.get_content_type() or "").lower()
+			except Exception:
+				mime = ""
+		
+		if mime:
+			if "pdf" in mime:
+				return "PDF"
+			if "video" in mime:
+				return "Video"
+			if "powerpoint" in mime or "presentation" in mime or "officedocument.presentationml" in mime:
+				return "PPT"
+
+	if any(ext in val_lower for ext in (".mp4", ".webm", ".mov", ".avi", ".mkv")):
+		return "Video"
+	if any(domain in val_lower for domain in ("youtube.com", "youtu.be", "vimeo.com")):
+		return "Video"
+	if val_lower.endswith(".pdf") or ".pdf?" in val_lower or "/pdf/" in val_lower or "-pdf" in val_lower:
+		return "PDF"
+	if any(ext in val_lower for ext in (".ppt", ".pptx", ".pps")):
+		return "PPT"
+	return "URL"
+
+
 def embed_url(value):
 	"""Convert supported video links into iframe-friendly URLs."""
 	parsed = urlparse(value or "")
@@ -1145,7 +1196,7 @@ def create_app():
 		tags = request.form.get("tags", "").strip()
 		thumbnail_color = request.form.get("thumbnail_color", "#6366f1")
 		status = request.form.get("status", "draft")
-		content_type = request.form.get("content_type", "")
+		source_type = request.form.get("source_type", "url")
 
 		errors = []
 		if not name:
@@ -1153,32 +1204,26 @@ def create_app():
 		if len(name) > 200:
 			errors.append("Course title must be under 200 characters.")
 
-		is_draft = (status == "draft")
-		
-		# If it's a draft and no content type is selected, default to URL
-		if not content_type:
-			if is_draft:
-				content_type = "URL"
-			else:
-				errors.append("Please select a valid content type.")
-		elif content_type not in CONTENT_TYPES:
-			errors.append("Please select a valid content type.")
-
 		content_url = None
-		if not errors:
+		content_type = "URL"
+
+		if source_type == "file":
 			try:
 				content_url = content_location("course_file")
+				if content_url:
+					content_type = detect_content_type(content_url)
 			except ValueError:
 				content_url = None
-
-		# If no file uploaded, look for URL input
-		if not content_url:
+		else:
 			content_url = request.form.get("content_url", "").strip()
+			if content_url:
+				content_type = detect_content_type(content_url)
 
-		# If still no content_url, and it is a draft, default to '#'
+		is_draft = (status == "draft")
 		if not content_url:
 			if is_draft:
 				content_url = "#"
+				content_type = "URL"
 			else:
 				errors.append("Please provide a valid URL or upload a supported file.")
 
@@ -1214,28 +1259,36 @@ def create_app():
 				flash("Course not found.")
 				return redirect(url_for("courses_page"))
 
-			content_type = request.form.get("content_type", existing["content_type"])
+			source_type = request.form.get("source_type", "url")
 			status = request.form.get("status", "draft")
 
 			new_url = None
-			if content_type == "URL":
+			content_type = existing["content_type"]
+
+			if source_type == "url":
 				new_url = request.form.get("content_url", "").strip()
+				if new_url:
+					content_type = detect_content_type(new_url)
 			else:
 				# Check if new file uploaded
 				try:
 					new_url = content_location("course_file")
+					if new_url:
+						content_type = detect_content_type(new_url)
 				except ValueError:
 					new_url = None
 				
 				# Keep existing URL if file unchanged
-				if not new_url and content_type == existing["content_type"]:
+				if not new_url and existing["content_url"].startswith("/uploads/"):
 					new_url = existing["content_url"]
+					content_type = existing["content_type"]
 
 			# Skip content checks for drafts, but require them for published courses
 			is_draft = (status == "draft")
 			if not new_url:
 				if is_draft:
 					new_url = existing["content_url"] or "#"
+					content_type = existing["content_type"] or "URL"
 				else:
 					flash("Please provide a valid URL or file for publication.")
 					return redirect(url_for("courses_page"))
