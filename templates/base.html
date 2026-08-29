@@ -78,6 +78,19 @@
     </style>
 </head>
 <body class="text-slate-900 dark:text-slate-50 transition-colors duration-500 min-h-screen">
+    {% if session.get('impersonator_id') %}
+    <!-- Impersonation Active Banner -->
+    <div class="bg-amber-500 text-slate-950 text-xs sm:text-sm font-semibold py-2.5 px-6 flex justify-between items-center z-[110] relative shadow-sm border-b border-amber-600">
+        <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-slate-950 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            <span>You are currently viewing the platform as <strong class="font-bold">{{ user }}</strong> ({{ role }} mode)</span>
+        </div>
+        <a href="{{ url_for('exit_view') }}" class="bg-slate-950 text-white hover:bg-slate-800 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow flex items-center gap-1.5 shrink-0">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+            Exit Preview
+        </a>
+    </div>
+    {% endif %}
     <!-- Navbar -->
     <header class="relative z-50 w-full border-b border-white/30 dark:border-white/10 bg-white/20 dark:bg-black/20 backdrop-blur supports-[backdrop-filter]:bg-background/60 dark:supports-[backdrop-filter]:bg-darkBackground/60">
         <nav class="max-w-6xl mx-auto px-6 h-16 flex justify-between items-center relative">
@@ -228,12 +241,6 @@
     </header>
     <!-- Main Content -->
     <main class="max-w-6xl mx-auto px-6 pb-12 pt-4 relative flex-grow w-full">
-        {% if impersonating %}
-        <div class="glass-panel p-4 mb-6 flex justify-between items-center bg-yellow-50/20 dark:bg-yellow-900/20 border-yellow-200/50 dark:border-yellow-700/50">
-            <span class="text-slate-800 dark:text-slate-200">Viewing as <strong class="font-bold">{{ user }}</strong></span>
-            <a href="{{ url_for('exit_view') }}" class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">Exit view</a>
-        </div>
-        {% endif %}
 
         {% with messages = get_flashed_messages() %}
             {% if messages %}
