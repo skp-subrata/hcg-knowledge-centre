@@ -8,8 +8,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.parse import parse_qs
 from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename
-from uuid import uuid4
 from flask import Flask, flash, redirect, render_template, request, send_file, send_from_directory, session, url_for
 from openpyxl import Workbook, load_workbook
 from storage import save_file
