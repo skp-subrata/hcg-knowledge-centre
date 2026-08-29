@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Post | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<!-- Quill CSS -->
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+
+<div class="max-w-3xl mx-auto py-8">
+    <!-- Back Link -->
+    <a href="{{ url_for('my_posts') }}" class="inline-flex items-center gap-2 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline mb-6">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+        Back to My Posts
+    </a>
+
+    <div class="glass-panel p-8 bg-white/50 dark:bg-slate-900/40 shadow-md">
+        <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-2">Edit Post</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-8">Update your shared post details. Version history and audit logs are recorded.</p>
+
+        <!-- Warning Alert for Re-Publishing Rule -->
+        {% if post.status == 'PUBLISHED' and role == 'basic user' %}
+        <div class="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl text-xs text-amber-800 dark:text-amber-300 mb-6 flex items-start gap-2">
+            <svg class="w-4 h-4 shrink-0 mt-0.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <span><strong>Notice:</strong> Because this content is currently published, editing it will revert its status back to <strong>Pending Approval</strong> and temporarily hide it from the public feed until it is approved again by a moderator.</span>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('edit_post', post_id=post.id) }}" enctype="multipart/form-data" id="post-form" class="space-y-6">
+            <!-- Title -->
+            <div>
+                <label for="wiz-title" class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Title *</label>
+                <input type="text" id="wiz-title" name="title" required value="{{ post.title }}" class="form-input w-full text-sm">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Content Type -->
+                <div>
+                    <label for="wiz-type" class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Content Type *</label>
+                    <select id="wiz-type" name="content_type" required class="form-input w-full text-sm">
+                        <option value="Text/Article" {% if post.content_type == 'Text/Article' %}selected{% endif %}>Text / Article</option>
+                        <option value="PDF" {% if post.content_type == 'PDF' %}selected{% endif %}>PDF</option>
+                        <option value="Video" {% if post.content_type == 'Video' %}selected{% endif %}>Video</option>
+                        <option value="Image" {% if post.content_type == 'Image' %}selected{% endif %}>Image</option>
+                        <option value="PPT/PowerPoint" {% if post.content_type == 'PPT/PowerPoint' %}selected{% endif %}>PPT / PowerPoint</option>
+                    </select>
+                </div>
+
+                <!-- Category -->
+                <div>
+                    <label for="wiz-category" class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Category</label>
+                    <input type="text" id="wiz-category" name="category" value="{{ post.category }}" class="form-input w-full text-sm">
+                </div>
+
+                <!-- Tags -->
+                <div>
+                    <label for="wiz-tags" class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Topic Tags</label>
+                    <input type="text" id="wiz-tags" name="topic_tag" value="{{ post.topic_tag }}" class="form-input w-full text-sm">
+                </div>
+            </div>
+
+            <!-- Quill Editor for Description -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Post Content / Long-form Text</label>
+                <div id="editor-container" class="bg-white text-slate-800 dark:text-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl h-64 shadow-inner"></div>
+                <textarea name="description" id="description-textarea" class="hidden">{{ post.description }}</textarea>
+            </div>
+
+            <!-- Existing Thumbnail Cover Image -->
+            {% if post.thumbnail %}
+            <div class="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-slate-800 rounded-xl flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <img src="/uploads/{{ post.thumbnail }}" alt="Cover" class="w-12 h-12 object-cover rounded-lg border">
+                    <span class="text-xs text-slate-500">Current Cover Image is active</span>
+                </div>
+                <label class="inline-flex items-center gap-1.5 text-xs text-rose-500 cursor-pointer">
+                    <input type="checkbox" name="delete_thumbnail" value="1" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    Delete Cover
+                </label>
+            </div>
+            {% endif %}
+
+            <!-- Upload Cover Image / Thumbnail -->
+            <div>
+                <label for="wiz-thumbnail" class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Replace Cover Image / Thumbnail</label>
+                <input id="wiz-thumbnail" name="thumbnail" type="file" accept="image/*" class="form-input w-full text-sm block">
+            </div>
+
+            <!-- Existing Attachments -->
+            {% if attachments %}
+            <div>
+                <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Current Attachments</label>
+                <div class="space-y-2">
+                    {% for att in attachments %}
+                    <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/80 rounded-xl text-xs">
+                        <div class="flex items-center gap-2 truncate">
+                            <svg class="w-4 h-4 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            <span class="font-medium text-slate-700 dark:text-slate-300 truncate">{{ att.file_name }}</span>
+                        </div>
+                        <label class="inline-flex items-center gap-1.5 text-xs text-rose-500 cursor-pointer">
+                            <input type="checkbox" name="delete_attachment" value="{{ att.id }}" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                            Remove
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Upload Attachments (Multiple allowed) -->
+            <div>
+                <label for="wiz-attachments" class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Upload More Attachments</label>
+                <input type="file" id="wiz-attachments" name="attachments" multiple class="form-input w-full text-sm block">
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex justify-end gap-3 pt-6 border-t border-slate-100 dark:border-slate-800">
+                <button type="submit" name="status" value="DRAFT" class="btn-secondary px-6 py-2.5 rounded-xl font-semibold text-sm">
+                    Save as Draft
+                </button>
+                {% if role in ('admin', 'moderator') %}
+                <button type="submit" name="status" value="PUBLISHED" class="btn-primary px-6 py-2.5 rounded-xl font-bold text-sm shadow">
+                    Publish Directly
+                </button>
+                {% else %}
+                <button type="submit" name="status" value="PENDING_APPROVAL" class="btn-primary px-6 py-2.5 rounded-xl font-bold text-sm shadow">
+                    Submit for Approval
+                </button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Quill JS Library -->
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<script>
+// Initialize Quill Editor
+const quill = new Quill('#editor-container', {
+    theme: 'snow',
+    placeholder: 'Write long-form content, formatting tools are available above...',
+    modules: {
+        toolbar: [
+            [{ 'header': [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+            ['link', 'blockquote', 'code-block'],
+            ['clean']
+        ]
+    }
+});
+
+// Load existing description
+quill.root.innerHTML = document.getElementById('description-textarea').value;
+
+// Update the hidden description input on form submit
+document.getElementById('post-form').onsubmit = function() {
+    document.getElementById('description-textarea').value = quill.root.innerHTML;
+};
+</script>
+{% endblock %}

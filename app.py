@@ -194,8 +194,72 @@ def init_db():
 			CREATE TABLE IF NOT EXISTS certificates (id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER NOT NULL REFERENCES users(id), course_id INTEGER NOT NULL REFERENCES courses(id), cert_uid TEXT UNIQUE NOT NULL, issued_date TEXT DEFAULT CURRENT_DATE, file_url TEXT);
 			CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), message TEXT NOT NULL, type TEXT DEFAULT 'system', is_read INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 			CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER REFERENCES users(id), action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+			
+			CREATE TABLE IF NOT EXISTS posts (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				title TEXT NOT NULL,
+				description TEXT NOT NULL,
+				content_type TEXT CHECK(content_type IN ('Text/Article', 'PDF', 'Video', 'Image', 'PPT/PowerPoint')) DEFAULT 'Text/Article',
+				category TEXT DEFAULT 'General',
+				topic_tag TEXT DEFAULT '',
+				created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				status TEXT CHECK(status IN ('DRAFT', 'PENDING_APPROVAL', 'PUBLISHED', 'REJECTED', 'UNPUBLISHED')) DEFAULT 'DRAFT',
+				published_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+				published_at TEXT,
+				version_number INTEGER DEFAULT 1,
+				thumbnail TEXT,
+				views INTEGER DEFAULT 0
+			);
+			CREATE TABLE IF NOT EXISTS post_attachments (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+				file_name TEXT NOT NULL,
+				file_type TEXT,
+				file_path TEXT NOT NULL,
+				file_size INTEGER,
+				uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+				uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP
+			);
+			CREATE TABLE IF NOT EXISTS post_ratings (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				rating INTEGER CHECK(rating >= 1 AND rating <= 5) NOT NULL,
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(post_id, user_id)
+			);
+			CREATE TABLE IF NOT EXISTS post_comments (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				comment_text TEXT NOT NULL,
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				status TEXT DEFAULT 'active'
+			);
+			CREATE TABLE IF NOT EXISTS post_approval_history (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+				version_number INTEGER NOT NULL,
+				submitted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+				submitted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+				reviewed_at TEXT,
+				action TEXT CHECK(action IN ('SUBMIT', 'APPROVE', 'REJECT', 'REQUEST_CHANGES')),
+				comments TEXT,
+				previous_status TEXT,
+				new_status TEXT
+			);
+			
 			CREATE INDEX IF NOT EXISTS idx_questions_bank ON questions(question_bank_id);
 			CREATE INDEX IF NOT EXISTS idx_attempt_student ON assessment_attempts(student_id);
+			CREATE INDEX IF NOT EXISTS idx_posts_creator ON posts(created_by);
+			CREATE INDEX IF NOT EXISTS idx_post_ratings_post ON post_ratings(post_id);
+			CREATE INDEX IF NOT EXISTS idx_post_comments_post ON post_comments(post_id);
 		""")
 		seed_demo_data(connection)
 
@@ -1446,6 +1510,687 @@ def create_app():
 		with get_db() as connection:
 			user_data = connection.execute("SELECT * FROM users WHERE id = ?", (session["user_id"],)).fetchone()
 		return render_template("profile.html", user_data=user_data, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
+	@app.context_processor
+	def inject_notifications():
+		if session.get("user_id"):
+			try:
+				with get_db() as connection:
+					count = connection.execute("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND is_read = 0", (session["user_id"],)).fetchone()["n"]
+					return {"unread_notifications_count": count}
+			except Exception:
+				pass
+		return {"unread_notifications_count": 0}
+
+	def create_notification(connection, user_id, message, type_name="system"):
+		connection.execute(
+			"INSERT INTO notifications (user_id, message, type) VALUES (?, ?, ?)",
+			(user_id, message, type_name)
+		)
+
+	@app.get("/notifications")
+	def notifications_page():
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		with get_db() as connection:
+			notifications = connection.execute(
+				"SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC",
+				(session["user_id"],)
+			).fetchall()
+		return render_template("notifications.html", notifications=notifications, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
+	@app.post("/notifications/read/<int:notif_id>")
+	def mark_read(notif_id):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		with get_db() as connection:
+			connection.execute(
+				"UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?",
+				(notif_id, session["user_id"])
+			)
+		return redirect(url_for("notifications_page"))
+
+	@app.post("/notifications/read-all")
+	def mark_all_read():
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		with get_db() as connection:
+			connection.execute(
+				"UPDATE notifications SET is_read = 1 WHERE user_id = ?",
+				(session["user_id"],)
+			)
+		return redirect(url_for("notifications_page"))
+
+	@app.route("/community/create", methods=["GET", "POST"])
+	def create_post():
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+			
+		role = session.get("role")
+		user_id = session.get("user_id")
+		
+		if request.method == "POST":
+			title = request.form.get("title", "").strip()
+			description = request.form.get("description", "").strip()
+			content_type = request.form.get("content_type", "Text/Article")
+			category = request.form.get("category", "General").strip() or "General"
+			topic_tag = request.form.get("topic_tag", "").strip()
+			status_input = request.form.get("status", "DRAFT")
+			
+			if role in ("admin", "moderator"):
+				status = "PUBLISHED" if status_input != "DRAFT" else "DRAFT"
+			else:
+				status = "PENDING_APPROVAL" if status_input != "DRAFT" else "DRAFT"
+				
+			thumbnail_filename = None
+			thumbnail_file = request.files.get("thumbnail")
+			if thumbnail_file and thumbnail_file.filename:
+				ext = os.path.splitext(thumbnail_file.filename)[1].lower()
+				if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+					thumbnail_filename = f"thumb_{uuid4().hex}{ext}"
+					thumbnail_file.save(UPLOAD_FOLDER / thumbnail_filename)
+					
+			with get_db() as connection:
+				cursor = connection.execute(
+					"""INSERT INTO posts (title, description, content_type, category, topic_tag, created_by, status, thumbnail, version_number)
+					   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+					(title, description, content_type, category, topic_tag, user_id, status, thumbnail_filename)
+				)
+				post_id = cursor.lastrowid
+				
+				attachments = request.files.getlist("attachments")
+				for file in attachments:
+					if file and file.filename:
+						ext = os.path.splitext(file.filename)[1].lower()
+						file_name = secure_filename(file.filename)
+						file_path = f"post_{post_id}_{uuid4().hex[:8]}_{file_name}"
+						file.save(UPLOAD_FOLDER / file_path)
+						
+						file_size = os.path.getsize(UPLOAD_FOLDER / file_path)
+						file_type = file.mimetype
+						
+						connection.execute(
+							"""INSERT INTO post_attachments (post_id, file_name, file_type, file_path, file_size, uploaded_by)
+							   VALUES (?, ?, ?, ?, ?, ?)""",
+							(post_id, file.filename, file_type, file_path, file_size, user_id)
+						)
+						
+				connection.execute(
+					"""INSERT INTO post_approval_history (post_id, version_number, submitted_by, action, comments, previous_status, new_status)
+					   VALUES (?, 1, ?, ?, ?, 'NONE', ?)""",
+					(post_id, user_id, 'SUBMIT' if status != 'DRAFT' else 'DRAFT', 'Initial creation', status)
+				)
+				
+				if status == "PENDING_APPROVAL":
+					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
+					for r in reviewers:
+						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review")
+						
+			flash("Post created successfully!")
+			return redirect(url_for("my_posts"))
+			
+		return render_template("create_post.html", role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
+	@app.route("/community/edit/<int:post_id>", methods=["GET", "POST"])
+	def edit_post(post_id):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+			
+		user_id = session.get("user_id")
+		role = session.get("role")
+		
+		with get_db() as connection:
+			post = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
+			
+		if not post:
+			flash("Post not found.")
+			return redirect(url_for("my_posts"))
+			
+		if post["created_by"] != user_id and role != "admin":
+			flash("Unauthorized to edit this post.")
+			return redirect(url_for("my_posts"))
+			
+		with get_db() as connection:
+			attachments = connection.execute("SELECT * FROM post_attachments WHERE post_id = ?", (post_id,)).fetchall()
+			
+		if request.method == "POST":
+			title = request.form.get("title", "").strip()
+			description = request.form.get("description", "").strip()
+			content_type = request.form.get("content_type", "Text/Article")
+			category = request.form.get("category", "General").strip() or "General"
+			topic_tag = request.form.get("topic_tag", "").strip()
+			status_input = request.form.get("status", "DRAFT")
+			
+			delete_thumbnail = request.form.get("delete_thumbnail") == "1"
+			delete_attachment_ids = request.form.getlist("delete_attachment")
+			
+			old_status = post["status"]
+			
+			if role in ("admin", "moderator"):
+				new_status = "PUBLISHED" if status_input != "DRAFT" else "DRAFT"
+			else:
+				if old_status == "PUBLISHED" and status_input != "DRAFT":
+					new_status = "PENDING_APPROVAL"
+				elif status_input == "DRAFT":
+					new_status = "DRAFT"
+				else:
+					new_status = "PENDING_APPROVAL"
+					
+			new_version = post["version_number"]
+			if old_status == "PUBLISHED" or status_input != "DRAFT":
+				new_version += 1
+				
+			with get_db() as connection:
+				thumbnail_filename = post["thumbnail"]
+				if delete_thumbnail and thumbnail_filename:
+					try:
+						(UPLOAD_FOLDER / thumbnail_filename).unlink(missing_ok=True)
+					except Exception:
+						pass
+					thumbnail_filename = None
+					
+				thumbnail_file = request.files.get("thumbnail")
+				if thumbnail_file and thumbnail_file.filename:
+					if thumbnail_filename:
+						try:
+							(UPLOAD_FOLDER / thumbnail_filename).unlink(missing_ok=True)
+						except Exception:
+							pass
+					ext = os.path.splitext(thumbnail_file.filename)[1].lower()
+					if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+						thumbnail_filename = f"thumb_{uuid4().hex}{ext}"
+						thumbnail_file.save(UPLOAD_FOLDER / thumbnail_filename)
+						
+				connection.execute(
+					"""UPDATE posts 
+					   SET title = ?, description = ?, content_type = ?, category = ?, topic_tag = ?, status = ?, thumbnail = ?, version_number = ?, updated_at = CURRENT_TIMESTAMP
+					   WHERE id = ?""",
+					(title, description, content_type, category, topic_tag, new_status, thumbnail_filename, new_version, post_id)
+				)
+				
+				for att_id in delete_attachment_ids:
+					att_row = connection.execute("SELECT file_path FROM post_attachments WHERE id = ? AND post_id = ?", (att_id, post_id)).fetchone()
+					if att_row:
+						try:
+							(UPLOAD_FOLDER / att_row["file_path"]).unlink(missing_ok=True)
+						except Exception:
+							pass
+						connection.execute("DELETE FROM post_attachments WHERE id = ?", (att_id,))
+						
+				new_attachments = request.files.getlist("attachments")
+				for file in new_attachments:
+					if file and file.filename:
+						ext = os.path.splitext(file.filename)[1].lower()
+						file_name = secure_filename(file.filename)
+						file_path = f"post_{post_id}_{uuid4().hex[:8]}_{file_name}"
+						file.save(UPLOAD_FOLDER / file_path)
+						
+						file_size = os.path.getsize(UPLOAD_FOLDER / file_path)
+						file_type = file.mimetype
+						
+						connection.execute(
+							"""INSERT INTO post_attachments (post_id, file_name, file_type, file_path, file_size, uploaded_by)
+							   VALUES (?, ?, ?, ?, ?, ?)""",
+							(post_id, file.filename, file_type, file_path, file_size, user_id)
+						)
+						
+				action_type = "SUBMIT" if new_status != "DRAFT" else "DRAFT"
+				change_desc = f"Updated post. Version incremented to {new_version}."
+				if old_status == "PUBLISHED" and new_status == "PENDING_APPROVAL":
+					change_desc = f"Student edited published post. Reverted to Pending Approval."
+					
+				connection.execute(
+					"""INSERT INTO post_approval_history (post_id, version_number, submitted_by, action, comments, previous_status, new_status)
+					   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+					(post_id, new_version, user_id, action_type, change_desc, old_status, new_status)
+				)
+				
+				if old_status == "PUBLISHED" and new_status == "PENDING_APPROVAL":
+					create_notification(connection, user_id, f"Your post '{title}' requires approval after modification.", "re_approval_needed")
+					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
+					for r in reviewers:
+						create_notification(connection, r["id"], f"Modified post '{title}' (previously published) is waiting for approval.", "pending_review")
+				elif new_status == "PENDING_APPROVAL" and old_status != "PENDING_APPROVAL":
+					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
+					for r in reviewers:
+						create_notification(connection, r["id"], f"Post '{title}' is waiting for approval.", "pending_review")
+						
+			flash("Post updated successfully!")
+			return redirect(url_for("my_posts"))
+			
+		return render_template("edit_post.html", post=post, attachments=attachments, role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
+	@app.get("/community/my-posts")
+	def my_posts():
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+			
+		user_id = session.get("user_id")
+		role = session.get("role")
+		
+		with get_db() as connection:
+			posts = connection.execute(
+				"""SELECT p.*, 
+						  (SELECT ROUND(AVG(r.rating), 1) FROM post_ratings r WHERE r.post_id = p.id) AS avg_rating,
+						  (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.id) AS comment_count
+				   FROM posts p
+				   WHERE p.created_by = ?
+				   ORDER BY p.id DESC""",
+				(user_id,)
+			).fetchall()
+			
+		return render_template("my_posts.html", posts=posts, role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
+	@app.post("/community/delete/<int:post_id>")
+	def delete_post(post_id):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+			
+		user_id = session.get("user_id")
+		role = session.get("role")
+		
+		with get_db() as connection:
+			post = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
+			
+		if not post:
+			flash("Post not found.")
+			return redirect(url_for("my_posts"))
+			
+		is_owner = post["created_by"] == user_id
+		if role == "basic user":
+			if not is_owner or post["status"] not in ("DRAFT", "REJECTED"):
+				flash("You can only delete your own draft or rejected posts.")
+				return redirect(url_for("my_posts"))
+		elif role != "admin" and not is_owner:
+			flash("Unauthorized to delete this post.")
+			return redirect(url_for("my_posts"))
+			
+		with get_db() as connection:
+			atts = connection.execute("SELECT file_path FROM post_attachments WHERE post_id = ?", (post_id,)).fetchall()
+			for att in atts:
+				try:
+					(UPLOAD_FOLDER / att["file_path"]).unlink(missing_ok=True)
+				except Exception:
+					pass
+					
+			if post["thumbnail"]:
+				try:
+					(UPLOAD_FOLDER / post["thumbnail"]).unlink(missing_ok=True)
+				except Exception:
+					pass
+					
+			connection.execute("DELETE FROM post_attachments WHERE post_id = ?", (post_id,))
+			connection.execute("DELETE FROM post_ratings WHERE post_id = ?", (post_id,))
+			connection.execute("DELETE FROM post_comments WHERE post_id = ?", (post_id,))
+			connection.execute("DELETE FROM post_approval_history WHERE post_id = ?", (post_id,))
+			connection.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+			
+		flash("Post deleted successfully.")
+		return redirect(url_for("my_posts"))
+
+	@app.get("/community/approval-queue")
+	def approval_queue():
+		if "user_id" not in session or session.get("role") not in ("admin", "moderator"):
+			return redirect(url_for("home"))
+			
+		role = session.get("role")
+		
+		with get_db() as connection:
+			posts = connection.execute(
+				"""SELECT p.*, u.full_name AS creator_name, u.username
+				   FROM posts p
+				   JOIN users u ON u.id = p.created_by
+				   WHERE p.status IN ('PENDING_APPROVAL', 'UNPUBLISHED')
+				   ORDER BY p.id ASC"""
+			).fetchall()
+			
+			pending_posts = []
+			for p in posts:
+				p_dict = dict(p)
+				p_dict["attachments"] = connection.execute(
+					"SELECT * FROM post_attachments WHERE post_id = ?",
+					(p["id"],)
+				).fetchall()
+				pending_posts.append(p_dict)
+				
+		return render_template("approval_queue.html", pending_posts=pending_posts, role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
+	@app.post("/community/approval-queue/<int:post_id>/action")
+	def approval_action(post_id):
+		if "user_id" not in session or session.get("role") not in ("admin", "moderator"):
+			return redirect(url_for("home"))
+			
+		reviewer_id = session.get("user_id")
+		action = request.form.get("action")
+		comments = request.form.get("comments", "").strip()
+		
+		with get_db() as connection:
+			post = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
+			
+		if not post:
+			flash("Post not found.")
+			return redirect(url_for("approval_queue"))
+			
+		old_status = post["status"]
+		
+		if action == "APPROVE":
+			new_status = "PUBLISHED"
+			audit_action = "APPROVE"
+			notif_message = f"Your content '{post['title']}' has been approved and published."
+			notif_type = "approval"
+			published_by = reviewer_id
+		elif action == "REJECT":
+			new_status = "REJECTED"
+			audit_action = "REJECT"
+			notif_message = f"Your content '{post['title']}' was rejected. Reason: {comments}"
+			notif_type = "rejection"
+			published_by = None
+		elif action == "REQUEST_CHANGES":
+			new_status = "UNPUBLISHED"
+			audit_action = "REQUEST_CHANGES"
+			notif_message = f"Changes were requested for your content '{post['title']}': {comments}"
+			notif_type = "change_request"
+			published_by = None
+		else:
+			flash("Invalid action.")
+			return redirect(url_for("approval_queue"))
+			
+		with get_db() as connection:
+			if action == "APPROVE":
+				connection.execute(
+					"""UPDATE posts 
+					   SET status = ?, published_by = ?, published_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+					   WHERE id = ?""",
+					(new_status, published_by, post_id)
+				)
+			else:
+				connection.execute(
+					"""UPDATE posts 
+					   SET status = ?, updated_at = CURRENT_TIMESTAMP
+					   WHERE id = ?""",
+					(new_status, post_id)
+				)
+				
+			connection.execute(
+				"""INSERT INTO post_approval_history (post_id, version_number, submitted_by, reviewed_by, reviewed_at, action, comments, previous_status, new_status)
+				   VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)""",
+				(post_id, post["version_number"], post["created_by"], reviewer_id, audit_action, comments, old_status, new_status)
+			)
+			
+			create_notification(connection, post["created_by"], notif_message, notif_type)
+			
+		flash(f"Decision '{action}' submitted successfully!")
+		return redirect(url_for("approval_queue"))
+
+	@app.get("/community")
+	def community_feed():
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+			
+		role = session.get("role")
+		user_id = session.get("user_id")
+		
+		q = request.args.get("q", "").strip()
+		category = request.args.get("category", "").strip()
+		content_type = request.args.get("type", "").strip()
+		sort = request.args.get("sort", "newest")
+		
+		sql = """
+			SELECT p.*, u.full_name AS creator_name, u.role,
+				   (SELECT ROUND(AVG(r.rating), 1) FROM post_ratings r WHERE r.post_id = p.id) AS avg_rating,
+				   (SELECT COUNT(*) FROM post_ratings r WHERE r.post_id = p.id) AS rating_count,
+				   (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.id) AS comment_count
+			FROM posts p
+			JOIN users u ON u.id = p.created_by
+			WHERE p.status = 'PUBLISHED'
+		"""
+		params = []
+		
+		if q:
+			sql += " AND (p.title LIKE ? OR p.description LIKE ? OR p.topic_tag LIKE ?)"
+			params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
+		if category:
+			sql += " AND p.category = ?"
+			params.append(category)
+		if content_type:
+			sql += " AND p.content_type = ?"
+			params.append(content_type)
+			
+		if sort == "highest_rated":
+			sql += " ORDER BY avg_rating DESC, p.id DESC"
+		else:
+			sql += " ORDER BY p.id DESC"
+			
+		with get_db() as connection:
+			posts_rows = connection.execute(sql, params).fetchall()
+			
+			categories_rows = connection.execute("SELECT DISTINCT category FROM posts WHERE status = 'PUBLISHED' AND category != ''").fetchall()
+			categories = [row["category"] for row in categories_rows]
+			
+			posts = []
+			for p in posts_rows:
+				p_dict = dict(p)
+				p_dict["attachments"] = connection.execute("SELECT * FROM post_attachments WHERE post_id = ?", (p["id"],)).fetchall()
+				posts.append(p_dict)
+				
+		return render_template("community_feed.html", posts=posts, categories=categories, role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
+	@app.get("/community/post/<int:post_id>")
+	def post_detail(post_id):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+			
+		user_id = session.get("user_id")
+		role = session.get("role")
+		
+		with get_db() as connection:
+			post = connection.execute(
+				"""SELECT p.*, u.full_name AS creator_name, u.role,
+						  (SELECT ROUND(AVG(r.rating), 1) FROM post_ratings r WHERE r.post_id = p.id) AS avg_rating,
+						  (SELECT COUNT(*) FROM post_ratings r WHERE r.post_id = p.id) AS rating_count
+				   FROM posts p
+				   JOIN users u ON u.id = p.created_by
+				   WHERE p.id = ?""",
+				(post_id,)
+			).fetchone()
+			
+		if not post:
+			flash("Post not found.")
+			return redirect(url_for("community_feed"))
+			
+		is_creator = post["created_by"] == user_id
+		is_reviewer = role in ("admin", "moderator")
+		if post["status"] != "PUBLISHED" and not (is_creator or is_reviewer):
+			flash("Unauthorized to view this post.")
+			return redirect(url_for("community_feed"))
+			
+		with get_db() as connection:
+			connection.execute("UPDATE posts SET views = views + 1 WHERE id = ?", (post_id,))
+			
+			attachments = connection.execute("SELECT * FROM post_attachments WHERE post_id = ?", (post_id,)).fetchall()
+			
+			user_rating = connection.execute("SELECT * FROM post_ratings WHERE post_id = ? AND user_id = ?", (post_id, user_id)).fetchone()
+			
+			comments = connection.execute(
+				"""SELECT c.*, u.full_name, u.role, r.rating
+				   FROM post_comments c
+				   JOIN users u ON u.id = c.user_id
+				   LEFT JOIN post_ratings r ON r.post_id = c.post_id AND r.user_id = c.user_id
+				   WHERE c.post_id = ? AND c.status = 'active'
+				   ORDER BY c.id DESC""",
+				(post_id,)
+			).fetchall()
+			
+		return render_template("post_detail.html", post=post, attachments=attachments, user_rating=user_rating, comments=comments, role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
+	@app.post("/community/post/<int:post_id>/rate")
+	def rate_post(post_id):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+			
+		user_id = session.get("user_id")
+		try:
+			rating = int(request.form.get("rating", 0))
+		except ValueError:
+			rating = 0
+			
+		if rating < 1 or rating > 5:
+			flash("Invalid rating. Must be between 1 and 5.")
+			return redirect(url_for("post_detail", post_id=post_id))
+			
+		with get_db() as connection:
+			post = connection.execute("SELECT created_by, status FROM posts WHERE id = ?", (post_id,)).fetchone()
+			if not post:
+				flash("Post not found.")
+				return redirect(url_for("community_feed"))
+				
+			role = session.get("role")
+			if post["status"] != "PUBLISHED" and not (post["created_by"] == user_id or role in ("admin", "moderator")):
+				flash("Unauthorized to rate this post.")
+				return redirect(url_for("community_feed"))
+				
+			connection.execute(
+				"""INSERT INTO post_ratings (post_id, user_id, rating, updated_at)
+				   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+				   ON CONFLICT(post_id, user_id) DO UPDATE SET rating = excluded.rating, updated_at = CURRENT_TIMESTAMP""",
+				(post_id, user_id, rating)
+			)
+			
+		flash("Thank you for your rating!")
+		return redirect(url_for("post_detail", post_id=post_id))
+
+	@app.post("/community/post/<int:post_id>/comment")
+	def comment_post(post_id):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+			
+		user_id = session.get("user_id")
+		comment_text = request.form.get("comment_text", "").strip()
+		
+		if not comment_text:
+			flash("Comment cannot be empty.")
+			return redirect(url_for("post_detail", post_id=post_id))
+			
+		with get_db() as connection:
+			post = connection.execute("SELECT created_by, status FROM posts WHERE id = ?", (post_id,)).fetchone()
+			if not post:
+				flash("Post not found.")
+				return redirect(url_for("community_feed"))
+				
+			role = session.get("role")
+			if post["status"] != "PUBLISHED" and not (post["created_by"] == user_id or role in ("admin", "moderator")):
+				flash("Unauthorized to comment on this post.")
+				return redirect(url_for("community_feed"))
+				
+			connection.execute(
+				"""INSERT INTO post_comments (post_id, user_id, comment_text)
+				   VALUES (?, ?, ?)""",
+				(post_id, user_id, comment_text)
+			)
+			
+		flash("Comment submitted successfully!")
+		return redirect(url_for("post_detail", post_id=post_id))
+
+	@app.get("/admin/reports/content-master/download")
+	@admin_required
+	def download_content_master_report():
+		headers = ["Content ID", "Title", "Content Type", "Category", "Created By", "Created Date", "Status", "Published Date", "Published By"]
+		query = """
+			SELECT p.id, p.title, p.content_type, p.category, 
+				   u1.full_name, p.created_at, p.status, 
+				   p.published_at, u2.full_name
+			FROM posts p
+			JOIN users u1 ON u1.id = p.created_by
+			LEFT JOIN users u2 ON u2.id = p.published_by
+			ORDER BY p.id ASC
+		"""
+		with get_db() as connection:
+			rows = connection.execute(query).fetchall()
+		
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow(headers)
+		for r in rows:
+			writer.writerow(list(r))
+		output = stream.getvalue().encode("utf-8-sig")
+		return send_file(BytesIO(output), as_attachment=True, download_name="Content_Master_Report.csv", mimetype="text/csv")
+
+	@app.get("/admin/reports/content-engagement/download")
+	@admin_required
+	def download_content_engagement_report():
+		headers = ["Content ID", "Content Name", "Views", "Average Rating", "Number of Ratings", "Number of Comments"]
+		query = """
+			SELECT p.id, p.title, p.views,
+				   COALESCE((SELECT ROUND(AVG(r.rating), 1) FROM post_ratings r WHERE r.post_id = p.id), 0.0),
+				   (SELECT COUNT(*) FROM post_ratings r WHERE r.post_id = p.id),
+				   (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.id)
+			FROM posts p
+			ORDER BY p.id ASC
+		"""
+		with get_db() as connection:
+			rows = connection.execute(query).fetchall()
+		
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow(headers)
+		for r in rows:
+			writer.writerow(list(r))
+		output = stream.getvalue().encode("utf-8-sig")
+		return send_file(BytesIO(output), as_attachment=True, download_name="Content_Engagement_Report.csv", mimetype="text/csv")
+
+	@app.get("/admin/reports/content-approval/download")
+	@admin_required
+	def download_content_approval_report():
+		headers = ["Content ID", "Created By", "Submitted Date", "Approval Date", "Approved By", "Status", "Rejection Reason", "Version"]
+		query = """
+			SELECT h.post_id, u1.full_name,
+				   h.submitted_at, h.reviewed_at,
+				   u2.full_name, h.new_status,
+				   h.comments, h.version_number
+			FROM post_approval_history h
+			JOIN posts p ON p.id = h.post_id
+			JOIN users u1 ON u1.id = p.created_by
+			LEFT JOIN users u2 ON u2.id = h.reviewed_by
+			ORDER BY h.id ASC
+		"""
+		with get_db() as connection:
+			rows = connection.execute(query).fetchall()
+		
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow(headers)
+		for r in rows:
+			writer.writerow(list(r))
+		output = stream.getvalue().encode("utf-8-sig")
+		return send_file(BytesIO(output), as_attachment=True, download_name="Content_Approval_Report.csv", mimetype="text/csv")
+
+	@app.get("/admin/reports/user-content/download")
+	@admin_required
+	def download_user_content_report():
+		headers = ["User", "Total Posts", "Published Posts", "Pending Posts", "Rejected Posts", "Average Rating", "Total Comments"]
+		query = """
+			SELECT u.full_name,
+				   (SELECT COUNT(*) FROM posts p WHERE p.created_by = u.id),
+				   (SELECT COUNT(*) FROM posts p WHERE p.created_by = u.id AND p.status = 'PUBLISHED'),
+				   (SELECT COUNT(*) FROM posts p WHERE p.created_by = u.id AND p.status = 'PENDING_APPROVAL'),
+				   (SELECT COUNT(*) FROM posts p WHERE p.created_by = u.id AND p.status = 'REJECTED'),
+				   COALESCE((SELECT ROUND(AVG(r.rating), 1) FROM post_ratings r JOIN posts p ON p.id = r.post_id WHERE p.created_by = u.id), 0.0),
+				   (SELECT COUNT(*) FROM post_comments c JOIN posts p ON p.id = c.post_id WHERE p.created_by = u.id)
+			FROM users u
+			ORDER BY (SELECT COUNT(*) FROM posts p WHERE p.created_by = u.id) DESC
+		"""
+		with get_db() as connection:
+			rows = connection.execute(query).fetchall()
+		
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow(headers)
+		for r in rows:
+			writer.writerow(list(r))
+		output = stream.getvalue().encode("utf-8-sig")
+		return send_file(BytesIO(output), as_attachment=True, download_name="User_Content_Report.csv", mimetype="text/csv")
+
+
 
 
 	@app.get("/logout")

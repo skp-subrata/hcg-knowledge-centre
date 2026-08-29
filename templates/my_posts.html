@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}My Posts | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex justify-between items-end">
+    <div>
+        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-2">My Posts</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-lg">Manage the content you have created on the platform.</p>
+    </div>
+    <a href="{{ url_for('create_post') }}" class="btn-primary px-6 py-3 rounded-full flex items-center gap-2 font-bold shadow-lg hover:shadow-xl transition-all">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+        New Post
+    </a>
+</div>
+
+<!-- My Posts Table / Grid List -->
+<div class="glass-panel p-6 bg-white/40 dark:bg-slate-900/40">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b border-slate-200/60 dark:border-slate-800 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    <th class="py-4 px-4">Post Title</th>
+                    <th class="py-4 px-4">Type</th>
+                    <th class="py-4 px-4">Created Date</th>
+                    <th class="py-4 px-4">Status</th>
+                    <th class="py-4 px-4 text-center">Avg Rating</th>
+                    <th class="py-4 px-4 text-center">Comments</th>
+                    <th class="py-4 px-4 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-sm">
+                {% for post in posts %}
+                <tr class="hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-colors">
+                    <td class="py-4 px-4">
+                        <p class="font-bold text-slate-900 dark:text-slate-50">{{ post.title }}</p>
+                        <p class="text-[10px] text-indigo-500 font-medium mt-0.5">{{ post.category }} {% if post.version_number > 1 %}(v{{ post.version_number }}){% endif %}</p>
+                    </td>
+                    <td class="py-4 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        {{ post.content_type }}
+                    </td>
+                    <td class="py-4 px-4 text-xs text-slate-500 dark:text-slate-400">
+                        {{ post.created_at.split(' ')[0] }}
+                    </td>
+                    <td class="py-4 px-4">
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider 
+                            {% if post.status == 'PUBLISHED' %}
+                                bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300
+                            {% elif post.status == 'PENDING_APPROVAL' %}
+                                bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300
+                            {% elif post.status == 'DRAFT' %}
+                                bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400
+                            {% elif post.status == 'REJECTED' %}
+                                bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300
+                            {% elif post.status == 'UNPUBLISHED' %}
+                                bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300
+                            {% endif %}">
+                            {{ post.status|replace('_', ' ') }}
+                        </span>
+                    </td>
+                    <td class="py-4 px-4 text-center font-bold text-slate-700 dark:text-slate-300">
+                        {{ post.avg_rating or '-' }}
+                    </td>
+                    <td class="py-4 px-4 text-center font-semibold text-slate-600 dark:text-slate-400">
+                        {{ post.comment_count or 0 }}
+                    </td>
+                    <td class="py-4 px-4 text-right">
+                        <div class="flex gap-2 justify-end items-center">
+                            {% if post.status == 'PUBLISHED' %}
+                            <a href="{{ url_for('post_detail', post_id=post.id) }}" class="text-xs font-bold text-sky-600 hover:underline px-2 py-1 bg-sky-50 dark:bg-sky-900/20 dark:text-sky-400 rounded-lg">View Post</a>
+                            {% endif %}
+                            
+                            <a href="{{ url_for('edit_post', post_id=post.id) }}" class="text-xs font-bold text-indigo-600 hover:underline px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400 rounded-lg">Edit</a>
+                            
+                            {% if post.status in ('DRAFT', 'REJECTED') or role == 'admin' %}
+                            <form method="post" action="{{ url_for('delete_post', post_id=post.id) }}" onsubmit="return confirm('Delete this post permanently?')" class="inline">
+                                <button type="submit" class="text-xs font-bold text-rose-600 hover:underline px-2 py-1 bg-rose-50 dark:bg-rose-900/20 dark:text-rose-400 rounded-lg">Delete</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="py-12 text-center text-slate-500 dark:text-slate-400">
+                        <svg class="w-16 h-16 mx-auto mb-4 opacity-30 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        <p class="text-lg font-medium">You haven't posted any content yet</p>
+                        <p class="text-sm mt-1">Click the "New Post" button to get started.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
