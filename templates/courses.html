@@ -259,12 +259,11 @@
 
             <!-- Footer / Navigation -->
             <div class="p-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between mt-auto items-center">
-                <button type="button" id="wiz-prev" onclick="changeStep(-1)" class="px-5 py-2.5 font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors hidden">Back</button>
+                <button type="button" id="wiz-prev" onclick="changeStep(-1)" class="px-5 py-2.5 font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" style="display: none;">Back</button>
                 <div class="flex-grow"></div>
                 <div class="flex gap-2">
                     <button type="button" id="wiz-draft" onclick="saveAsDraft()" class="px-5 py-2.5 font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors border border-slate-200 dark:border-slate-700">Save as Draft</button>
                     <button type="button" id="wiz-next" onclick="changeStep(1)" class="btn-primary px-8 py-2.5">Next</button>
-                    <button type="submit" id="wiz-submit" class="btn-primary px-8 py-2.5 hidden bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white shadow-emerald-600/30">Create Course</button>
                 </div>
             </div>
         </form>
@@ -477,11 +476,27 @@ function updateWizardUI() {
         }
     });
     
-    // Buttons
-    document.getElementById('wiz-prev').classList.toggle('hidden', currentStep === 1);
-    document.getElementById('wiz-next').classList.toggle('hidden', currentStep === totalSteps);
-    document.getElementById('wiz-submit').classList.toggle('hidden', currentStep !== totalSteps);
-    document.getElementById('wiz-draft').classList.toggle('hidden', currentStep === totalSteps);
+    // Buttons visibility using style.display
+    document.getElementById('wiz-prev').style.display = (currentStep === 1) ? 'none' : 'inline-flex';
+    document.getElementById('wiz-draft').style.display = (currentStep === totalSteps) ? 'none' : 'inline-flex';
+    
+    // Transform wiz-next dynamically
+    const nextBtn = document.getElementById('wiz-next');
+    if (currentStep === totalSteps) {
+        nextBtn.textContent = 'Create Course';
+        nextBtn.type = 'submit';
+        nextBtn.onclick = null;
+        // Apply green theme for submission
+        nextBtn.classList.remove('bg-slate-900/90', 'dark:bg-white/90', 'hover:bg-slate-800', 'dark:hover:bg-white', 'text-white', 'dark:text-black');
+        nextBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'border-emerald-600', 'text-white');
+    } else {
+        nextBtn.textContent = 'Next';
+        nextBtn.type = 'button';
+        nextBtn.onclick = () => changeStep(1);
+        // Reset to original styling
+        nextBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'border-emerald-600');
+        nextBtn.classList.add('bg-slate-900/90', 'dark:bg-white/90', 'hover:bg-slate-800', 'dark:hover:bg-white');
+    }
 }
 
 function toggleContentInput() {
