@@ -1356,7 +1356,7 @@ def create_app():
 	@admin_required
 	def view_as_page():
 		with get_db() as connection:
-			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
+			students = connection.execute("SELECT id, full_name, username, role FROM users WHERE id != ? ORDER BY full_name", (session["user_id"],)).fetchall()
 		return render_template("view_as.html", students=students, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.post("/admin/view-as/<int:user_id>")
