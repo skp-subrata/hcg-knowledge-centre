@@ -1137,14 +1137,26 @@ def create_app():
 		return send_file(question_template(), as_attachment=True, download_name="learnly_questions_template.xlsx", mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 	@app.post("/admin/delete/<resource>/<int:record_id>")
-	@admin_required
+	@staff_required
 	def delete_record(resource, record_id):
-		"""Delete an approved admin resource and report dependency conflicts."""
+		"""Delete an approved staff/admin resource and report dependency conflicts."""
 		allowed = {"user": "users", "course": "courses", "module": "modules", "assessment": "assessments"}
 		table = allowed.get(resource)
 		if not table or resource == "user" and record_id == session.get("user_id"):
 			flash("This record cannot be deleted.")
-			return redirect(url_for("admin_panel"))
+			return redirect(request.referrer or url_for("admin_panel"))
+
+		if session.get("role") != "admin":
+			if resource == "course":
+				with get_db() as connection:
+					course = connection.execute("SELECT created_by FROM courses WHERE id = ?", (record_id,)).fetchone()
+					if not course or course["created_by"] != session.get("user_id"):
+						flash("You can only delete courses you created.")
+						return redirect(request.referrer or url_for("courses_page"))
+			elif resource == "user":
+				flash("You do not have permission to delete users.")
+				return redirect(request.referrer or url_for("admin_panel"))
+
 		try:
 			with get_db() as connection:
 				cursor = connection.execute(f"DELETE FROM {table} WHERE id = ?", (record_id,))
@@ -1154,7 +1166,7 @@ def create_app():
 					flash("Record not found.")
 		except sqlite3.IntegrityError:
 			flash("This record is still in use and cannot be deleted.")
-		return redirect(url_for("admin_panel"))
+		return redirect(request.referrer or url_for("admin_panel"))
 
 	@app.get("/assessments/<int:assessment_id>/questions/download")
 	def download_assessment_questions(assessment_id):
@@ -1179,6 +1191,7 @@ def create_app():
 			courses=courses,
 			content_types=CONTENT_TYPES,
 			user=session.get("user"),
+			user_id=session.get("user_id"),
 			role=session.get("role"),
 			actual_role=session.get("actual_role"),
 			profile_picture=session.get("profile_picture")
