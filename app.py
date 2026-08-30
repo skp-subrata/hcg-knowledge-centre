@@ -32,6 +32,89 @@ def get_db():
 	return connection
 
 
+def process_reward_event(connection, user_id, event_name, source_reference_id, source_reference_type, description, input_value=None, actor_id=None):
+	"""
+	Central Reward Engine function.
+	Calculates and registers reward transactions, maintaining a ledger and wallet balance.
+	Avoids duplicates using idempotent checks and handles rating diffs.
+	"""
+	# 1. Lookup reward source rule
+	source = connection.execute("SELECT * FROM reward_sources WHERE name = ?", (event_name,)).fetchone()
+	if not source or source["status"] != "active":
+		return 0
+
+	# 2. Calculate point output
+	points = 0
+	if source["calculation_type"] == "MULTIPLIER":
+		if input_value is None:
+			input_value = 0
+		points = int(float(input_value) * float(source["multiplier"]))
+	elif source["calculation_type"] == "FIXED":
+		points = int(source["fixed_points"])
+
+	# 3. Check for duplicates / updates
+	prev_sum = connection.execute(
+		"""SELECT COALESCE(SUM(points), 0) AS total 
+		   FROM reward_transactions 
+		   WHERE user_id = ? AND reward_source = ? AND source_reference_id = ? AND source_reference_type = ?""",
+		(user_id, event_name, str(source_reference_id), source_reference_type)
+	).fetchone()["total"]
+
+	# If this is a FIXED type and it has already been awarded, do NOT award it again.
+	if source["calculation_type"] == "FIXED" and prev_sum != 0:
+		return 0
+
+	points_to_award = points - prev_sum
+	if points_to_award == 0:
+		return 0
+
+	# 4. Determine transaction type
+	tx_type = "EARN"
+	if prev_sum != 0:
+		tx_type = "ADJUSTMENT"
+		if points_to_award < 0:
+			tx_type = "REVERSAL"
+
+	# 5. Fetch/initialize user wallet
+	wallet = connection.execute("SELECT * FROM user_wallets WHERE user_id = ?", (user_id,)).fetchone()
+	if not wallet:
+		connection.execute("INSERT INTO user_wallets (user_id, current_balance, total_earned, total_settled, total_adjusted) VALUES (?, 0, 0, 0, 0)", (user_id,))
+		balance_before = 0
+		total_earned = 0
+		total_settled = 0
+		total_adjusted = 0
+	else:
+		balance_before = wallet["current_balance"]
+		total_earned = wallet["total_earned"]
+		total_settled = wallet["total_settled"]
+		total_adjusted = wallet["total_adjusted"]
+
+	balance_after = balance_before + points_to_award
+
+	# 6. Insert transaction ledger entry
+	connection.execute(
+		"""INSERT INTO reward_transactions 
+		   (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after, created_by)
+		   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+		(user_id, event_name, str(source_reference_id), source_reference_type, description, points_to_award, tx_type, balance_before, balance_after, actor_id)
+	)
+
+	# 7. Update wallet totals
+	if tx_type == "EARN":
+		total_earned += points_to_award
+	elif tx_type in ("ADJUSTMENT", "REVERSAL"):
+		total_adjusted += abs(points_to_award)
+
+	connection.execute(
+		"""UPDATE user_wallets 
+		   SET current_balance = ?, total_earned = ?, total_adjusted = ?, updated_at = CURRENT_TIMESTAMP 
+		   WHERE user_id = ?""",
+		(balance_after, total_earned, total_adjusted, user_id)
+	)
+
+	return points_to_award
+
+
 def init_db():
 	"""Create the LMS schema and seed the first administrator."""
 	with get_db() as connection:
@@ -257,11 +340,53 @@ def init_db():
 				new_status TEXT
 			);
 			
+			CREATE TABLE IF NOT EXISTS reward_sources (
+				name TEXT PRIMARY KEY,
+				status TEXT CHECK(status IN ('active', 'inactive')) DEFAULT 'active',
+				calculation_type TEXT CHECK(calculation_type IN ('MULTIPLIER', 'FIXED')),
+				multiplier REAL DEFAULT 1.0,
+				fixed_points INTEGER DEFAULT 0
+			);
+			
+			CREATE TABLE IF NOT EXISTS reward_transactions (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				reward_source TEXT NOT NULL REFERENCES reward_sources(name),
+				source_reference_id TEXT NOT NULL,
+				source_reference_type TEXT NOT NULL,
+				description TEXT NOT NULL,
+				points INTEGER NOT NULL,
+				transaction_type TEXT CHECK(transaction_type IN ('EARN', 'ADJUSTMENT', 'SETTLEMENT', 'REVERSAL')) DEFAULT 'EARN',
+				balance_before INTEGER NOT NULL,
+				balance_after INTEGER NOT NULL,
+				created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				status TEXT DEFAULT 'completed',
+				settlement_id TEXT
+			);
+			
+			CREATE TABLE IF NOT EXISTS user_wallets (
+				user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+				current_balance INTEGER DEFAULT 0,
+				total_earned INTEGER DEFAULT 0,
+				total_settled INTEGER DEFAULT 0,
+				total_adjusted INTEGER DEFAULT 0,
+				updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+			);
+			
+			INSERT OR IGNORE INTO reward_sources (name, status, calculation_type, multiplier, fixed_points) VALUES
+			('COURSE_CERTIFICATION', 'active', 'MULTIPLIER', 100.0, 0),
+			('COURSE_OWNER_RATING', 'active', 'MULTIPLIER', 10.0, 0),
+			('COMMUNITY_POST_RATING', 'active', 'MULTIPLIER', 1.0, 0),
+			('RATING_GIVEN', 'active', 'FIXED', 0.0, 2);
+			
 			CREATE INDEX IF NOT EXISTS idx_questions_bank ON questions(question_bank_id);
 			CREATE INDEX IF NOT EXISTS idx_attempt_student ON assessment_attempts(student_id);
 			CREATE INDEX IF NOT EXISTS idx_posts_creator ON posts(created_by);
 			CREATE INDEX IF NOT EXISTS idx_post_ratings_post ON post_ratings(post_id);
 			CREATE INDEX IF NOT EXISTS idx_post_comments_post ON post_comments(post_id);
+			CREATE INDEX IF NOT EXISTS idx_reward_tx_user ON reward_transactions(user_id);
+			CREATE INDEX IF NOT EXISTS idx_reward_tx_src ON reward_transactions(reward_source, source_reference_id);
 		""")
 		seed_demo_data(connection)
 
@@ -1160,6 +1285,47 @@ def create_app():
 					(session["user_id"], course_id, session["user"], course["name"], final_score, pass_mark, session["user_id"], course_id, int(rating), comments, certificate_id, badge)
 				)
 				connection.execute("UPDATE course_assignments SET status='certified', completed_at=COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"]))
+				
+				# Reward Engine integration
+				score_row = connection.execute(
+					"SELECT COALESCE(MAX(score), 0) AS max_score FROM assessment_attempts WHERE student_id = ? AND assessment_id IN (SELECT id FROM assessments WHERE course_id = ?)",
+					(session["user_id"], course_id)
+				).fetchone()
+				attempt_score = score_row["max_score"] if score_row else 0
+				
+				# 1. Course Certification Reward
+				process_reward_event(
+					connection=connection,
+					user_id=session["user_id"],
+					event_name="COURSE_CERTIFICATION",
+					source_reference_id=certificate_id,
+					source_reference_type="CERTIFICATE",
+					description=f"Course Certification - {course['name']} (Score: {attempt_score})",
+					input_value=attempt_score,
+					actor_id=session["user_id"]
+				)
+				
+				# 2. Course Owner Rating Reward & 3. Rating Giver Reward
+				ref_id = f"CRATE-{course_id}-{session['user_id']}"
+				process_reward_event(
+					connection=connection,
+					user_id=course["created_by"],
+					event_name="COURSE_OWNER_RATING",
+					source_reference_id=ref_id,
+					source_reference_type="COURSE_RATING",
+					description=f"Course Rating received - {course['name']} (Rating: {rating}/10)",
+					input_value=int(rating),
+					actor_id=session["user_id"]
+				)
+				process_reward_event(
+					connection=connection,
+					user_id=session["user_id"],
+					event_name="RATING_GIVEN",
+					source_reference_id=ref_id,
+					source_reference_type="COURSE_RATING",
+					description=f"Rated course - {course['name']}",
+					actor_id=session["user_id"]
+				)
 			flash("Feedback submitted successfully. Your certificate and badge have been created.")
 			return redirect(url_for("certificate", course_id=course_id))
 		return render_template("feedback.html", course=course, user=session.get("user"), certification=certification)
@@ -2058,6 +2224,32 @@ def create_app():
 				(post_id, user_id, rating)
 			)
 			
+			# Reward Engine Integration
+			ref_id = f"PRATE-{post_id}-{user_id}"
+			
+			# 1. Post Owner Reward
+			process_reward_event(
+				connection=connection,
+				user_id=post["created_by"],
+				event_name="COMMUNITY_POST_RATING",
+				source_reference_id=ref_id,
+				source_reference_type="POST_RATING",
+				description=f"Community Post Rating received (Post ID: {post_id}, Rating: {rating}/5)",
+				input_value=rating,
+				actor_id=user_id
+			)
+			
+			# 2. Rating Giver Reward
+			process_reward_event(
+				connection=connection,
+				user_id=user_id,
+				event_name="RATING_GIVEN",
+				source_reference_id=ref_id,
+				source_reference_type="POST_RATING",
+				description=f"Rated community post (Post ID: {post_id})",
+				actor_id=user_id
+			)
+			
 		flash("Thank you for your rating!")
 		return redirect(url_for("post_detail", post_id=post_id))
 
@@ -2227,10 +2419,426 @@ def create_app():
 		output = stream.getvalue().encode("utf-8-sig")
 		return send_file(BytesIO(output), as_attachment=True, download_name="Assessment_Results_Report.csv", mimetype="text/csv")
 
+	@app.get("/rewards")
+	def rewards_dashboard():
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+			
+		user_id = session.get("user_id")
+		
+		with get_db() as connection:
+			wallet = connection.execute("SELECT * FROM user_wallets WHERE user_id = ?", (user_id,)).fetchone()
+			if not wallet:
+				wallet = {
+					"current_balance": 0,
+					"total_earned": 0,
+					"total_settled": 0,
+					"total_adjusted": 0
+				}
+				
+			source_filter = request.args.get("source", "").strip()
+			start_date = request.args.get("start_date", "").strip()
+			end_date = request.args.get("end_date", "").strip()
+			points_min = request.args.get("points_min", "").strip()
+			points_max = request.args.get("points_max", "").strip()
+			
+			query = "SELECT * FROM reward_transactions WHERE user_id = ?"
+			params = [user_id]
+			
+			if source_filter:
+				query += " AND reward_source = ?"
+				params.append(source_filter)
+			if start_date:
+				query += " AND DATE(created_at) >= DATE(?)"
+				params.append(start_date)
+			if end_date:
+				query += " AND DATE(created_at) <= DATE(?)"
+				params.append(end_date)
+			if points_min:
+				try:
+					query += " AND ABS(points) >= ?"
+					params.append(int(points_min))
+				except ValueError:
+					pass
+			if points_max:
+				try:
+					query += " AND ABS(points) <= ?"
+					params.append(int(points_max))
+				except ValueError:
+					pass
+					
+			query += " ORDER BY id DESC"
+			transactions = connection.execute(query, params).fetchall()
+			sources = connection.execute("SELECT name FROM reward_sources").fetchall()
+			
+		return render_template(
+			"rewards.html", 
+			wallet=wallet, 
+			transactions=transactions, 
+			sources=sources,
+			user=session.get("user"),
+			profile_picture=session.get("profile_picture"),
+			role=session.get("role"),
+			actual_role=session.get("actual_role")
+		)
 
+	@app.get("/admin/rewards")
+	@admin_required
+	def admin_rewards():
+		with get_db() as connection:
+			sources = connection.execute("SELECT * FROM reward_sources ORDER BY name ASC").fetchall()
+			wallets = connection.execute(
+				"""SELECT w.*, u.full_name, u.username 
+				   FROM user_wallets w
+				   JOIN users u ON u.id = w.user_id
+				   ORDER BY w.current_balance DESC"""
+			).fetchall()
+			ledger = connection.execute(
+				"""SELECT t.*, u.full_name, u.username
+				   FROM reward_transactions t
+				   JOIN users u ON u.id = t.user_id
+				   ORDER BY t.id DESC LIMIT 100"""
+			).fetchall()
+			all_students = connection.execute("SELECT id, full_name, username FROM users WHERE role='basic' OR role='basic user'").fetchall()
+			
+		return render_template(
+			"reward_admin.html",
+			sources=sources,
+			wallets=wallets,
+			ledger=ledger,
+			all_students=all_students,
+			user=session.get("user"),
+			profile_picture=session.get("profile_picture"),
+			role=session.get("role"),
+			actual_role=session.get("actual_role")
+		)
 
+	@app.post("/admin/rewards/source/update")
+	@admin_required
+	def admin_update_reward_source():
+		name = request.form.get("name")
+		status = request.form.get("status", "active")
+		calc_type = request.form.get("calculation_type", "MULTIPLIER")
+		multiplier = request.form.get("multiplier", 1.0)
+		fixed_points = request.form.get("fixed_points", 0)
+		
+		try:
+			multiplier = float(multiplier)
+			fixed_points = int(fixed_points)
+		except ValueError:
+			flash("Invalid multiplier or fixed points value.")
+			return redirect(url_for("admin_rewards"))
+			
+		with get_db() as connection:
+			connection.execute(
+				"""UPDATE reward_sources 
+				   SET status = ?, calculation_type = ?, multiplier = ?, fixed_points = ? 
+				   WHERE name = ?""",
+				(status, calc_type, multiplier, fixed_points, name)
+			)
+			connection.execute(
+				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, ?, ?, 0)",
+				(session.get("user_id"), f"Updated reward source rules: {name}", "reward_sources")
+			)
+			
+		flash(f"Reward source '{name}' updated successfully.")
+		return redirect(url_for("admin_rewards"))
 
+	@app.post("/admin/rewards/settle")
+	@admin_required
+	def admin_settle_rewards():
+		user_id = request.form.get("user_id")
+		points = request.form.get("points", 0)
+		remarks = request.form.get("remarks", "Settle points").strip()
+		
+		try:
+			points = int(points)
+		except ValueError:
+			flash("Points must be an integer.")
+			return redirect(url_for("admin_rewards"))
+			
+		if points <= 0:
+			flash("Settlement points must be greater than zero.")
+			return redirect(url_for("admin_rewards"))
+			
+		with get_db() as connection:
+			wallet = connection.execute("SELECT * FROM user_wallets WHERE user_id = ?", (user_id,)).fetchone()
+			if not wallet or wallet["current_balance"] < points:
+				flash("Insufficient points balance for settlement.")
+				return redirect(url_for("admin_rewards"))
+				
+			balance_before = wallet["current_balance"]
+			balance_after = balance_before - points
+			settlement_id = f"SETTLE-{user_id}-{os.urandom(3).hex().upper()}"
+			
+			connection.execute(
+				"""INSERT INTO reward_transactions 
+				   (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after, created_by, settlement_id)
+				   VALUES (?, 'MANUAL_SETTLEMENT', ?, 'SETTLEMENT', ?, ?, 'SETTLEMENT', ?, ?, ?, ?)""",
+				(user_id, settlement_id, remarks, -points, balance_before, balance_after, session.get("user_id"), settlement_id)
+			)
+			connection.execute(
+				"""UPDATE user_wallets 
+				   SET current_balance = ?, total_settled = ?
+				   WHERE user_id = ?""",
+				(balance_after, wallet["total_settled"] + points, user_id)
+			)
+			connection.execute(
+				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, ?, ?, ?)",
+				(session.get("user_id"), f"Settled {points} points. Settlement ID: {settlement_id}", "user_wallets", user_id)
+			)
+			
+		flash(f"Successfully settled {points} points for user.")
+		return redirect(url_for("admin_rewards"))
 
+	@app.post("/admin/rewards/reset")
+	@admin_required
+	def admin_reset_rewards():
+		user_id = request.form.get("user_id")
+		confirm = request.form.get("confirm")
+		
+		if confirm != "YES":
+			flash("Please confirm the warning checkboxes to execute a reset.")
+			return redirect(url_for("admin_rewards"))
+			
+		with get_db() as connection:
+			if user_id == "all":
+				active_wallets = connection.execute("SELECT * FROM user_wallets WHERE current_balance > 0").fetchall()
+				if not active_wallets:
+					flash("No active wallets with positive balances to reset.")
+					return redirect(url_for("admin_rewards"))
+					
+				for wallet in active_wallets:
+					uid = wallet["user_id"]
+					balance = wallet["current_balance"]
+					
+					connection.execute(
+						"""INSERT INTO reward_transactions 
+						   (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after, created_by)
+						   VALUES (?, 'GLOBAL_RESET', 'RESET', 'ADJUSTMENT', 'Global reward points reset', ?, 'ADJUSTMENT', ?, 0, ?)""",
+						(uid, -balance, balance, session.get("user_id"))
+					)
+					connection.execute(
+						"""UPDATE user_wallets 
+						   SET current_balance = 0, total_adjusted = ?
+						   WHERE user_id = ?""",
+						(wallet["total_adjusted"] + balance, uid)
+					)
+				
+				connection.execute(
+					"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, ?, ?, 0)",
+					(session.get("user_id"), "Executed global rewards reset for all users", "user_wallets")
+				)
+				flash("Successfully executed a global reset of points for all users.")
+				
+			else:
+				wallet = connection.execute("SELECT * FROM user_wallets WHERE user_id = ?", (user_id,)).fetchone()
+				if not wallet or wallet["current_balance"] <= 0:
+					flash("User has no points balance to reset.")
+					return redirect(url_for("admin_rewards"))
+					
+				balance = wallet["current_balance"]
+				
+				connection.execute(
+					"""INSERT INTO reward_transactions 
+					   (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after, created_by)
+					   VALUES (?, 'USER_RESET', 'RESET', 'ADJUSTMENT', 'User reward points reset', ?, 'ADJUSTMENT', ?, 0, ?)""",
+					(user_id, -balance, balance, session.get("user_id"))
+				)
+				connection.execute(
+					"""UPDATE user_wallets 
+					   SET current_balance = 0, total_adjusted = ?
+					   WHERE user_id = ?""",
+					(wallet["total_adjusted"] + balance, user_id)
+				)
+				connection.execute(
+					"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, ?, ?, ?)",
+					(session.get("user_id"), f"Reset user reward wallet to 0 (Deducted {balance} points)", "user_wallets", user_id)
+				)
+				flash(f"Successfully reset reward points to 0 for user.")
+				
+		return redirect(url_for("admin_rewards"))
+
+	@app.post("/admin/rewards/adjust")
+	@admin_required
+	def admin_adjust_rewards():
+		user_id = request.form.get("user_id")
+		points = request.form.get("points", 0)
+		remarks = request.form.get("remarks", "Manual adjustment").strip()
+		
+		try:
+			points = int(points)
+		except ValueError:
+			flash("Adjustment points must be a non-zero integer.")
+			return redirect(url_for("admin_rewards"))
+			
+		if points == 0:
+			flash("Adjustment points cannot be zero.")
+			return redirect(url_for("admin_rewards"))
+			
+		with get_db() as connection:
+			wallet = connection.execute("SELECT * FROM user_wallets WHERE user_id = ?", (user_id,)).fetchone()
+			if not wallet:
+				connection.execute("INSERT INTO user_wallets (user_id, current_balance, total_earned, total_settled, total_adjusted) VALUES (?, 0, 0, 0, 0)", (user_id,))
+				balance_before = 0
+				total_earned = 0
+				total_settled = 0
+				total_adjusted = 0
+			else:
+				balance_before = wallet["current_balance"]
+				total_earned = wallet["total_earned"]
+				total_settled = wallet["total_settled"]
+				total_adjusted = wallet["total_adjusted"]
+				
+			balance_after = balance_before + points
+			if balance_after < 0:
+				flash("Adjustment cannot result in a negative wallet balance.")
+				return redirect(url_for("admin_rewards"))
+				
+			tx_ref = f"ADJUST-{os.urandom(3).hex().upper()}"
+			tx_type = "ADJUSTMENT" if points > 0 else "REVERSAL"
+			
+			connection.execute(
+				"""INSERT INTO reward_transactions 
+				   (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after, created_by)
+				   VALUES (?, 'MANUAL_ADJUSTMENT', ?, 'ADJUSTMENT', ?, ?, ?, ?, ?, ?)""",
+				(user_id, tx_ref, remarks, points, tx_type, balance_before, balance_after, session.get("user_id"))
+			)
+			connection.execute(
+				"""UPDATE user_wallets 
+				   SET current_balance = ?, total_adjusted = ?
+				   WHERE user_id = ?""",
+				(balance_after, total_adjusted + abs(points), user_id)
+			)
+			connection.execute(
+				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, ?, ?, ?)",
+				(session.get("user_id"), f"Manual adjustment: {points:+} points ({remarks})", "user_wallets", user_id)
+			)
+			
+		flash(f"Successfully adjusted user balance by {points:+} points.")
+		return redirect(url_for("admin_rewards"))
+
+	@app.get("/admin/reports/user-rewards/download")
+	@admin_required
+	def download_user_rewards_report():
+		headers = ["User ID", "Full Name", "Username", "Current Balance", "Total Earned", "Total Settled", "Total Adjusted"]
+		query = """
+			SELECT u.id, u.full_name, u.username,
+				   COALESCE(w.current_balance, 0),
+				   COALESCE(w.total_earned, 0),
+				   COALESCE(w.total_settled, 0),
+				   COALESCE(w.total_adjusted, 0)
+			FROM users u
+			LEFT JOIN user_wallets w ON w.user_id = u.id
+			ORDER BY COALESCE(w.current_balance, 0) DESC
+		"""
+		with get_db() as connection:
+			rows = connection.execute(query).fetchall()
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow(headers)
+		for r in rows:
+			writer.writerow(list(r))
+		output = stream.getvalue().encode("utf-8-sig")
+		return send_file(BytesIO(output), as_attachment=True, download_name="User_Rewards_Report.csv", mimetype="text/csv")
+
+	@app.get("/admin/reports/reward-transactions/download")
+	@admin_required
+	def download_reward_transactions_report():
+		headers = ["Transaction ID", "Student Name", "Username", "Reward Source", "Source Reference ID", "Source Reference Type", "Description", "Points", "Transaction Type", "Balance Before", "Balance After", "Date"]
+		query = """
+			SELECT t.id, u.full_name, u.username, t.reward_source, t.source_reference_id, t.source_reference_type,
+				   t.description, t.points, t.transaction_type, t.balance_before, t.balance_after, t.created_at
+			FROM reward_transactions t
+			JOIN users u ON u.id = t.user_id
+			ORDER BY t.id DESC
+		"""
+		with get_db() as connection:
+			rows = connection.execute(query).fetchall()
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow(headers)
+		for r in rows:
+			writer.writerow(list(r))
+		output = stream.getvalue().encode("utf-8-sig")
+		return send_file(BytesIO(output), as_attachment=True, download_name="Reward_Transactions_Report.csv", mimetype="text/csv")
+
+	@app.get("/admin/reports/reward-sources/download")
+	@admin_required
+	def download_reward_sources_report():
+		headers = ["Source Name", "Status", "Calculation Type", "Multiplier/Fixed Value", "Total Transactions", "Total Points Generated"]
+		query = """
+			SELECT s.name, s.status, s.calculation_type,
+				   CASE WHEN s.calculation_type = 'MULTIPLIER' THEN s.multiplier ELSE s.fixed_points END,
+				   COUNT(t.id),
+				   COALESCE(SUM(t.points), 0)
+			FROM reward_sources s
+			LEFT JOIN reward_transactions t ON t.reward_source = s.name
+			GROUP BY s.name
+		"""
+		with get_db() as connection:
+			rows = connection.execute(query).fetchall()
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow(headers)
+		for r in rows:
+			writer.writerow(list(r))
+		output = stream.getvalue().encode("utf-8-sig")
+		return send_file(BytesIO(output), as_attachment=True, download_name="Reward_Sources_Report.csv", mimetype="text/csv")
+
+	@app.get("/admin/reports/course-owner-rewards/download")
+	@admin_required
+	def download_course_owner_rewards_report():
+		headers = ["Course Name", "Course Owner Name", "Owner Username", "Number of Ratings", "Average Rating", "Reward Points Generated"]
+		query = """
+			SELECT c.name, u.full_name, u.username,
+				   COUNT(cc.feedback_rating),
+				   AVG(cc.feedback_rating),
+				   (SELECT COALESCE(SUM(points), 0) FROM reward_transactions WHERE reward_source = 'COURSE_OWNER_RATING' AND user_id = c.created_by AND source_reference_id LIKE 'CRATE-' || c.id || '-%')
+			FROM courses c
+			JOIN users u ON u.id = c.created_by
+			LEFT JOIN course_certifications cc ON cc.course_id = c.id
+			GROUP BY c.id
+		"""
+		with get_db() as connection:
+			rows = connection.execute(query).fetchall()
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow(headers)
+		for r in rows:
+			row_list = list(r)
+			if row_list[4] is not None:
+				row_list[4] = round(row_list[4], 1)
+			writer.writerow(row_list)
+		output = stream.getvalue().encode("utf-8-sig")
+		return send_file(BytesIO(output), as_attachment=True, download_name="Course_Owner_Rewards_Report.csv", mimetype="text/csv")
+
+	@app.get("/admin/reports/community-content-rewards/download")
+	@admin_required
+	def download_community_content_rewards_report():
+		headers = ["Post Title", "Post Owner Name", "Owner Username", "Number of Ratings", "Average Rating", "Reward Points Generated"]
+		query = """
+			SELECT p.title, u.full_name, u.username,
+				   COUNT(r.rating),
+				   AVG(r.rating),
+				   (SELECT COALESCE(SUM(points), 0) FROM reward_transactions WHERE reward_source = 'COMMUNITY_POST_RATING' AND user_id = p.created_by AND source_reference_id LIKE 'PRATE-' || p.id || '-%')
+			FROM posts p
+			JOIN users u ON u.id = p.created_by
+			LEFT JOIN post_ratings r ON r.post_id = p.id
+			GROUP BY p.id
+		"""
+		with get_db() as connection:
+			rows = connection.execute(query).fetchall()
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow(headers)
+		for r in rows:
+			row_list = list(r)
+			if row_list[4] is not None:
+				row_list[4] = round(row_list[4], 1)
+			writer.writerow(row_list)
+		output = stream.getvalue().encode("utf-8-sig")
+		return send_file(BytesIO(output), as_attachment=True, download_name="Community_Content_Rewards_Report.csv", mimetype="text/csv")
 
 	@app.get("/logout")
 	def logout():

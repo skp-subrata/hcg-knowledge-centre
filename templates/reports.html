@@ -64,4 +64,65 @@
         </a>
     </div>
 </section>
+
+<div class="mt-12 mb-6">
+    <h2 class="font-serif text-2xl md:text-3xl font-bold mb-2">Reward & Engagement Analytics</h2>
+    <p class="text-muted dark:text-darkMuted text-sm">Download CSV reports detailing user reward wallets, transaction ledgers, active source formulas, and creators points generated.</p>
+</div>
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-12">
+    <!-- Card 1: User Wallet Balances -->
+    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
+        <div>
+            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">User Reward Ledger</h3>
+            <p class="text-xs text-slate-400 mt-1">Summary of active balances, earned, settled, and adjustments by user.</p>
+        </div>
+        <a href="{{ url_for('download_user_rewards_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
+            Download CSV
+        </a>
+    </div>
+
+    <!-- Card 2: Transactions Log -->
+    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
+        <div>
+            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Reward Transactions Log</h3>
+            <p class="text-xs text-slate-400 mt-1">Immutable ledger details: source events, points delta, types, dates.</p>
+        </div>
+        <a href="{{ url_for('download_reward_transactions_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
+            Download CSV
+        </a>
+    </div>
+
+    <!-- Card 3: Reward Sources -->
+    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
+        <div>
+            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Reward Sources Report</h3>
+            <p class="text-xs text-slate-400 mt-1">Breakdown of rules, statuses, activity counts, and total points generated.</p>
+        </div>
+        <a href="{{ url_for('download_reward_sources_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
+            Download CSV
+        </a>
+    </div>
+
+    <!-- Card 4: Course Creator Rewards -->
+    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
+        <div>
+            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Course Owner Rewards</h3>
+            <p class="text-xs text-slate-400 mt-1">Aggregated rating metrics and owner rewards earned per course.</p>
+        </div>
+        <a href="{{ url_for('download_course_owner_rewards_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
+            Download CSV
+        </a>
+    </div>
+
+    <!-- Card 5: Post Owner Rewards -->
+    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
+        <div>
+            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Post Owner Rewards</h3>
+            <p class="text-xs text-slate-400 mt-1">Aggregated community ratings and owner rewards earned per post.</p>
+        </div>
+        <a href="{{ url_for('download_community_content_rewards_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
+            Download CSV
+        </a>
+    </div>
+</section>
 {% endblock %}

@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% block title %}Reward Management | HCG Knowledge Centre{% endblock %}
+{% block content %}
+<div class="mb-8">
+    <h1 class="font-serif text-4xl md:text-5xl font-bold mb-3">Reward Management</h1>
+    <p class="text-muted dark:text-darkMuted text-lg">Configure calculation rules, settle balances, adjust points, and review the immutable ledger logs.</p>
+</div>
+
+<!-- Tabs selector -->
+<div class="flex gap-4 border-b border-slate-200 dark:border-slate-800 mb-8 select-none overflow-x-auto whitespace-nowrap">
+    <button onclick="switchTab('wallets')" id="tab-btn-wallets" class="py-2.5 px-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400">
+        User Wallets
+    </button>
+    <button onclick="switchTab('rules')" id="tab-btn-rules" class="py-2.5 px-4 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+        Reward Rules
+    </button>
+    <button onclick="switchTab('ledger')" id="tab-btn-ledger" class="py-2.5 px-4 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+        Master Ledger
+    </button>
+    <button onclick="switchTab('ops')" id="tab-btn-ops" class="py-2.5 px-4 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+        Operations & Reset
+    </button>
+</div>
+
+<!-- SECTION 1: USER WALLETS -->
+<div id="tab-sec-wallets" class="tab-section space-y-6">
+    <!-- Search Bar & Statistics Overview -->
+    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40">
+        <h3 class="font-bold text-slate-900 dark:text-slate-100 text-sm mb-4">Search User Wallets</h3>
+        <input type="text" id="wallet-search" onkeyup="filterWalletsTable()" placeholder="Search by user name or username..." class="form-input w-full text-xs py-2.5 px-4">
+    </div>
+
+    <!-- Wallets list table -->
+    <div class="glass-panel bg-white/50 dark:bg-slate-900/10 p-1 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse" id="wallets-table">
+                <thead>
+                    <tr class="border-b border-slate-100 dark:border-slate-800/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none bg-slate-50/50 dark:bg-slate-900/50">
+                        <th class="py-3 px-4">User</th>
+                        <th class="py-3 px-4">Username</th>
+                        <th class="py-3 px-4 text-right">Current Balance</th>
+                        <th class="py-3 px-4 text-right">Total Earned</th>
+                        <th class="py-3 px-4 text-right">Total Settled</th>
+                        <th class="py-3 px-4 text-right">Total Adjusted</th>
+                        <th class="py-3 px-4 text-right">Quick Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/50 text-xs">
+                    {% for w in wallets %}
+                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/10 transition-colors wallet-row">
+                        <!-- User Name -->
+                        <td class="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-50 wallet-name">
+                            {{ w.full_name }}
+                        </td>
+                        <!-- Username -->
+                        <td class="py-3.5 px-4 text-slate-500 dark:text-slate-400 wallet-uname">
+                            {{ w.username }}
+                        </td>
+                        <!-- Current Balance -->
+                        <td class="py-3.5 px-4 text-right font-black text-slate-950 dark:text-slate-50 text-sm">
+                            ⭐ {{ "{:,}".format(w.current_balance) }}
+                        </td>
+                        <!-- Total Earned -->
+                        <td class="py-3.5 px-4 text-right text-emerald-600 dark:text-emerald-400 font-semibold">
+                            +{{ "{:,}".format(w.total_earned) }}
+                        </td>
+                        <!-- Total Settled -->
+                        <td class="py-3.5 px-4 text-right text-purple-600 dark:text-purple-400 font-semibold">
+                            {{ "{:,}".format(w.total_settled) }}
+                        </td>
+                        <!-- Total Adjusted -->
+                        <td class="py-3.5 px-4 text-right text-amber-600 dark:text-amber-400 font-semibold">
+                            {{ "{:,}".format(w.total_adjusted) }}
+                        </td>
+                        <!-- Actions -->
+                        <td class="py-3.5 px-4 text-right space-x-2 whitespace-nowrap">
+                            <button onclick="openAdjustModal({{ w.user_id }}, '{{ w.full_name }}')" class="btn-secondary text-[10px] py-1 px-2.5 rounded-lg shadow-sm font-bold text-indigo-600 dark:text-indigo-400">
+                                Adjust
+                            </button>
+                            <button onclick="openSettleModal({{ w.user_id }}, '{{ w.full_name }}', {{ w.current_balance }})" class="btn-primary text-[10px] py-1 px-2.5 rounded-lg shadow-sm font-bold">
+                                Settle
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500 dark:text-slate-400">
+                            <p class="text-base font-semibold">No wallets initialized yet</p>
+                            <p class="text-xs text-slate-400 mt-1">Wallets are automatically initialized when points are earned or adjustments are made.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 2: REWARD RULES -->
+<div id="tab-sec-rules" class="tab-section space-y-6 hidden">
+    <div class="grid grid-cols-1 gap-6">
+        {% for src in sources %}
+        <div class="glass-panel p-6 bg-white/40 dark:bg-slate-900/40">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h3 class="font-bold text-base text-slate-900 dark:text-slate-50">
+                        {{ src.name|replace('_', ' ') }}
+                    </h3>
+                    <span class="text-xs font-semibold text-slate-400 mt-0.5 inline-block">
+                        Current Status: 
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold {% if src.status == 'active' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400{% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400{% endif %}">
+                            {{ src.status|upper }}
+                        </span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Configuration Update Form -->
+            <form method="post" action="{{ url_for('admin_update_reward_source') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <input type="hidden" name="name" value="{{ src.name }}">
+                
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Calculation Type</label>
+                    <select name="calculation_type" class="form-input w-full text-xs py-2">
+                        <option value="MULTIPLIER" {% if src.calculation_type == 'MULTIPLIER' %}selected{% endif %}>MULTIPLIER (Formula)</option>
+                        <option value="FIXED" {% if src.calculation_type == 'FIXED' %}selected{% endif %}>FIXED (Static Points)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Multiplier</label>
+                    <input type="number" step="0.1" name="multiplier" value="{{ src.multiplier }}" class="form-input w-full text-xs py-2">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Fixed Points</label>
+                    <input type="number" name="fixed_points" value="{{ src.fixed_points }}" class="form-input w-full text-xs py-2">
+                </div>
+
+                <div class="flex gap-2">
+                    <select name="status" class="form-input text-xs py-2 w-1/2">
+                        <option value="active" {% if src.status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if src.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </select>
+                    <button type="submit" class="w-1/2 btn-primary py-2 rounded-xl text-xs font-bold shadow-sm">
+                        Save Rules
+                    </button>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- SECTION 3: MASTER LEDGER -->
+<div id="tab-sec-ledger" class="tab-section space-y-6 hidden">
+    <div class="glass-panel bg-white/50 dark:bg-slate-900/10 p-1 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-100 dark:border-slate-800/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none bg-slate-50/50 dark:bg-slate-900/50">
+                        <th class="py-3 px-4">Date</th>
+                        <th class="py-3 px-4">User</th>
+                        <th class="py-3 px-4">Source</th>
+                        <th class="py-3 px-4">Type</th>
+                        <th class="py-3 px-4">Reference</th>
+                        <th class="py-3 px-4">Description</th>
+                        <th class="py-3 px-4 text-right">Points</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/50 text-xs">
+                    {% for tx in ledger %}
+                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/10 transition-colors">
+                        <td class="py-3.5 px-4 font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                            {{ tx.created_at }}
+                        </td>
+                        <td class="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-50">
+                            {{ tx.full_name }} <span class="text-[10px] font-normal text-slate-400">({{ tx.username }})</span>
+                        </td>
+                        <td class="py-3.5 px-4 font-semibold text-slate-700 dark:text-slate-300">
+                            {{ tx.reward_source|replace('_', ' ') }}
+                        </td>
+                        <td class="py-3.5 px-4">
+                            {% if tx.transaction_type == 'EARN' %}
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                                EARN
+                            </span>
+                            {% elif tx.transaction_type == 'SETTLEMENT' %}
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400">
+                                SETTLEMENT
+                            </span>
+                            {% elif tx.transaction_type == 'REVERSAL' %}
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
+                                REVERSAL
+                            </span>
+                            {% else %}
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                                ADJUSTMENT
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3.5 px-4 whitespace-nowrap">
+                            <span class="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200/50 dark:border-slate-800/80">
+                                {{ tx.source_reference_id }}
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4 text-slate-600 dark:text-slate-300 max-w-xs truncate" title="{{ tx.description }}">
+                            {{ tx.description }}
+                        </td>
+                        <td class="py-3.5 px-4 text-right font-black text-sm whitespace-nowrap">
+                            {% if tx.points > 0 %}
+                            <span class="text-emerald-600 dark:text-emerald-400">+{{ tx.points }}</span>
+                            {% else %}
+                            <span class="text-rose-600 dark:text-rose-400">{{ tx.points }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-slate-500 dark:text-slate-400">
+                            <p class="text-base font-semibold">No ledger transactions logged</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 4: OPERATIONS & RESET -->
+<div id="tab-sec-ops" class="tab-section space-y-6 hidden">
+    <!-- User Level Reset -->
+    <div class="glass-panel p-6 bg-white/40 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80">
+        <h3 class="font-bold text-slate-900 dark:text-slate-50 text-base mb-2">Reset User Wallet Balance</h3>
+        <p class="text-xs text-slate-400 mb-6">Reset a specific user's reward points to 0. This creates an adjustments transaction in the ledger without deleting transaction history.</p>
+        
+        <form method="post" action="{{ url_for('admin_reset_rewards') }}" class="space-y-4 max-w-lg">
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Target User</label>
+                <select name="user_id" required class="form-input w-full text-sm">
+                    <option value="">Select Student...</option>
+                    {% for student in all_students %}
+                    <option value="{{ student.id }}">{{ student.full_name }} ({{ student.username }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 p-4 rounded-xl space-y-3">
+                <h4 class="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">⚠️ CRITICAL RESET WARNING</h4>
+                <div class="flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300">
+                    <input type="checkbox" name="confirm" value="YES" required class="mt-0.5 rounded border-red-300 text-red-600 focus:ring-red-500">
+                    <span>I understand this action will reset the user's current points balance to zero by creating a negative audit entry. This action cannot be undone.</span>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn-primary py-2.5 px-5 rounded-xl font-bold text-xs bg-red-600 hover:bg-red-700 border-red-500 focus:ring-red-500 shadow-sm text-white">
+                Confirm & Reset User Points
+            </button>
+        </form>
+    </div>
+
+    <!-- Bulk/Global Reset -->
+    <div class="glass-panel p-6 bg-white/40 dark:bg-slate-900/40 border border-red-200 dark:border-red-800/30">
+        <h3 class="font-bold text-red-600 dark:text-red-400 text-base mb-2">Global Reset (All Users)</h3>
+        <p class="text-xs text-slate-400 mb-6">Reset points balance to 0 for **all users** on the platform. Strong administrative clearance is required.</p>
+        
+        <form method="post" action="{{ url_for('admin_reset_rewards') }}" class="space-y-4 max-w-lg">
+            <input type="hidden" name="user_id" value="all">
+            
+            <div class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 p-4 rounded-xl space-y-3">
+                <h4 class="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">⚠️ DANGER ZONE: GLOBAL SYSTEM RESET</h4>
+                <div class="flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300">
+                    <input type="checkbox" name="confirm" value="YES" required class="mt-0.5 rounded border-red-300 text-red-600 focus:ring-red-500">
+                    <span>I explicitly confirm that I want to reset reward balances to 0 globally for ALL platform users.</span>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn-primary py-2.5 px-5 rounded-xl font-bold text-xs bg-red-600 hover:bg-red-700 border-red-500 focus:ring-red-500 shadow-sm text-white">
+                Execute System-wide Global Reset
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- ADJUSTMENT MODAL -->
+<div id="adjust-modal" class="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 w-full max-w-md">
+        <h3 class="font-bold text-slate-950 dark:text-slate-50 text-base mb-2">Manual Points Adjustment</h3>
+        <p class="text-xs text-slate-400 mb-4">Adjust points balance for <span id="adjust-user-name" class="font-bold text-slate-700 dark:text-slate-200">User</span>.</p>
+        
+        <form method="post" action="{{ url_for('admin_adjust_rewards') }}" class="space-y-4">
+            <input type="hidden" name="user_id" id="adjust-user-id">
+            
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Adjustment Points</label>
+                <input type="number" name="points" required placeholder="Use positive (e.g. 50) or negative (e.g. -50) numbers" class="form-input w-full text-sm">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Remarks / Audit Note</label>
+                <textarea name="remarks" required rows="2" placeholder="Provide audit explanation for adjustment..." class="form-input w-full text-sm resize-none rounded-xl"></textarea>
+            </div>
+
+            <div class="flex gap-3 justify-end pt-2">
+                <button type="button" onclick="closeAdjustModal()" class="btn-secondary py-2 px-4 rounded-xl text-xs font-bold">
+                    Cancel
+                </button>
+                <button type="submit" class="btn-primary py-2 px-4 rounded-xl text-xs font-bold shadow-sm">
+                    Submit Adjustment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- SETTLEMENT MODAL -->
+<div id="settle-modal" class="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 w-full max-w-md">
+        <h3 class="font-bold text-slate-950 dark:text-slate-50 text-base mb-2">Process Reward Settlement</h3>
+        <p class="text-xs text-slate-400 mb-4">Deduct settled points from <span id="settle-user-name" class="font-bold text-slate-700 dark:text-slate-200">User</span>'s current balance.</p>
+        
+        <form method="post" action="{{ url_for('admin_settle_rewards') }}" class="space-y-4">
+            <input type="hidden" name="user_id" id="settle-user-id">
+            
+            <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-3 rounded-xl border border-indigo-100 dark:border-indigo-800/30 text-xs text-slate-600 dark:text-slate-400">
+                Current Points Balance: <span class="font-bold text-indigo-600 dark:text-indigo-400">⭐ <span id="settle-max-points">0</span> Points</span>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Points to Settle</label>
+                <input type="number" name="points" id="settle-points-input" min="1" required placeholder="Points to settle..." class="form-input w-full text-sm">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Settlement Description / Reference</label>
+                <textarea name="remarks" required rows="2" placeholder="e.g. Redeemed Amazon Voucher, Ref: V1009" class="form-input w-full text-sm resize-none rounded-xl"></textarea>
+            </div>
+
+            <div class="flex gap-3 justify-end pt-2">
+                <button type="button" onclick="closeSettleModal()" class="btn-secondary py-2 px-4 rounded-xl text-xs font-bold">
+                    Cancel
+                </button>
+                <button type="submit" class="btn-primary py-2 px-4 rounded-xl text-xs font-bold shadow-sm">
+                    Confirm Settlement
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function switchTab(tabId) {
+    // Hide all sections
+    document.querySelectorAll('.tab-section').forEach(sec => sec.classList.add('hidden'));
+    // Remove border styles from all tabs
+    document.querySelectorAll('[id^="tab-btn-"]').forEach(btn => {
+        btn.classList.remove('border-indigo-600', 'text-indigo-600', 'dark:border-indigo-400', 'dark:text-indigo-400');
+        btn.classList.add('border-transparent', 'text-slate-500', 'dark:text-slate-400');
+    });
+
+    // Show selected section
+    document.getElementById(`tab-sec-${tabId}`).classList.remove('hidden');
+    // Highlight selected tab button
+    const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+    activeBtn.classList.remove('border-transparent', 'text-slate-500', 'dark:text-slate-400');
+    activeBtn.classList.add('border-indigo-600', 'text-indigo-600', 'dark:border-indigo-400', 'dark:text-indigo-400');
+}
+
+function filterWalletsTable() {
+    const query = document.getElementById('wallet-search').value.toLowerCase();
+    const rows = document.querySelectorAll('.wallet-row');
+    rows.forEach(row => {
+        const name = row.querySelector('.wallet-name').innerText.toLowerCase();
+        const uname = row.querySelector('.wallet-uname').innerText.toLowerCase();
+        if (name.includes(query) || uname.includes(query)) {
+            row.classList.remove('hidden');
+        } else {
+            row.classList.add('hidden');
+        }
+    });
+}
+
+function openAdjustModal(userId, userName) {
+    document.getElementById('adjust-user-id').value = userId;
+    document.getElementById('adjust-user-name').innerText = userName;
+    
+    const modal = document.getElementById('adjust-modal');
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.remove('opacity-0'), 50);
+}
+
+function closeAdjustModal() {
+    const modal = document.getElementById('adjust-modal');
+    modal.classList.add('opacity-0');
+    setTimeout(() => modal.classList.add('hidden'), 200);
+}
+
+function openSettleModal(userId, userName, currentBalance) {
+    document.getElementById('settle-user-id').value = userId;
+    document.getElementById('settle-user-name').innerText = userName;
+    document.getElementById('settle-max-points').innerText = currentBalance;
+    
+    const input = document.getElementById('settle-points-input');
+    input.setAttribute('max', currentBalance);
+    input.value = '';
+    
+    const modal = document.getElementById('settle-modal');
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.remove('opacity-0'), 50);
+}
+
+function closeSettleModal() {
+    const modal = document.getElementById('settle-modal');
+    modal.classList.add('opacity-0');
+    setTimeout(() => modal.classList.add('hidden'), 200);
+}
+</script>
+{% endblock %}
