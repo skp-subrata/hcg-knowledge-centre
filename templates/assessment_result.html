@@ -69,6 +69,7 @@
 
     <!-- Action Buttons -->
     <div class="mt-10 pt-8 border-t border-slate-200 dark:border-slate-800 flex flex-col md:flex-row justify-center items-center gap-4">
+        {% if attempt.result == 'pass' %}
         <a href="{{ url_for('assessment_review', attempt_id=attempt.id) }}" class="btn-secondary w-full md:w-auto px-8 py-3 rounded-full font-bold text-center">
             Review Your Answers
         </a>
