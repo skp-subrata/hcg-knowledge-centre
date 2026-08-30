@@ -1323,6 +1323,10 @@ def create_app():
 				flash("Unauthorized access to this assessment attempt.")
 				return redirect(url_for("home"))
 				
+			if attempt["result"] != "pass":
+				flash("Answer review is only available for passed assessments.")
+				return redirect(url_for("course_detail", course_id=attempt["course_id"]))
+				
 			questions_reviews = connection.execute(
 				"""SELECT q.*, aa.selected_option, aa.is_correct, aa.marks_awarded
 				   FROM questions q
