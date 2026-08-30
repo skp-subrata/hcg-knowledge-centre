@@ -17,6 +17,8 @@ erDiagram
         TEXT department
         TEXT location
         INTEGER is_active
+        TEXT created_at
+        TEXT updated_at
     }
 
     courses {
@@ -32,6 +34,8 @@ erDiagram
         INTEGER duration_minutes
         TEXT difficulty
         TEXT thumbnail_color
+        TEXT created_at
+        TEXT updated_at
     }
 
     course_assignments {
@@ -39,6 +43,8 @@ erDiagram
         INTEGER student_id FK
         TEXT status
         TEXT completed_at
+        TEXT created_at
+        TEXT updated_at
     }
 
     modules {
@@ -46,6 +52,8 @@ erDiagram
         INTEGER course_id FK
         TEXT title
         INTEGER sequence_order
+        TEXT created_at
+        TEXT updated_at
     }
 
     course_content {
@@ -56,6 +64,8 @@ erDiagram
         TEXT file_url
         INTEGER sequence_order
         INTEGER duration_minutes
+        TEXT created_at
+        TEXT updated_at
     }
 
     content_progress {
@@ -64,6 +74,8 @@ erDiagram
         INTEGER content_id FK
         TEXT status
         TEXT completed_at
+        TEXT created_at
+        TEXT updated_at
     }
 
     question_banks {
@@ -71,6 +83,8 @@ erDiagram
         TEXT name
         TEXT category
         INTEGER created_by FK
+        TEXT created_at
+        TEXT updated_at
     }
 
     questions {
@@ -87,6 +101,8 @@ erDiagram
         TEXT topic_tag
         INTEGER created_by FK
         TEXT explanation
+        TEXT created_at
+        TEXT updated_at
     }
 
     assessments {
@@ -96,11 +112,15 @@ erDiagram
         TEXT title
         INTEGER pass_percentage
         INTEGER max_attempts
+        TEXT created_at
+        TEXT updated_at
     }
 
     assessment_questions {
         INTEGER assessment_id FK
         INTEGER question_id FK
+        TEXT created_at
+        TEXT updated_at
     }
 
     assessment_attempts {
@@ -114,6 +134,8 @@ erDiagram
         TEXT result
         TEXT started_at
         TEXT submitted_at
+        TEXT created_at
+        TEXT updated_at
     }
 
     attempt_answers {
@@ -123,6 +145,8 @@ erDiagram
         TEXT selected_option
         INTEGER is_correct
         INTEGER marks_awarded
+        TEXT created_at
+        TEXT updated_at
     }
 
     certificates {
@@ -132,6 +156,8 @@ erDiagram
         TEXT cert_uid
         TEXT issued_date
         TEXT file_url
+        TEXT created_at
+        TEXT updated_at
     }
 
     notifications {
@@ -141,6 +167,7 @@ erDiagram
         TEXT type
         INTEGER is_read
         TEXT created_at
+        TEXT updated_at
     }
 
     audit_logs {
@@ -150,6 +177,7 @@ erDiagram
         TEXT entity_type
         INTEGER entity_id
         TEXT created_at
+        TEXT updated_at
     }
 
     course_certifications {
@@ -171,6 +199,8 @@ erDiagram
         TEXT certificate_generated_at
         TEXT badge
         TEXT certification_status
+        TEXT created_at
+        TEXT updated_at
     }
 
     groups {
@@ -181,6 +211,7 @@ erDiagram
         TEXT status
         INTEGER created_by FK
         TEXT created_at
+        TEXT updated_at
     }
 
     group_members {
@@ -193,6 +224,8 @@ erDiagram
         TEXT location
         TEXT user_status
         TEXT added_at
+        TEXT created_at
+        TEXT updated_at
     }
 
     group_course_assignments {
@@ -202,6 +235,8 @@ erDiagram
         INTEGER assigned_by FK
         TEXT assigned_at
         TEXT status
+        TEXT created_at
+        TEXT updated_at
     }
 
     assignment_history {
@@ -218,6 +253,8 @@ erDiagram
         TEXT assigned_at
         TEXT assignment_status
         TEXT duplicate_check_result
+        TEXT created_at
+        TEXT updated_at
     }
 
     posts {
@@ -248,6 +285,8 @@ erDiagram
         INTEGER file_size
         INTEGER uploaded_by FK
         TEXT uploaded_at
+        TEXT created_at
+        TEXT updated_at
     }
 
     post_ratings {
@@ -281,6 +320,8 @@ erDiagram
         TEXT comments
         TEXT previous_status
         TEXT new_status
+        TEXT created_at
+        TEXT updated_at
     }
 
     reward_sources {
@@ -289,6 +330,8 @@ erDiagram
         TEXT calculation_type
         REAL multiplier
         INTEGER fixed_points
+        TEXT created_at
+        TEXT updated_at
     }
 
     reward_transactions {
@@ -306,6 +349,7 @@ erDiagram
         TEXT created_at
         TEXT status
         TEXT settlement_id
+        TEXT updated_at
     }
 
     user_wallets {
@@ -315,6 +359,7 @@ erDiagram
         INTEGER total_settled
         INTEGER total_adjusted
         TEXT updated_at
+        TEXT created_at
     }
 
     api_credentials {
@@ -324,6 +369,7 @@ erDiagram
         TEXT api_secret
         TEXT created_at
         TEXT status
+        TEXT updated_at
     }
 
     users ||--o{ courses : "created_by"
