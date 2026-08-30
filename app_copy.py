@@ -121,8 +121,6 @@ def init_db():
 		# ── Core tables ──────────────────────────────────────────────────────────
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS users (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				full_name TEXT NOT NULL,
 				username TEXT UNIQUE NOT NULL,
@@ -136,8 +134,6 @@ def init_db():
 		)
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS courses (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				name TEXT NOT NULL,
 				content_type TEXT NOT NULL CHECK (content_type IN ('URL', 'PDF', 'Video', 'PPT')),
@@ -150,7 +146,6 @@ def init_db():
 		""")
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS groups (
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				name TEXT NOT NULL,
 				description TEXT DEFAULT '',
@@ -162,8 +157,6 @@ def init_db():
 		""")
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS group_members (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
 				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -178,8 +171,6 @@ def init_db():
 		""")
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS group_course_assignments (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
 				course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -191,8 +182,6 @@ def init_db():
 		""")
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS assignment_history (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
 				course_name TEXT NOT NULL,
@@ -210,8 +199,6 @@ def init_db():
 		""")
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS course_assignments (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
 				student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 				status TEXT DEFAULT 'not_started',
@@ -221,8 +208,6 @@ def init_db():
 		""")
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS course_certifications (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 				course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -292,33 +277,16 @@ def init_db():
 
 		# ── Remaining tables (assessments, questions, etc.) ───────────────────
 		connection.executescript("""
-			CREATE TABLE IF NOT EXISTS question_banks (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT DEFAULT 'General', created_by INTEGER NOT NULL REFERENCES users(id));
-			CREATE TABLE IF NOT EXISTS questions (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, question_bank_id INTEGER NOT NULL REFERENCES question_banks(id) ON DELETE CASCADE, question_text TEXT NOT NULL, option_a TEXT NOT NULL, option_b TEXT NOT NULL, option_c TEXT NOT NULL, option_d TEXT NOT NULL, correct_option TEXT NOT NULL, marks INTEGER DEFAULT 1, difficulty TEXT DEFAULT 'medium', topic_tag TEXT DEFAULT '', created_by INTEGER NOT NULL REFERENCES users(id), explanation TEXT);
-			CREATE TABLE IF NOT EXISTS assessments (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE, type TEXT NOT NULL, title TEXT NOT NULL, pass_percentage INTEGER DEFAULT 60, max_attempts INTEGER DEFAULT 1);
-			CREATE TABLE IF NOT EXISTS assessment_questions (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, PRIMARY KEY(assessment_id, question_id));
-			CREATE TABLE IF NOT EXISTS assessment_attempts (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE, student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, attempt_no INTEGER DEFAULT 1, score INTEGER DEFAULT 0, percentage REAL DEFAULT 0, status TEXT DEFAULT 'in_progress', result TEXT DEFAULT 'fail', started_at TEXT DEFAULT CURRENT_TIMESTAMP, submitted_at TEXT);
-			CREATE TABLE IF NOT EXISTS attempt_answers (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, attempt_id INTEGER NOT NULL REFERENCES assessment_attempts(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id), selected_option TEXT, is_correct INTEGER DEFAULT 0, marks_awarded INTEGER DEFAULT 0, UNIQUE(attempt_id, question_id));
-			CREATE TABLE IF NOT EXISTS certificates (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER NOT NULL REFERENCES users(id), course_id INTEGER NOT NULL REFERENCES courses(id), cert_uid TEXT UNIQUE NOT NULL, issued_date TEXT DEFAULT CURRENT_DATE, file_url TEXT);
-			CREATE TABLE IF NOT EXISTS notifications (
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), message TEXT NOT NULL, type TEXT DEFAULT 'system', is_read INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-			CREATE TABLE IF NOT EXISTS audit_logs (
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER REFERENCES users(id), action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-			CREATE TABLE IF NOT EXISTS api_credentials (
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, api_key TEXT UNIQUE NOT NULL, api_secret TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, status TEXT CHECK(status IN ('active', 'inactive')) DEFAULT 'active');
+			CREATE TABLE IF NOT EXISTS question_banks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT DEFAULT 'General', created_by INTEGER NOT NULL REFERENCES users(id));
+			CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY AUTOINCREMENT, question_bank_id INTEGER NOT NULL REFERENCES question_banks(id) ON DELETE CASCADE, question_text TEXT NOT NULL, option_a TEXT NOT NULL, option_b TEXT NOT NULL, option_c TEXT NOT NULL, option_d TEXT NOT NULL, correct_option TEXT NOT NULL, marks INTEGER DEFAULT 1, difficulty TEXT DEFAULT 'medium', topic_tag TEXT DEFAULT '', created_by INTEGER NOT NULL REFERENCES users(id), explanation TEXT);
+			CREATE TABLE IF NOT EXISTS assessments (id INTEGER PRIMARY KEY AUTOINCREMENT, course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE, type TEXT NOT NULL, title TEXT NOT NULL, pass_percentage INTEGER DEFAULT 60, max_attempts INTEGER DEFAULT 1);
+			CREATE TABLE IF NOT EXISTS assessment_questions (assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, PRIMARY KEY(assessment_id, question_id));
+			CREATE TABLE IF NOT EXISTS assessment_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE, student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, attempt_no INTEGER DEFAULT 1, score INTEGER DEFAULT 0, percentage REAL DEFAULT 0, status TEXT DEFAULT 'in_progress', result TEXT DEFAULT 'fail', started_at TEXT DEFAULT CURRENT_TIMESTAMP, submitted_at TEXT);
+			CREATE TABLE IF NOT EXISTS attempt_answers (id INTEGER PRIMARY KEY AUTOINCREMENT, attempt_id INTEGER NOT NULL REFERENCES assessment_attempts(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id), selected_option TEXT, is_correct INTEGER DEFAULT 0, marks_awarded INTEGER DEFAULT 0, UNIQUE(attempt_id, question_id));
+			CREATE TABLE IF NOT EXISTS certificates (id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER NOT NULL REFERENCES users(id), course_id INTEGER NOT NULL REFERENCES courses(id), cert_uid TEXT UNIQUE NOT NULL, issued_date TEXT DEFAULT CURRENT_DATE, file_url TEXT);
+			CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), message TEXT NOT NULL, type TEXT DEFAULT 'system', is_read INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+			CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER REFERENCES users(id), action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+			CREATE TABLE IF NOT EXISTS api_credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, api_key TEXT UNIQUE NOT NULL, api_secret TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, status TEXT CHECK(status IN ('active', 'inactive')) DEFAULT 'active');
 			
 			CREATE TABLE IF NOT EXISTS posts (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -339,8 +307,6 @@ def init_db():
 				views INTEGER DEFAULT 0
 			);
 			CREATE TABLE IF NOT EXISTS post_attachments (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
 				file_name TEXT NOT NULL,
@@ -369,8 +335,6 @@ def init_db():
 				status TEXT DEFAULT 'active'
 			);
 			CREATE TABLE IF NOT EXISTS post_approval_history (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
 				version_number INTEGER NOT NULL,
@@ -385,8 +349,6 @@ def init_db():
 			);
 			
 			CREATE TABLE IF NOT EXISTS reward_sources (
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				name TEXT PRIMARY KEY,
 				status TEXT CHECK(status IN ('active', 'inactive')) DEFAULT 'active',
 				calculation_type TEXT CHECK(calculation_type IN ('MULTIPLIER', 'FIXED')),
@@ -395,7 +357,6 @@ def init_db():
 			);
 			
 			CREATE TABLE IF NOT EXISTS reward_transactions (
-				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 				reward_source TEXT NOT NULL REFERENCES reward_sources(name),
@@ -1096,68 +1057,6 @@ def create_app():
 		writer.writerow(["EMP-1001", "john.doe", "john.doe@company.com", "basic user"])
 		output = stream.getvalue().encode("utf-8")
 		return send_file(BytesIO(output), as_attachment=True, download_name="group_members_template.csv", mimetype="text/csv")
-
-	
-	@app.get("/admin/reports")
-	@staff_required
-	def admin_reports():
-		"""Render the reporting and analytics dashboard."""
-		with get_db() as connection:
-			# User Stats
-			total_users = connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-			active_users = connection.execute("SELECT COUNT(*) FROM users WHERE is_active = 1").fetchone()[0]
-			
-			# Course Stats
-			total_courses = connection.execute("SELECT COUNT(*) FROM courses").fetchone()[0]
-			active_courses = connection.execute("SELECT COUNT(*) FROM courses WHERE status = 'published'").fetchone()[0]
-			
-			# Assessment Stats
-			total_attempts = connection.execute("SELECT COUNT(*) FROM assessment_attempts").fetchone()[0]
-			passed_attempts = connection.execute("SELECT COUNT(*) FROM assessment_attempts WHERE result = 'pass'").fetchone()[0]
-			pass_rate = round((passed_attempts / total_attempts * 100) if total_attempts > 0 else 0, 1)
-			
-			# Rewards Stats
-			total_points_issued = connection.execute("SELECT SUM(total_earned) FROM user_wallets").fetchone()[0] or 0
-			
-			# Chart Data: Completions by Category
-			cat_data = connection.execute("""
-				SELECT c.category, COUNT(cc.id) as completions 
-				FROM courses c 
-				LEFT JOIN course_certifications cc ON c.id = cc.course_id 
-				GROUP BY c.category
-			""").fetchall()
-			categories = [row[0] for row in cat_data]
-			completions = [row[1] for row in cat_data]
-			
-			# Leaderboard: Top Learners
-			top_learners = connection.execute("""
-				SELECT user_name, COUNT(*) as certs 
-				FROM course_certifications 
-				GROUP BY user_id, user_name 
-				ORDER BY certs DESC 
-				LIMIT 5
-			""").fetchall()
-			
-			# Recent Activity
-			recent_activity = connection.execute("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 5").fetchall()
-			
-		return render_template("reports.html", 
-			total_users=total_users, 
-			active_users=active_users,
-			total_courses=total_courses,
-			active_courses=active_courses,
-			total_attempts=total_attempts,
-			pass_rate=pass_rate,
-			total_points_issued=total_points_issued,
-			chart_categories=categories,
-			chart_completions=completions,
-			top_learners=[dict(row) for row in top_learners],
-			recent_activity=[dict(row) for row in recent_activity],
-			user=session.get("user"), 
-			role=session.get("role"),
-			profile_picture=session.get("profile_picture")
-		)
-
 
 	@app.route("/admin", methods=["GET", "POST"])
 	@staff_required

@@ -1,128 +1,211 @@
-{% extends "base.html" %}
-{% block title %}Reports | HCG knowledge centre{% endblock %}
+﻿{% extends "base.html" %}
+
+{% block title %}Reporting & Analytics | HCG Knowledge Centre{% endblock %}
+
 {% block content %}
-<div class="mb-8"><h1 class="font-serif text-4xl md:text-5xl font-bold mb-3">Reports</h1><p class="text-muted dark:text-darkMuted text-lg">Record counts across every LMS table.</p></div>
-<section class="glass-panel p-6"><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{% for table, count in report %}<div class="p-5 rounded-2xl bg-white/30 dark:bg-black/20 border border-line dark:border-darkLine"><p class="text-muted dark:text-darkMuted text-sm uppercase tracking-wider">{{ table|replace('_', ' ') }}</p><p class="text-4xl font-bold text-primary mt-2">{{ count }}</p></div>{% endfor %}</div></section>
+<div class="max-w-7xl mx-auto space-y-8">
+    <div class="flex items-center justify-between">
+        <h1 class="text-3xl font-bold text-slate-900 dark:text-white">Reporting & Analytics</h1>
+        <button onclick="window.print()" class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+            Print Report
+        </button>
+    </div>
 
-<div class="mt-12 mb-6">
-    <h2 class="font-serif text-2xl md:text-3xl font-bold mb-2">Platform Activity Reports</h2>
-    <p class="text-muted dark:text-darkMuted text-sm">Download CSV reports for content feed activity, approvals, user actions, and grading metrics.</p>
+    <!-- Top KPI Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Users Card -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <div class="flex items-center gap-4">
+                <div class="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Users</p>
+                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white">{{ total_users }}</h3>
+                </div>
+            </div>
+            <p class="mt-4 text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ active_users }} Active Accounts</p>
+        </div>
+
+        <!-- Courses Card -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <div class="flex items-center gap-4">
+                <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Courses</p>
+                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white">{{ total_courses }}</h3>
+                </div>
+            </div>
+            <p class="mt-4 text-xs font-medium text-indigo-600 dark:text-indigo-400">{{ active_courses }} Published</p>
+        </div>
+
+        <!-- Assessments Card -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <div class="flex items-center gap-4">
+                <div class="p-3 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Pass Rate</p>
+                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white">{{ pass_rate }}%</h3>
+                </div>
+            </div>
+            <p class="mt-4 text-xs font-medium text-slate-500 dark:text-slate-400">From {{ total_attempts }} total attempts</p>
+        </div>
+
+        <!-- Rewards Card -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <div class="flex items-center gap-4">
+                <div class="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Points Issued</p>
+                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white">{{ total_points_issued }}</h3>
+                </div>
+            </div>
+            <p class="mt-4 text-xs font-medium text-amber-600 dark:text-amber-400">Total gamification points</p>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Bar Chart -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">Course Completions by Category</h3>
+            <div class="relative h-72">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Doughnut Chart -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">Overall Exam Pass vs Fail Ratio</h3>
+            <div class="relative h-72 flex justify-center">
+                <canvas id="passFailChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Row (Tables) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Top Learners -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                <svg class="w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                Top Learners
+            </h3>
+            <div class="space-y-4">
+                {% for learner in top_learners %}
+                <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
+                            {{ loop.index }}
+                        </div>
+                        <span class="font-medium text-slate-700 dark:text-slate-300">{{ learner.user_name }}</span>
+                    </div>
+                    <span class="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold rounded-full">
+                        {{ learner.certs }} Certs
+                    </span>
+                </div>
+                {% else %}
+                <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No certifications issued yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Recent Activity Feed -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">Recent System Activity</h3>
+            <div class="space-y-4">
+                {% for log in recent_activity %}
+                <div class="border-l-2 border-indigo-200 dark:border-indigo-800 pl-4 py-1">
+                    <p class="text-sm text-slate-700 dark:text-slate-300">
+                        <span class="font-semibold">{{ log.action }}</span> on <span class="font-medium text-indigo-600 dark:text-indigo-400">{{ log.entity_type }} #{{ log.entity_id }}</span>
+                    </p>
+                    <p class="text-xs text-slate-500 dark:text-slate-500 mt-1">{{ log.created_at }}</p>
+                </div>
+                {% else %}
+                <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No audit logs found.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
 </div>
-<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-12">
-    <!-- Card 1: Content Master -->
-    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
-        <div>
-            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Content Master Report</h3>
-            <p class="text-xs text-slate-400 mt-1">Full index of posts, categories, content types, owners, and dates.</p>
-        </div>
-        <a href="{{ url_for('download_content_master_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
-            Download CSV
-        </a>
-    </div>
 
-    <!-- Card 2: Content Engagement -->
-    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
-        <div>
-            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Content Engagement Report</h3>
-            <p class="text-xs text-slate-400 mt-1">Tracks views, average rating scores, comment counts per post.</p>
-        </div>
-        <a href="{{ url_for('download_content_engagement_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
-            Download CSV
-        </a>
-    </div>
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const isDarkMode = document.documentElement.classList.contains('dark');
+    const textColor = isDarkMode ? '#94a3b8' : '#64748b'; // slate-400 or slate-500
+    const gridColor = isDarkMode ? '#334155' : '#f1f5f9'; // slate-700 or slate-100
+    
+    // Category Completions Bar Chart
+    const ctxCat = document.getElementById('categoryChart').getContext('2d');
+    const categoryChart = new Chart(ctxCat, {
+        type: 'bar',
+        data: {
+            labels: {{ chart_categories | tojson | safe }},
+            datasets: [{
+                label: 'Course Completions',
+                data: {{ chart_completions | tojson | safe }},
+                backgroundColor: 'rgba(99, 102, 241, 0.8)', // indigo-500
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: textColor, precision: 0 },
+                    grid: { color: gridColor }
+                },
+                x: {
+                    ticks: { color: textColor },
+                    grid: { display: false }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
 
-    <!-- Card 3: Content Approval -->
-    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
-        <div>
-            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Content Approval Report</h3>
-            <p class="text-xs text-slate-400 mt-1">Tracks submission dates, approvals, rejections, and versions.</p>
-        </div>
-        <a href="{{ url_for('download_content_approval_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
-            Download CSV
-        </a>
-    </div>
-
-    <!-- Card 4: User Content -->
-    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
-        <div>
-            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">User Content Report</h3>
-            <p class="text-xs text-slate-400 mt-1">Aggregates posts count, ratings, and comments per user.</p>
-        </div>
-        <a href="{{ url_for('download_user_content_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
-            Download CSV
-        </a>
-    </div>
-
-    <!-- Card 5: Assessment Results -->
-    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
-        <div>
-            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Assessment Results Report</h3>
-            <p class="text-xs text-slate-400 mt-1">Full log of all student assessment attempts, scores, and pass/fail status.</p>
-        </div>
-        <a href="{{ url_for('download_assessment_results_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
-            Download CSV
-        </a>
-    </div>
-</section>
-
-<div class="mt-12 mb-6">
-    <h2 class="font-serif text-2xl md:text-3xl font-bold mb-2">Reward & Engagement Analytics</h2>
-    <p class="text-muted dark:text-darkMuted text-sm">Download CSV reports detailing user reward wallets, transaction ledgers, active source formulas, and creators points generated.</p>
-</div>
-<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-12">
-    <!-- Card 1: User Wallet Balances -->
-    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
-        <div>
-            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">User Reward Ledger</h3>
-            <p class="text-xs text-slate-400 mt-1">Summary of active balances, earned, settled, and adjustments by user.</p>
-        </div>
-        <a href="{{ url_for('download_user_rewards_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
-            Download CSV
-        </a>
-    </div>
-
-    <!-- Card 2: Transactions Log -->
-    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
-        <div>
-            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Reward Transactions Log</h3>
-            <p class="text-xs text-slate-400 mt-1">Immutable ledger details: source events, points delta, types, dates.</p>
-        </div>
-        <a href="{{ url_for('download_reward_transactions_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
-            Download CSV
-        </a>
-    </div>
-
-    <!-- Card 3: Reward Sources -->
-    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
-        <div>
-            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Reward Sources Report</h3>
-            <p class="text-xs text-slate-400 mt-1">Breakdown of rules, statuses, activity counts, and total points generated.</p>
-        </div>
-        <a href="{{ url_for('download_reward_sources_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
-            Download CSV
-        </a>
-    </div>
-
-    <!-- Card 4: Course Creator Rewards -->
-    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
-        <div>
-            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Course Owner Rewards</h3>
-            <p class="text-xs text-slate-400 mt-1">Aggregated rating metrics and owner rewards earned per course.</p>
-        </div>
-        <a href="{{ url_for('download_course_owner_rewards_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
-            Download CSV
-        </a>
-    </div>
-
-    <!-- Card 5: Post Owner Rewards -->
-    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
-        <div>
-            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Post Owner Rewards</h3>
-            <p class="text-xs text-slate-400 mt-1">Aggregated community ratings and owner rewards earned per post.</p>
-        </div>
-        <a href="{{ url_for('download_community_content_rewards_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
-            Download CSV
-        </a>
-    </div>
-</section>
+    // Pass vs Fail Doughnut Chart
+    const ctxPass = document.getElementById('passFailChart').getContext('2d');
+    const passRate = {{ pass_rate }};
+    const failRate = 100 - passRate;
+    
+    const passFailChart = new Chart(ctxPass, {
+        type: 'doughnut',
+        data: {
+            labels: ['Pass', 'Fail'],
+            datasets: [{
+                data: [passRate, failRate],
+                backgroundColor: [
+                    'rgba(16, 185, 129, 0.8)', // emerald-500
+                    'rgba(239, 68, 68, 0.8)'   // red-500
+                ],
+                borderWidth: 0,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: textColor, padding: 20 }
+                }
+            },
+            cutout: '70%'
+        }
+    });
+</script>
 {% endblock %}
