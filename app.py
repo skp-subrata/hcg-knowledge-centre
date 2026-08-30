@@ -1495,7 +1495,7 @@ def create_app():
 
 	@app.get("/course/<int:course_id>/certificate/download")
 	def download_certificate(course_id):
-		"""Return the certificate as a downloadable HTML file for the student."""
+		"""Return the certificate as a downloadable PNG image for the student."""
 		if not session.get("user_id"):
 			return redirect(url_for("home"))
 		with get_db() as connection:
