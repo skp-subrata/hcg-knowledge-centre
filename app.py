@@ -866,6 +866,7 @@ def create_app():
 					ca.status AS progress_status,
 					ca.updated_at AS last_accessed,
 					ca.completed_at AS completion_date,
+					ca.created_at AS assigned_on,
 					cc.certification_status,
 					cc.badge
 				FROM courses c 
@@ -4044,4 +4045,5 @@ app = create_app()
 
 if __name__ == "__main__":
 	app.run(debug=True)
+
 
