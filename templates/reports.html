@@ -5,10 +5,10 @@
 <section class="glass-panel p-6"><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{% for table, count in report %}<div class="p-5 rounded-2xl bg-white/30 dark:bg-black/20 border border-line dark:border-darkLine"><p class="text-muted dark:text-darkMuted text-sm uppercase tracking-wider">{{ table|replace('_', ' ') }}</p><p class="text-4xl font-bold text-primary mt-2">{{ count }}</p></div>{% endfor %}</div></section>
 
 <div class="mt-12 mb-6">
-    <h2 class="font-serif text-2xl md:text-3xl font-bold mb-2">Community Content Reports</h2>
-    <p class="text-muted dark:text-darkMuted text-sm">Download tabular CSV reports for platform content, engagement, approval history, and user activity.</p>
+    <h2 class="font-serif text-2xl md:text-3xl font-bold mb-2">Platform Activity Reports</h2>
+    <p class="text-muted dark:text-darkMuted text-sm">Download CSV reports for content feed activity, approvals, user actions, and grading metrics.</p>
 </div>
-<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-12">
     <!-- Card 1: Content Master -->
     <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
         <div>
@@ -49,6 +49,17 @@
             <p class="text-xs text-slate-400 mt-1">Aggregates posts count, ratings, and comments per user.</p>
         </div>
         <a href="{{ url_for('download_user_content_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
+            Download CSV
+        </a>
+    </div>
+
+    <!-- Card 5: Assessment Results -->
+    <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between h-40">
+        <div>
+            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Assessment Results Report</h3>
+            <p class="text-xs text-slate-400 mt-1">Full log of all student assessment attempts, scores, and pass/fail status.</p>
+        </div>
+        <a href="{{ url_for('download_assessment_results_report') }}" class="btn-primary py-2 text-center text-xs font-bold rounded-xl mt-4 block">
             Download CSV
         </a>
     </div>

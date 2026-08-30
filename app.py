@@ -2192,6 +2192,43 @@ def create_app():
 		output = stream.getvalue().encode("utf-8-sig")
 		return send_file(BytesIO(output), as_attachment=True, download_name="User_Content_Report.csv", mimetype="text/csv")
 
+	@app.get("/admin/reports/assessment-results/download")
+	@admin_required
+	def download_assessment_results_report():
+		headers = ["Attempt ID", "Student Name", "Username", "Course Name", "Assessment Title", "Attempt Number", "Score", "Percentage", "Result", "Submitted At"]
+		query = """
+			SELECT aa.id, 
+				   u.full_name, 
+				   u.username, 
+				   c.name, 
+				   a.title, 
+				   aa.attempt_no, 
+				   aa.score, 
+				   aa.percentage, 
+				   aa.result, 
+				   aa.submitted_at
+			FROM assessment_attempts aa
+			JOIN users u ON u.id = aa.student_id
+			JOIN assessments a ON a.id = aa.assessment_id
+			JOIN courses c ON c.id = a.course_id
+			ORDER BY aa.id DESC
+		"""
+		with get_db() as connection:
+			rows = connection.execute(query).fetchall()
+		
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow(headers)
+		for r in rows:
+			row_list = list(r)
+			if row_list[7] is not None:
+				row_list[7] = round(row_list[7], 1)
+			writer.writerow(row_list)
+		output = stream.getvalue().encode("utf-8-sig")
+		return send_file(BytesIO(output), as_attachment=True, download_name="Assessment_Results_Report.csv", mimetype="text/csv")
+
+
+
 
 
 
