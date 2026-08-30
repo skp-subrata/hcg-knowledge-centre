@@ -163,61 +163,47 @@
 <div id="courses-grid"></div>
 <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     {% for course in courses %}
-    <article class="glass-panel glass-panel-hover p-5 flex flex-col h-full hover:-translate-y-1 relative overflow-hidden group">
-        <div class="flex items-start justify-between mb-4">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-extrabold flex items-center justify-center shadow-sm border border-slate-200 dark:border-slate-700/50">
-                    {{ course.content_type[:1] }}
-                </div>
-                <div>
-                    <h3 class="font-bold tracking-tight text-lg text-slate-900 dark:text-slate-50 leading-tight">{{ course.name }}</h3>
-                    <div class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">
-                        #{{ course.id }} &bull; {{ course.category or 'General' }}
-                    </div>
-                </div>
-            </div>
-            {% if course.badge %}
-                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50">
+    <article class="glass-panel p-6 flex flex-col course-card transition-all hover:-translate-y-1 hover:shadow-xl">
+        <div class="flex justify-between items-start mb-4">
+            <div class="flex flex-wrap gap-2">
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                    {{ course.content_type }}
+                </span>
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                    {{ (course.progress_status or 'Not Started').replace('_', ' ') }}
+                </span>
+                {% if course.badge %}
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                     🏆 {{ course.badge }}
                 </span>
-            {% elif course.certification_status == 'CERTIFIED' %}
-                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50">
+                {% elif course.certification_status == 'CERTIFIED' %}
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                     ✓ Certified
                 </span>
-            {% endif %}
-        </div>
-        
-        <div class="flex-grow">
-            <div class="grid grid-cols-2 gap-y-2 gap-x-4 mb-4 mt-2">
-                <div>
-                    <span class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Owner</span>
-                    <span class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate block">{{ course.course_owner or 'System' }}</span>
-                </div>
-                <div>
-                    <span class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Assigned By</span>
-                    <span class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate block">{{ course.assigned_by or 'System' }}</span>
-                </div>
-                <div>
-                    <span class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Progress</span>
-                    <span class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate block capitalize">{{ (course.progress_status or 'Not Started').replace('_', ' ') }}</span>
-                </div>
-                <div>
-                    <span class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Last Accessed</span>
-                    <span class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate block">{% if course.last_accessed %}{{ course.last_accessed.split(' ')[0] }}{% else %}-{% endif %}</span>
-                </div>
-                {% if course.completion_date %}
-                <div class="col-span-2 mt-1 pt-2 border-t border-slate-100 dark:border-slate-800/50">
-                    <span class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Completion Date</span>
-                    <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400 truncate block">{{ course.completion_date.split(' ')[0] }}</span>
-                </div>
                 {% endif %}
+            </div>
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 ml-2" style="background-color: {{ course.thumbnail_color or '#6366f1' }}">
+                {{ course.name[:2]|upper }}
             </div>
         </div>
         
-        <div class="mt-auto pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
-            <a class="inline-flex items-center gap-2 text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 transition-colors" href="{{ url_for('course_detail', course_id=course.id) }}">
+        <h3 class="text-xl font-bold text-slate-900 dark:text-slate-50 mb-2">{{ course.name }}</h3>
+        <p class="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 mb-4 flex-grow">{{ course.description or 'Course content is ready to explore.' }}</p>
+        
+        <div class="flex flex-wrap gap-2 mb-6">
+            {% if course.difficulty %}
+            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> {{ course.difficulty|title }}</span>
+            {% endif %}
+            {% if course.duration_minutes %}
+            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> {{ course.duration_minutes }} min</span>
+            {% endif %}
+            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg> {{ course.category or 'General' }}</span>
+        </div>
+        
+        <div class="flex gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/60">
+            <a href="{{ url_for('course_detail', course_id=course.id) }}" class="flex-1 btn-primary py-2 text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
                 Open Course
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
             </a>
         </div>
     </article>
