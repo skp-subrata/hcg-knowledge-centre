@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 import os
 import csv
 from io import BytesIO
@@ -118,7 +118,7 @@ def process_reward_event(connection, user_id, event_name, source_reference_id, s
 def init_db():
 	"""Create the LMS schema and seed the first administrator."""
 	with get_db() as connection:
-		# â”€â”€ Core tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		# ── Core tables ──────────────────────────────────────────────────────────
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS users (
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -248,7 +248,7 @@ def init_db():
 		connection.execute("CREATE INDEX IF NOT EXISTS idx_courses_creator ON courses(created_by)")
 		connection.execute("CREATE INDEX IF NOT EXISTS idx_course_certifications_user_course ON course_certifications(user_id, course_id)")
 
-		# â”€â”€ Migrate users table for group metadata â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		# ── Migrate users table for group metadata ──────────────────────────────
 		user_columns = [col[1] for col in connection.execute("PRAGMA table_info(users)").fetchall()]
 		for column, column_sql in (
 			("employee_id", "ALTER TABLE users ADD COLUMN employee_id TEXT DEFAULT ''"),
@@ -259,7 +259,7 @@ def init_db():
 			if column not in user_columns:
 				connection.execute(column_sql)
 
-		# â”€â”€ Migrate courses table if old schema (missing PPT or extra columns) â”€â”€
+		# ── Migrate courses table if old schema (missing PPT or extra columns) ──
 		table_sql = connection.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'courses'").fetchone()[0]
 		if "'PPT'" not in table_sql:
 			connection.execute("ALTER TABLE courses RENAME TO courses_legacy")
@@ -267,7 +267,7 @@ def init_db():
 			connection.execute("INSERT INTO courses (id, name, content_type, content_url, created_by) SELECT id, name, content_type, content_url, created_by FROM courses_legacy")
 			connection.execute("DROP TABLE courses_legacy")
 
-		# â”€â”€ Migrate course_assignments: add status/completed_at if missing â”€â”€â”€â”€â”€â”€
+		# ── Migrate course_assignments: add status/completed_at if missing ──────
 		assignment_sql = connection.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'course_assignments'").fetchone()
 		if assignment_sql:
 			assignment_sql = assignment_sql[0]
@@ -283,14 +283,14 @@ def init_db():
 				connection.execute("ALTER TABLE course_assignments ADD COLUMN status TEXT DEFAULT 'not_started'")
 				connection.execute("ALTER TABLE course_assignments ADD COLUMN completed_at TEXT")
 
-		# â”€â”€ Migrate questions table: add explanation if missing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		# ── Migrate questions table: add explanation if missing ────────────────
 		cursor = connection.execute("PRAGMA table_info(questions)")
 		columns = [row[1] for row in cursor.fetchall()]
 		cursor.close()
 		if columns and "explanation" not in columns:
 			connection.execute("ALTER TABLE questions ADD COLUMN explanation TEXT")
 
-		# â”€â”€ Remaining tables (assessments, questions, etc.) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		# ── Remaining tables (assessments, questions, etc.) ───────────────────
 		connection.executescript("""
 			CREATE TABLE IF NOT EXISTS question_banks (
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -1040,7 +1040,7 @@ def create_app():
 					connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (int(course_id), user_id))
 					create_group_assignment_history(connection, int(course_id), course["name"], user_id, user["full_name"], 'Group', group_id, group["name"], session["user_id"], session["user"], 'new', 'assigned')
 				else:
-					create_group_assignment_history(connection, int(course_id), course["name"], user_id, user["full_name"], 'Group', group_id, group["name"], session["user_id"], session["user"], 'Existing Access â€” No Action Taken', 'duplicate')
+					create_group_assignment_history(connection, int(course_id), course["name"], user_id, user["full_name"], 'Group', group_id, group["name"], session["user_id"], session["user"], 'Existing Access — No Action Taken', 'duplicate')
 		flash("Course assigned to the group. Existing access was preserved for users who already had the course.")
 		return redirect(url_for("group_detail", group_id=group_id))
 
@@ -1100,7 +1100,6 @@ def create_app():
 	
 	
 	@app.get("/api/notifications/unread")
-	
 	def api_get_unread_notifications():
 		if "user_id" not in session:
 			return jsonify({"count": 0, "notifications": []})
@@ -1112,13 +1111,434 @@ def create_app():
 		return jsonify({"count": len(notifications), "notifications": [dict(n) for n in notifications]})
 
 	@app.post("/api/notifications/<int:notif_id>/read")
-	
 	def api_mark_notification_read(notif_id):
 		if "user_id" not in session:
 			return jsonify({"error": "Unauthorized"}), 401
 		with get_db() as conn:
 			conn.execute("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?", (notif_id, session["user_id"]))
 		return jsonify({"success": True})
+
+	@app.get("/admin/reports")
+	@staff_required
+	def admin_reports():
+		"""Render the reporting and analytics dashboard."""
+		with get_db() as connection:
+			# User Stats
+			total_users = connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+			active_users = connection.execute("SELECT COUNT(*) FROM users WHERE is_active = 1").fetchone()[0]
+			
+			# Course Stats
+			total_courses = connection.execute("SELECT COUNT(*) FROM courses").fetchone()[0]
+			active_courses = connection.execute("SELECT COUNT(*) FROM courses WHERE status = 'published'").fetchone()[0]
+			
+			# Assessment Stats
+			total_attempts = connection.execute("SELECT COUNT(*) FROM assessment_attempts").fetchone()[0]
+			passed_attempts = connection.execute("SELECT COUNT(*) FROM assessment_attempts WHERE result = 'pass'").fetchone()[0]
+			pass_rate = round((passed_attempts / total_attempts * 100) if total_attempts > 0 else 0, 1)
+			
+			# Rewards Stats
+			total_points_issued = connection.execute("SELECT SUM(total_earned) FROM user_wallets").fetchone()[0] or 0
+			
+			# Chart Data: Completions by Category
+			cat_data = connection.execute("""
+				SELECT c.category, COUNT(cc.id) as completions 
+				FROM courses c 
+				LEFT JOIN course_certifications cc ON c.id = cc.course_id 
+				GROUP BY c.category
+			""").fetchall()
+			categories = [row[0] for row in cat_data]
+			completions = [row[1] for row in cat_data]
+			
+			# Leaderboard: Top Learners
+			top_learners = connection.execute("""
+				SELECT user_name, COUNT(*) as certs 
+				FROM course_certifications 
+				GROUP BY user_id, user_name 
+				ORDER BY certs DESC 
+				LIMIT 5
+			""").fetchall()
+			
+			# Recent Activity
+			recent_activity = connection.execute("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 5").fetchall()
+			
+		return render_template("reports.html", 
+			total_users=total_users, 
+			active_users=active_users,
+			total_courses=total_courses,
+			active_courses=active_courses,
+			total_attempts=total_attempts,
+			pass_rate=pass_rate,
+			total_points_issued=total_points_issued,
+			chart_categories=categories,
+			chart_completions=completions,
+			top_learners=[dict(row) for row in top_learners],
+			recent_activity=[dict(row) for row in recent_activity],
+			user=session.get("user"), 
+			role=session.get("role"),
+			profile_picture=session.get("profile_picture")
+		)
+
+
+	@app.route("/admin", methods=["GET", "POST"])
+	@staff_required
+	def admin_panel():
+		"""Create users, manage courses, and assign courses to individuals or groups."""
+		if request.method == "POST":
+			action = request.form.get("action")
+			if action == "add_user" and session.get("role") == "admin":
+				full_name = request.form.get("full_name", "").strip()
+				username = request.form.get("username", "").strip().lower()
+				password = request.form.get("password", "")
+				role = request.form.get("role", "basic user")
+				employee_id = request.form.get("employee_id", "").strip()
+				department = request.form.get("department", "").strip()
+				location = request.form.get("location", "").strip()
+				if not full_name or not username or len(password) < 6 or role not in ROLES:
+					flash("Enter all fields and use a password of at least 6 characters.")
+				else:
+					try:
+						with get_db() as connection:
+							connection.execute(
+								"INSERT INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+								(full_name, username, generate_password_hash(password), role, employee_id, department, location),
+							)
+						flash("User added successfully.")
+					except sqlite3.IntegrityError:
+						flash("That username already exists.")
+			elif action == "update_user" and session.get("role") == "admin":
+				with get_db() as connection:
+					connection.execute(
+						"UPDATE users SET full_name = ?, username = ?, role = ? WHERE id = ? AND id != ?",
+						(request.form["full_name"].strip(), request.form["username"].strip().lower(), request.form["role"], request.form["record_id"], session["user_id"]),
+					)
+				flash("User updated successfully.")
+			elif action == "add_course":
+				name = request.form.get("course_name", "").strip()
+				description = request.form.get("description", "").strip()
+				category = request.form.get("category", "General").strip() or "General"
+				content_type = request.form.get("content_type", "")
+				try:
+					content_url = content_location("course_file")
+				except ValueError as error:
+					content_url = None
+					flash(str(error))
+				if not name or content_type not in CONTENT_TYPES or not content_url:
+					flash("Enter a course name and provide a valid link or supported file.")
+				else:
+					with get_db() as connection:
+						cursor = connection.execute(
+							"INSERT INTO courses (name, description, category, content_type, content_url, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+							(name, description, category, content_type, content_url, session["user_id"]),
+						)
+						connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)", (session["user_id"], cursor.lastrowid))
+					flash("Course created successfully.")
+			elif action == "update_course":
+				with get_db() as connection:
+					if course_is_manageable(connection, request.form["record_id"], session["user_id"], session["role"]):
+						connection.execute(
+							"UPDATE courses SET name = ?, description = ?, category = ?, status = ? WHERE id = ?",
+							(request.form["name"].strip(), request.form.get("description", "").strip(), request.form.get("category", "General").strip(), request.form.get("status", "published"), request.form["record_id"]),
+						)
+						flash("Course updated successfully.")
+			elif action == "add_bank":
+				with get_db() as connection:
+					connection.execute("INSERT INTO question_banks (name, category, created_by) VALUES (?, ?, ?)", (request.form["bank_name"].strip(), request.form.get("category", "General").strip(), session["user_id"]))
+				flash("Question bank created successfully.")
+			elif action == "add_question":
+				with get_db() as connection:
+					assessment = connection.execute("SELECT course_id, title FROM assessments WHERE id = ?", (request.form["assessment_id"],)).fetchone()
+					if assessment and course_is_manageable(connection, assessment["course_id"], session["user_id"], session["role"]):
+						bank_name = f"{assessment['title']} Question Bank"
+						bank = connection.execute("SELECT id FROM question_banks WHERE name = ?", (bank_name,)).fetchone()
+						if not bank:
+							bank = (connection.execute("INSERT INTO question_banks (name, category, created_by) VALUES (?, 'Manual', ?)", (bank_name, session["user_id"])).lastrowid,)
+						explanation = request.form.get("explanation", "").strip() or None
+						question_id = connection.execute(
+							"INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, difficulty, created_by, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+							(bank[0], request.form["question_text"].strip(), request.form["option_a"].strip(), request.form["option_b"].strip(), request.form["option_c"].strip(), request.form["option_d"].strip(), request.form["correct_option"], int(request.form.get("marks", 1)), request.form.get("difficulty", "medium"), session["user_id"], explanation),
+						).lastrowid
+						connection.execute("INSERT INTO assessment_questions (assessment_id, question_id) VALUES (?, ?)", (request.form["assessment_id"], question_id))
+						flash("Question added and linked to assessment successfully.")
+					else:
+						flash("You can only manage courses you created.")
+			elif action == "add_assessment":
+				with get_db() as connection:
+					if course_is_manageable(connection, request.form["course_id"], session["user_id"], session["role"]):
+						connection.execute("INSERT INTO assessments (course_id, type, title, pass_percentage, max_attempts) VALUES (?, ?, ?, ?, ?)", (request.form["course_id"], request.form["assessment_type"], request.form["assessment_title"].strip(), request.form.get("pass_percentage", 60), request.form.get("max_attempts", 1)))
+						flash("Assessment created successfully.")
+					else:
+						flash("You can only manage courses you created.")
+			elif action == "import_questions":
+				file_obj = request.files.get("question_file")
+				if not file_obj or not file_obj.filename.lower().endswith((".xlsx", ".csv")):
+					flash("Upload an .xlsx or .csv question file.")
+				else:
+					try:
+						created, rejected = import_questions(file_obj, session["user_id"], session["role"])
+						flash(f"Imported {created} questions; rejected {rejected} rows.")
+					except (ValueError, KeyError, TypeError):
+						flash("The workbook format is invalid. Download and use the template.")
+			elif action == "update_assessment":
+				with get_db() as connection:
+					course = connection.execute("SELECT course_id FROM assessments WHERE id = ?", (request.form["record_id"],)).fetchone()
+					if course and course_is_manageable(connection, course["course_id"], session["user_id"], session["role"]):
+						connection.execute("UPDATE assessments SET title = ?, type = ?, pass_percentage = ?, max_attempts = ? WHERE id = ?", (request.form["title"].strip(), request.form["type"], request.form["pass_percentage"], request.form["max_attempts"], request.form["record_id"]))
+						flash("Assessment updated successfully.")
+			elif action == "generate_api_creds":
+				target_user_id = int(request.form["target_user_id"])
+				import os
+				api_key = "ak_" + os.urandom(16).hex()
+				api_secret = "as_" + os.urandom(24).hex()
+				with get_db() as connection:
+					connection.execute("UPDATE api_credentials SET status = 'inactive' WHERE user_id = ?", (target_user_id,))
+					connection.execute(
+						"INSERT INTO api_credentials (user_id, api_key, api_secret, status) VALUES (?, ?, ?, 'active')",
+						(target_user_id, api_key, api_secret)
+					)
+				flash("API credentials generated successfully.")
+			elif action == "revoke_api_creds":
+				target_user_id = int(request.form["target_user_id"])
+				with get_db() as connection:
+					connection.execute("UPDATE api_credentials SET status = 'inactive' WHERE user_id = ?", (target_user_id,))
+				flash("API credentials revoked successfully.")
+			elif action == "assign_course":
+				try:
+					with get_db() as connection:
+						assignment_type = request.form.get("assignment_type", "individual")
+						course_id = int(request.form["course_id"])
+						course_row = connection.execute("SELECT name FROM courses WHERE id = ?", (course_id,)).fetchone()
+						if course_row is None:
+							flash("Select a valid course.")
+							return redirect(url_for("admin_panel"))
+						course_name = course_row["name"]
+						if assignment_type == "group":
+							group_id = int(request.form["group_id"])
+							group = connection.execute("SELECT * FROM groups WHERE id = ?", (group_id,)).fetchone()
+							if not group:
+								flash("Select a valid group.")
+								return redirect(url_for("admin_panel"))
+							members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ? ORDER BY user_id", (group_id,)).fetchall()
+							for member in members:
+								user_id = member["user_id"]
+								user = connection.execute("SELECT full_name FROM users WHERE id = ?", (user_id,)).fetchone()
+								if user and not user_has_course_access(connection, user_id, course_id):
+									connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (course_id, user_id))
+									connection.execute(
+										"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) SELECT ?, c.name, u.id, u.full_name, 'Group', ?, g.name, ?, ?, 'assigned', 'new' FROM users u JOIN courses c ON c.id = ? JOIN groups g ON g.id = ? WHERE u.id = ?",
+										(course_id, group_id, session["user_id"], session["user"], course_id, group_id, user_id),
+									)
+								else:
+									if user:
+										connection.execute(
+											"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Group', ?, ?, ?, ?, 'duplicate', 'Existing Access — No Action Taken')",
+											(course_id, course_name, user_id, user["full_name"], group_id, group["name"], session["user_id"], session["user"]),
+										)
+						else:
+							user_id = int(request.form["student_id"])
+							user = connection.execute("SELECT full_name FROM users WHERE id = ?", (user_id,)).fetchone()
+							if user and not user_has_course_access(connection, user_id, course_id):
+								connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (course_id, user_id))
+								connection.execute(
+									"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', NULL, NULL, ?, ?, 'assigned', 'new')",
+									(course_id, course_name, user_id, user["full_name"], session["user_id"], session["user"]),
+								)
+							else:
+								if user:
+									connection.execute(
+										"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', NULL, NULL, ?, ?, 'duplicate', 'Existing Access — No Action Taken')",
+										(course_id, course_name, user_id, user["full_name"], session["user_id"], session["user"]),
+									)
+					flash("Course assignment processed. Existing course access was preserved when present.")
+				except (sqlite3.IntegrityError, KeyError, ValueError):
+					flash("That course assignment could not be completed.")
+
+		with get_db() as connection:
+			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, COALESCE(GROUP_CONCAT(ca.course_id), '') AS course_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
+			courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (session["user_id"], session["user_id"])).fetchall()
+			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
+			banks = connection.execute("SELECT * FROM question_banks ORDER BY id DESC").fetchall()
+			assessments = connection.execute("SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY a.id DESC", (session["user_id"], session["user_id"])).fetchall()
+			groups = connection.execute("SELECT * FROM groups ORDER BY id DESC").fetchall()
+			api_creds = connection.execute("SELECT ac.*, u.username, u.full_name, u.role FROM api_credentials ac JOIN users u ON u.id = ac.user_id ORDER BY ac.id DESC").fetchall()
+		return render_template("admin.html", users=users, courses=courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
+	@app.route("/assessments/<int:assessment_id>", methods=["GET", "POST"])
+	def assessment(assessment_id):
+		"""Display and grade a student's assessment while keeping failed attempts retryable."""
+		if not session.get("user_id"):
+			return redirect(url_for("home"))
+		with get_db() as connection:
+			assessment_row = connection.execute(
+				"SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id WHERE a.id = ?",
+				(assessment_id,),
+			).fetchone()
+			questions = connection.execute(
+				"SELECT q.* FROM questions q JOIN assessment_questions aq ON aq.question_id = q.id WHERE aq.assessment_id = ? ORDER BY q.id",
+				(assessment_id,),
+			).fetchall()
+			if not assessment_row:
+				return redirect(url_for("home"))
+			allowed = connection.execute(
+				"SELECT 1 FROM course_assignments WHERE student_id = ? AND course_id = ? LIMIT 1",
+				(session["user_id"], assessment_row["course_id"]),
+			).fetchone() is not None
+			certification = get_user_course_record(connection, session["user_id"], assessment_row["course_id"])
+			if not allowed:
+				flash("Complete the course before starting the assessment.")
+				return redirect(url_for("course_detail", course_id=assessment_row["course_id"]))
+			if certification and certification["certification_status"] == "CERTIFIED":
+				flash("This course is already certified. You can review the material and view your certificate, but you cannot retake the assessment.")
+				return redirect(url_for("course_detail", course_id=assessment_row["course_id"]))
+			if certification and certification["latest_assessment_status"] == "FEEDBACK_PENDING":
+				return redirect(url_for("feedback_form", course_id=assessment_row["course_id"]))
+			assignment = connection.execute(
+				"SELECT status FROM course_assignments WHERE course_id = ? AND student_id = ?",
+				(assessment_row["course_id"], session["user_id"]),
+			).fetchone()
+			is_completed = assignment and get_course_status_label(assignment["status"]) in ("ASSESSMENT_PENDING", "IN_PROGRESS", "ASSESSMENT_FAILED")
+		if not is_completed:
+			flash("Complete the course before starting the assessment.")
+			return redirect(url_for("course_detail", course_id=assessment_row["course_id"]))
+		if request.method == "POST":
+			with get_db() as connection:
+				cert_row = get_user_course_record(connection, session["user_id"], assessment_row["course_id"])
+				if cert_row and cert_row["certification_status"] == "CERTIFIED":
+					flash("This course is already certified.")
+					return redirect(url_for("course_detail", course_id=assessment_row["course_id"]))
+				attempt_count = connection.execute("SELECT COUNT(*) AS n FROM assessment_attempts WHERE assessment_id = ? AND student_id = ?", (assessment_id, session["user_id"])).fetchone()["n"]
+				attempt = connection.execute("INSERT INTO assessment_attempts (assessment_id, student_id, attempt_no, status, result) VALUES (?, ?, ?, 'evaluated', 'fail')", (assessment_id, session["user_id"], attempt_count + 1))
+				attempt_id = attempt.lastrowid
+				score = 0
+				for question in questions:
+					selected = request.form.get(f"q{question['id']}")
+					correct = selected == question["correct_option"]
+					marks = question["marks"] if correct else 0
+					score += marks
+					connection.execute("INSERT INTO attempt_answers (attempt_id, question_id, selected_option, is_correct, marks_awarded) VALUES (?, ?, ?, ?, ?)", (attempt_id, question["id"], selected, correct, marks))
+				percentage = (score / max(sum(q["marks"] for q in questions), 1)) * 100
+				result = "pass" if percentage >= assessment_row["pass_percentage"] else "fail"
+				connection.execute("UPDATE assessment_attempts SET score=?, percentage=?, result=?, submitted_at=CURRENT_TIMESTAMP, status='submitted' WHERE id=?", (score, percentage, result, attempt_id))
+				course = connection.execute("SELECT c.name FROM courses c WHERE c.id = ?", (assessment_row["course_id"],)).fetchone()
+				cert_row = get_user_course_record(connection, session["user_id"], assessment_row["course_id"])
+				if cert_row is None:
+					connection.execute(
+						"INSERT INTO course_certifications (user_id, course_id, user_name, course_name, course_start_date, course_completion_date, assessment_score, pass_mark, assessment_attempts, latest_assessment_status, certification_status, badge) VALUES (?, ?, ?, ?, DATE('now'), DATE('now'), ?, ?, ?, ?, ?, ?)",
+						(session["user_id"], assessment_row["course_id"], session["user"], course["name"], percentage, assessment_row["pass_percentage"], attempt_count + 1, "FEEDBACK_PENDING" if result == "pass" else "ASSESSMENT_FAILED", "FEEDBACK_PENDING" if result == "pass" else "ASSESSMENT_FAILED", "NOT CERTIFIED" if result == "fail" else "NOT CERTIFIED")
+					)
+				else:
+					connection.execute(
+						"UPDATE course_certifications SET user_name = ?, course_name = ?, assessment_score = ?, pass_mark = ?, assessment_attempts = ?, latest_assessment_status = ?, certification_status = ?, badge = ?, course_completion_date = COALESCE(course_completion_date, DATE('now')) WHERE user_id = ? AND course_id = ?",
+						(session["user"], course["name"], percentage, assessment_row["pass_percentage"], attempt_count + 1, "FEEDBACK_PENDING" if result == "pass" else "ASSESSMENT_FAILED", "FEEDBACK_PENDING" if result == "pass" else "ASSESSMENT_FAILED", determine_badge(percentage, assessment_row["pass_percentage"]), session["user_id"], assessment_row["course_id"])
+					)
+				if result == "pass":
+					connection.execute("UPDATE course_assignments SET status = 'feedback_pending', completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (assessment_row["course_id"], session["user_id"]))
+				else:
+					connection.execute("UPDATE course_assignments SET status = 'assessment_failed', completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (assessment_row["course_id"], session["user_id"]))
+				return redirect(url_for("assessment_result", attempt_id=attempt_id))
+		return render_template("assessment.html", assessment=assessment_row, questions=questions)
+
+	@app.get("/assessment/result/<int:attempt_id>")
+	def assessment_result(attempt_id):
+		if not session.get("user_id"):
+			return redirect(url_for("home"))
+		with get_db() as connection:
+			attempt = connection.execute(
+				"""SELECT a.*, ast.title, ast.pass_percentage, ast.id AS assessment_id, c.name AS course_name, c.id AS course_id
+				   FROM assessment_attempts a
+				   JOIN assessments ast ON ast.id = a.assessment_id
+				   JOIN courses c ON c.id = ast.course_id
+				   WHERE a.id = ?""",
+				(attempt_id,)
+			).fetchone()
+			
+			if not attempt:
+				flash("Assessment attempt not found.")
+				return redirect(url_for("home"))
+				
+			if attempt["student_id"] != session["user_id"]:
+				flash("Unauthorized access to this assessment attempt.")
+				return redirect(url_for("home"))
+				
+			total_questions = connection.execute(
+				"SELECT COUNT(*) AS count FROM attempt_answers WHERE attempt_id = ?",
+				(attempt_id,)
+			).fetchone()["count"]
+			
+			correct_answers = connection.execute(
+				"SELECT COUNT(*) AS count FROM attempt_answers WHERE attempt_id = ? AND is_correct = 1",
+				(attempt_id,)
+			).fetchone()["count"]
+			
+			incorrect_answers = total_questions - correct_answers
+			
+			total_marks = connection.execute(
+				"""SELECT SUM(q.marks) AS total 
+				   FROM questions q
+				   JOIN assessment_questions aq ON aq.question_id = q.id
+				   WHERE aq.assessment_id = ?""",
+				(attempt["assessment_id"],)
+			).fetchone()["total"] or 0
+			
+			marks_obtained = attempt["score"]
+			
+		return render_template(
+			"assessment_result.html",
+			attempt=attempt,
+			total_questions=total_questions,
+			correct_answers=correct_answers,
+			incorrect_answers=incorrect_answers,
+			total_marks=total_marks,
+			marks_obtained=marks_obtained,
+			user=session.get("user"),
+			role=session.get("role"),
+			actual_role=session.get("actual_role"),
+			profile_picture=session.get("profile_picture")
+		)
+
+	@app.get("/assessment/review/<int:attempt_id>")
+	def assessment_review(attempt_id):
+		if not session.get("user_id"):
+			return redirect(url_for("home"))
+		with get_db() as connection:
+			attempt = connection.execute(
+				"""SELECT a.*, ast.title, ast.id AS assessment_id, c.name AS course_name, c.id AS course_id
+				   FROM assessment_attempts a
+				   JOIN assessments ast ON ast.id = a.assessment_id
+				   JOIN courses c ON c.id = ast.course_id
+				   WHERE a.id = ?""",
+				(attempt_id,)
+			).fetchone()
+			
+			if not attempt:
+				flash("Assessment attempt not found.")
+				return redirect(url_for("home"))
+				
+			if attempt["student_id"] != session["user_id"]:
+				flash("Unauthorized access to this assessment attempt.")
+				return redirect(url_for("home"))
+				
+			if attempt["result"] != "pass":
+				flash("Answer review is only available for passed assessments.")
+				return redirect(url_for("course_detail", course_id=attempt["course_id"]))
+				
+			questions_reviews = connection.execute(
+				"""SELECT q.*, aa.selected_option, aa.is_correct, aa.marks_awarded
+				   FROM questions q
+				   JOIN attempt_answers aa ON aa.question_id = q.id
+				   WHERE aa.attempt_id = ?
+				   ORDER BY q.id""",
+				(attempt_id,)
+			).fetchall()
+			
+		return render_template(
+			"assessment_review.html",
+			attempt=attempt,
+			questions_reviews=questions_reviews,
+			user=session.get("user"),
+			role=session.get("role"),
+			actual_role=session.get("actual_role"),
+			profile_picture=session.get("profile_picture")
+		)
 
 	@app.get("/admin/reports")
 	@admin_required
@@ -2802,7 +3222,7 @@ def create_app():
 		session.clear()
 		return redirect(url_for("home"))
 
-	# â”€â”€ API v1 Authentication & Routing Block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+	# ── API v1 Authentication & Routing Block ──────────────────────────────────
 
 	@app.get("/api/v1/docs")
 	def api_docs_playground():
@@ -2815,7 +3235,7 @@ def create_app():
 			profile_picture=session.get("profile_picture")
 		)
 
-	# â”€â”€ USERS API â”€â”€
+	# ── USERS API ──
 
 	@app.get("/api/v1/users")
 	@api_staff_required
@@ -2918,7 +3338,7 @@ def create_app():
 		with get_db() as connection:
 			connection.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
 		return {"message": "User deactivated successfully."}
-	# â”€â”€ COURSES API â”€â”€
+	# ── COURSES API ──
 
 	@app.get("/api/v1/courses")
 	@api_required
@@ -3011,7 +3431,7 @@ def create_app():
 				return {"error": f"Failed to assign course: {str(e)}"}, 500
 		return {"message": "Course assigned successfully."}, 200
 
-	# â”€â”€ COMMUNITY/SOCIAL API â”€â”€
+	# ── COMMUNITY/SOCIAL API ──
 
 	@app.get("/api/v1/posts")
 	@api_required
@@ -3190,7 +3610,7 @@ def create_app():
 				return {"error": f"Comment submission failed: {str(e)}"}, 500
 		return {"message": "Comment submitted successfully.", "comment_id": comment_id}, 201
 
-	# â”€â”€ ASSESSMENTS & GRADING API â”€â”€
+	# ── ASSESSMENTS & GRADING API ──
 
 	@app.get("/api/v1/assessments/<int:assessment_id>")
 	@api_required
@@ -3436,7 +3856,7 @@ def create_app():
 			"questions": [dict(r) for r in reviews]
 		}
 
-	# â”€â”€ REWARDS API â”€â”€
+	# ── REWARDS API ──
 
 
 	@app.get("/api/v1/leaderboard")
@@ -3599,5 +4019,3 @@ app = create_app()
 
 if __name__ == "__main__":
 	app.run(debug=True)
-
-
