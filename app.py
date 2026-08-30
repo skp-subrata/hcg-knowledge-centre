@@ -269,11 +269,11 @@ def init_db():
 				connection.execute("ALTER TABLE course_assignments ADD COLUMN completed_at TEXT")
 
 		# ── Migrate questions table: add explanation if missing ────────────────
-		questions_sql = connection.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'questions'").fetchone()
-		if questions_sql:
-			questions_sql = questions_sql[0]
-			if "explanation" not in questions_sql:
-				connection.execute("ALTER TABLE questions ADD COLUMN explanation TEXT")
+		cursor = connection.execute("PRAGMA table_info(questions)")
+		columns = [row[1] for row in cursor.fetchall()]
+		cursor.close()
+		if columns and "explanation" not in columns:
+			connection.execute("ALTER TABLE questions ADD COLUMN explanation TEXT")
 
 		# ── Remaining tables (assessments, questions, etc.) ───────────────────
 		connection.executescript("""
@@ -1213,16 +1213,17 @@ def create_app():
 					return redirect(url_for("course_detail", course_id=assessment_row["course_id"]))
 				attempt_count = connection.execute("SELECT COUNT(*) AS n FROM assessment_attempts WHERE assessment_id = ? AND student_id = ?", (assessment_id, session["user_id"])).fetchone()["n"]
 				attempt = connection.execute("INSERT INTO assessment_attempts (assessment_id, student_id, attempt_no, status, result) VALUES (?, ?, ?, 'evaluated', 'fail')", (assessment_id, session["user_id"], attempt_count + 1))
+				attempt_id = attempt.lastrowid
 				score = 0
 				for question in questions:
 					selected = request.form.get(f"q{question['id']}")
 					correct = selected == question["correct_option"]
 					marks = question["marks"] if correct else 0
 					score += marks
-					connection.execute("INSERT INTO attempt_answers (attempt_id, question_id, selected_option, is_correct, marks_awarded) VALUES (?, ?, ?, ?, ?)", (attempt.lastrowid, question["id"], selected, correct, marks))
+					connection.execute("INSERT INTO attempt_answers (attempt_id, question_id, selected_option, is_correct, marks_awarded) VALUES (?, ?, ?, ?, ?)", (attempt_id, question["id"], selected, correct, marks))
 				percentage = (score / max(sum(q["marks"] for q in questions), 1)) * 100
 				result = "pass" if percentage >= assessment_row["pass_percentage"] else "fail"
-				connection.execute("UPDATE assessment_attempts SET score=?, percentage=?, result=?, submitted_at=CURRENT_TIMESTAMP, status='submitted' WHERE id=?", (score, percentage, result, attempt.lastrowid))
+				connection.execute("UPDATE assessment_attempts SET score=?, percentage=?, result=?, submitted_at=CURRENT_TIMESTAMP, status='submitted' WHERE id=?", (score, percentage, result, attempt_id))
 				course = connection.execute("SELECT c.name FROM courses c WHERE c.id = ?", (assessment_row["course_id"],)).fetchone()
 				cert_row = get_user_course_record(connection, session["user_id"], assessment_row["course_id"])
 				if cert_row is None:
@@ -1239,7 +1240,7 @@ def create_app():
 					connection.execute("UPDATE course_assignments SET status = 'feedback_pending', completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (assessment_row["course_id"], session["user_id"]))
 				else:
 					connection.execute("UPDATE course_assignments SET status = 'assessment_failed', completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (assessment_row["course_id"], session["user_id"]))
-				return redirect(url_for("assessment_result", attempt_id=attempt.lastrowid))
+				return redirect(url_for("assessment_result", attempt_id=attempt_id))
 		return render_template("assessment.html", assessment=assessment_row, questions=questions)
 
 	@app.get("/assessment/result/<int:attempt_id>")
