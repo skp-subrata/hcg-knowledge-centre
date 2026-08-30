@@ -8,6 +8,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.parse import parse_qs
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+from uuid import uuid4
 from flask import Flask, flash, redirect, render_template, request, send_file, send_from_directory, session, url_for
 from openpyxl import Workbook, load_workbook
 from storage import save_file
@@ -1618,7 +1620,7 @@ def create_app():
 				connection.execute(
 					"""INSERT INTO post_approval_history (post_id, version_number, submitted_by, action, comments, previous_status, new_status)
 					   VALUES (?, 1, ?, ?, ?, 'NONE', ?)""",
-					(post_id, user_id, 'SUBMIT' if status != 'DRAFT' else 'DRAFT', 'Initial creation', status)
+					(post_id, user_id, 'SUBMIT', 'Initial creation', status)
 				)
 				
 				if status == "PENDING_APPROVAL":
@@ -1734,7 +1736,7 @@ def create_app():
 							(post_id, file.filename, file_type, file_path, file_size, user_id)
 						)
 						
-				action_type = "SUBMIT" if new_status != "DRAFT" else "DRAFT"
+				action_type = "SUBMIT"
 				change_desc = f"Updated post. Version incremented to {new_version}."
 				if old_status == "PUBLISHED" and new_status == "PENDING_APPROVAL":
 					change_desc = f"Student edited published post. Reverted to Pending Approval."
