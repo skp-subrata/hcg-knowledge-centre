@@ -67,11 +67,17 @@ document.addEventListener("DOMContentLoaded", function() {
             const filename = `Certificate_${cleanName}.pdf`;
             
             const opt = {
-                margin:       0.2,
+                margin:       [0.4, 0.4, 0.4, 0.4],
                 filename:     filename,
                 image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2.5, useCORS: true },
-                jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' }
+                html2canvas:  { 
+                    scale: 2.0, 
+                    useCORS: true, 
+                    logging: false,
+                    windowWidth: 1200 // Force desktop width for html2canvas evaluation
+                },
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' },
+                pagebreak:    { mode: 'avoid-all' }
             };
             
             // Temporarily disable dark mode on html element to print clean white bg
@@ -81,8 +87,10 @@ document.addEventListener("DOMContentLoaded", function() {
                 htmlElement.classList.remove("dark");
             }
             
-            // Apply a temporary white bg style on the card to ensure high quality print matching yellow/emerald gradient
+            // Force fixed desktop dimensions and clean styling during capture to avoid portrait/mobile stacking
             const originalStyle = element.getAttribute("style") || "";
+            element.style.width = "1000px";
+            element.style.maxWidth = "1000px";
             element.style.color = "#0f172a"; // force slate-900 color for text visibility
             
             // Show loading state
