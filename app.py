@@ -3329,12 +3329,19 @@ def create_app():
 		with get_db() as connection:
 			try:
 				cursor = connection.execute(
-					"""INSERT INTO posts (title, description, content_type, category, topic_tag, content_url, created_by, status, version_number)
-					   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)""",
-					(title, description, content_type, category, topic_tag, content_url, g.api_user["id"], status)
+					"""INSERT INTO posts (title, description, content_type, category, topic_tag, created_by, status, version_number)
+					   VALUES (?, ?, ?, ?, ?, ?, ?, 1)""",
+					(title, description, content_type, category, topic_tag, g.api_user["id"], status)
 				)
 				post_id = cursor.lastrowid
 				cursor.close()
+				
+				if content_url:
+					connection.execute(
+						"""INSERT INTO post_attachments (post_id, file_name, file_type, file_path, file_size, uploaded_by)
+						   VALUES (?, ?, 'url', ?, 0, ?)""",
+						(post_id, "Attached Link", content_url, g.api_user["id"])
+					)
 				
 				connection.execute(
 					"""INSERT INTO post_approval_history (post_id, version_number, submitted_by, action, comments, previous_status, new_status)
@@ -3359,6 +3366,8 @@ def create_app():
 						actor_id=g.api_user["id"]
 					)
 			except Exception as e:
+				import traceback
+				traceback.print_exc()
 				return {"error": f"Database insertion failed: {str(e)}"}, 500
 		return {"message": "Post created successfully.", "post_id": post_id, "status": status}, 201
 
@@ -3752,10 +3761,12 @@ def create_app():
 				return {"error": f"Insufficient reward balance. User only has {balance} points."}, 400
 				
 			try:
+				import uuid
+				ref_id = f"SETTLE-{uuid.uuid4().hex[:8]}"
 				connection.execute(
-					"""INSERT INTO reward_transactions (user_id, reward_source, description, points, transaction_type, balance_before, balance_after)
-					   VALUES (?, 'ADMIN_SETTLEMENT', 'Points settled by Administrator', ?, 'DEBIT', ?, ?)""",
-					(target_user_id, points, balance, balance - points)
+					"""INSERT INTO reward_transactions (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after)
+					   VALUES (?, 'MANUAL_SETTLEMENT', ?, 'ADMIN_SETTLEMENT', 'Points settled by Administrator', ?, 'SETTLEMENT', ?, ?)""",
+					(target_user_id, ref_id, points, balance, balance - points)
 				)
 				connection.execute(
 					"UPDATE user_wallets SET current_balance = current_balance - ?, total_settled = total_settled + ? WHERE user_id = ?",
@@ -3790,14 +3801,15 @@ def create_app():
 			if points < 0 and balance < abs(points):
 				return {"error": f"Cannot deduct {abs(points)} points. Wallet balance is only {balance}."}, 400
 				
-			tx_type = "CREDIT" if points >= 0 else "DEBIT"
 			new_balance = balance + points
 			
 			try:
+				import uuid
+				ref_id = f"ADJ-{uuid.uuid4().hex[:8]}"
 				connection.execute(
-					"""INSERT INTO reward_transactions (user_id, reward_source, description, points, transaction_type, balance_before, balance_after)
-					   VALUES (?, 'ADMIN_ADJUSTMENT', ?, ?, ?, ?, ?)""",
-					(target_user_id, description, abs(points), tx_type, balance, new_balance)
+					"""INSERT INTO reward_transactions (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after)
+					   VALUES (?, 'MANUAL_ADJUSTMENT', ?, 'ADMIN_ADJUSTMENT', ?, ?, 'ADJUSTMENT', ?, ?)""",
+					(target_user_id, ref_id, description, abs(points), balance, new_balance)
 				)
 				connection.execute(
 					"UPDATE user_wallets SET current_balance = ?, total_adjusted = total_adjusted + ? WHERE user_id = ?",
@@ -3827,10 +3839,12 @@ def create_app():
 				return {"message": "User balance is already 0."}, 200
 				
 			try:
+				import uuid
+				ref_id = f"RESET-{uuid.uuid4().hex[:8]}"
 				connection.execute(
-					"""INSERT INTO reward_transactions (user_id, reward_source, description, points, transaction_type, balance_before, balance_after)
-					   VALUES (?, 'ADMIN_RESET', 'Rewards wallet reset to zero by Administrator', ?, 'DEBIT', ?, 0)""",
-					(target_user_id, balance, balance)
+					"""INSERT INTO reward_transactions (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after)
+					   VALUES (?, 'USER_RESET', ?, 'ADMIN_RESET', 'Rewards wallet reset to zero by Administrator', ?, 'SETTLEMENT', ?, 0)""",
+					(target_user_id, ref_id, balance, balance)
 				)
 				connection.execute(
 					"UPDATE user_wallets SET current_balance = 0, total_adjusted = total_adjusted - ? WHERE user_id = ?",
