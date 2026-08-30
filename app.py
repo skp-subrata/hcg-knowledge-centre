@@ -1850,7 +1850,10 @@ def create_app():
 		"""Dedicated course management page with wizard."""
 		with get_db() as connection:
 			courses = connection.execute(
-				"SELECT c.*, u.full_name AS creator_name FROM courses c JOIN users u ON u.id = c.created_by ORDER BY c.id DESC"
+				"""SELECT c.*, u.full_name AS creator_name,
+				   (SELECT ROUND(AVG(CAST(feedback_rating AS FLOAT)), 1) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS avg_rating,
+				   (SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
+				   FROM courses c JOIN users u ON u.id = c.created_by ORDER BY c.id DESC"""
 			).fetchall()
 		return render_template("courses.html",
 			courses=courses,
