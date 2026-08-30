@@ -3103,11 +3103,9 @@ def create_app():
 
 	# ── API v1 Authentication & Routing Block ──────────────────────────────────
 
-	@app.get("/admin/api-docs")
+	@app.get("/api/v1/docs")
 	def api_docs_playground():
 		"""Display interactive API v1 documentation and sandbox playground."""
-		if not session.get("user_id"):
-			return redirect(url_for("home"))
 		return render_template(
 			"api_docs.html",
 			user=session.get("user"),

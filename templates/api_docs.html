@@ -2,6 +2,90 @@
 
 {% block title %}Developer Tools & API v1 Docs | HCG Knowledge Centre{% endblock %}
 
+<!-- Macros for standard card rendering -->
+{% macro render_api_card(method, path, description, permission, params, body_schema) %}
+<div class="glass-panel p-0 overflow-hidden border border-slate-200 dark:border-slate-800/80 rounded-2xl mb-4 group" id="card-{{ method }}-{{ path|replace('/', '-')|replace('{', '')|replace('}', '') }}">
+    <!-- Card Header -->
+    <div class="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer select-none bg-slate-50/50 dark:bg-slate-900/10 hover:bg-slate-100/50 dark:hover:bg-white/5 transition" onclick="toggleCardBody('{{ method }}-{{ path|replace('/', '-')|replace('{', '')|replace('}', '') }}')">
+        <div class="flex items-center gap-3">
+            <span class="px-3 py-1 text-xs font-extrabold uppercase rounded-lg tracking-wider text-white shadow-sm
+                {% if method == 'GET' %}bg-sky-500
+                {% elif method == 'POST' %}bg-emerald-500
+                {% elif method == 'PUT' %}bg-amber-500
+                {% else %}bg-rose-500{% endif %}">
+                {{ method }}
+            </span>
+            <span class="font-mono text-sm font-bold text-slate-800 dark:text-slate-200">{{ path }}</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider
+                {% if permission == 'admin' %}bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400
+                {% elif permission == 'staff' %}bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400
+                {% elif permission == 'self-admin' %}bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400
+                {% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+                Role: {{ permission|title }}
+            </span>
+            <svg class="w-4 h-4 text-slate-400 transform transition-transform duration-200 arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+    </div>
+
+    <!-- Expanded Body (Hidden by Default) -->
+    <div id="body-{{ method }}-{{ path|replace('/', '-')|replace('{', '')|replace('}', '') }}" class="hidden p-6 border-t border-slate-100 dark:border-slate-800/60 bg-white/20 dark:bg-slate-950/10 space-y-6">
+        <p class="text-sm text-slate-600 dark:text-slate-400">{{ description }}</p>
+
+        <!-- Parameters form -->
+        {% if params %}
+        <div>
+            <h4 class="text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Parameters</h4>
+            <div class="space-y-3">
+                {% for p in params %}
+                <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                    <span class="w-32 font-mono text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <span class="font-bold">{{ p.name }}</span>
+                        {% if p.required %}<span class="text-red-500">*</span>{% endif %}
+                    </span>
+                    <input type="text" data-param-name="{{ p.name }}" data-param-type="{{ p.type }}" class="form-input text-xs font-mono max-w-sm" placeholder="{{ p.placeholder }}" value="{{ p.placeholder }}">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Body Payload Textarea -->
+        {% if body_schema %}
+        <div>
+            <h4 class="text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Request Body (JSON)</h4>
+            <textarea data-body-payload class="form-input text-xs font-mono h-32 w-full p-3 bg-slate-900 text-slate-200 border-none rounded-xl" placeholder="JSON input">{{ body_schema }}</textarea>
+        </div>
+        {% endif %}
+
+        <!-- Integration Tabs (Curl / Python / Live Console) -->
+        <div class="border border-slate-200 dark:border-slate-800/80 rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-900/20">
+            <div class="flex border-b border-slate-200 dark:border-slate-800/60 text-xs font-semibold bg-slate-100/50 dark:bg-slate-950/40">
+                <button class="px-4 py-2 border-r border-slate-200 dark:border-slate-800/60 active-tab-btn" onclick="switchSnippetTab(this, 'curl')">cURL</button>
+                <button class="px-4 py-2 border-r border-slate-200 dark:border-slate-800/60" onclick="switchSnippetTab(this, 'python')">Python</button>
+                <button class="px-4 py-2 ml-auto text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/20" onclick="executeApiCall('{{ method }}', '{{ path }}', this)">Send Request</button>
+            </div>
+            
+            <!-- Code Block display -->
+            <div class="p-4 bg-slate-900 dark:bg-slate-950/80 font-mono text-[11px] text-slate-200 overflow-x-auto select-all snippet-container">
+                <pre class="snippet-curl">Generating snippet...</pre>
+                <pre class="snippet-python hidden">Generating snippet...</pre>
+            </div>
+        </div>
+
+        <!-- Response Console -->
+        <div class="hidden response-console border border-slate-200 dark:border-slate-800/80 rounded-2xl overflow-hidden">
+            <div class="flex justify-between items-center px-4 py-2 border-b border-slate-200 dark:border-slate-800/60 bg-slate-100/50 dark:bg-slate-950/40 text-xs font-semibold">
+                <span class="text-slate-500">Response Status: <span class="status-badge font-bold">---</span></span>
+                <button class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-[10px]" onclick="clearConsole(this)">Clear</button>
+            </div>
+            <pre class="p-4 bg-slate-900 dark:bg-slate-950 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-80 select-all response-pre"></pre>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
 {% block content %}
 <div class="max-w-6xl mx-auto py-4">
     <!-- Header -->
@@ -10,9 +94,9 @@
             <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50 mb-2">API v1 Documentation & Playground</h1>
             <p class="text-slate-500 dark:text-slate-400 text-sm">Explore core LMS functionalities, query statistics, submit answers, and test integrations dynamically.</p>
         </div>
-        <a href="{{ url_for('admin_panel') }}" class="btn-secondary text-xs px-4 py-2.5 rounded-xl font-bold flex items-center gap-1.5">
+        <a href="{% if role in ('admin', 'moderator') %}{{ url_for('admin_panel') }}{% else %}{{ url_for('home') }}{% endif %}" class="btn-secondary text-xs px-4 py-2.5 rounded-xl font-bold flex items-center gap-1.5">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
-            Back to Dashboard
+            {% if role in ('admin', 'moderator') %}Back to Dashboard{% else %}Back to Home{% endif %}
         </a>
     </div>
 
@@ -158,90 +242,6 @@
     </div>
 </div>
 
-<!-- Macros for standard card rendering -->
-{% macro render_api_card(method, path, description, permission, params, body_schema) %}
-<div class="glass-panel p-0 overflow-hidden border border-slate-200 dark:border-slate-800/80 rounded-2xl mb-4 group" id="card-{{ method }}-{{ path|replace('/', '-')|replace('{', '')|replace('}', '') }}">
-    <!-- Card Header -->
-    <div class="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer select-none bg-slate-50/50 dark:bg-slate-900/10 hover:bg-slate-100/50 dark:hover:bg-white/5 transition" onclick="toggleCardBody('{{ method }}-{{ path|replace('/', '-')|replace('{', '')|replace('}', '') }}')">
-        <div class="flex items-center gap-3">
-            <span class="px-3 py-1 text-xs font-extrabold uppercase rounded-lg tracking-wider text-white shadow-sm
-                {% if method == 'GET' %}bg-sky-500
-                {% elif method == 'POST' %}bg-emerald-500
-                {% elif method == 'PUT' %}bg-amber-500
-                {% else %}bg-rose-500{% endif %}">
-                {{ method }}
-            </span>
-            <span class="font-mono text-sm font-bold text-slate-800 dark:text-slate-200">{{ path }}</span>
-        </div>
-        <div class="flex items-center gap-2">
-            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider
-                {% if permission == 'admin' %}bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400
-                {% elif permission == 'staff' %}bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400
-                {% elif permission == 'self-admin' %}bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400
-                {% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}">
-                Role: {{ permission|title }}
-            </span>
-            <svg class="w-4 h-4 text-slate-400 transform transition-transform duration-200 arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-        </div>
-    </div>
-
-    <!-- Expanded Body (Hidden by Default) -->
-    <div id="body-{{ method }}-{{ path|replace('/', '-')|replace('{', '')|replace('}', '') }}" class="hidden p-6 border-t border-slate-100 dark:border-slate-800/60 bg-white/20 dark:bg-slate-950/10 space-y-6">
-        <p class="text-sm text-slate-600 dark:text-slate-400">{{ description }}</p>
-
-        <!-- Parameters form -->
-        {% if params %}
-        <div>
-            <h4 class="text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Parameters</h4>
-            <div class="space-y-3">
-                {% for p in params %}
-                <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                    <span class="w-32 font-mono text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                        <span class="font-bold">{{ p.name }}</span>
-                        {% if p.required %}<span class="text-red-500">*</span>{% endif %}
-                    </span>
-                    <input type="text" data-param-name="{{ p.name }}" data-param-type="{{ p.type }}" class="form-input text-xs font-mono max-w-sm" placeholder="{{ p.placeholder }}" value="{{ p.placeholder }}">
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Body Payload Textarea -->
-        {% if body_schema %}
-        <div>
-            <h4 class="text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Request Body (JSON)</h4>
-            <textarea data-body-payload class="form-input text-xs font-mono h-32 w-full p-3 bg-slate-900 text-slate-200 border-none rounded-xl" placeholder="JSON input">{{ body_schema }}</textarea>
-        </div>
-        {% endif %}
-
-        <!-- Integration Tabs (Curl / Python / Live Console) -->
-        <div class="border border-slate-200 dark:border-slate-800/80 rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-900/20">
-            <div class="flex border-b border-slate-200 dark:border-slate-800/60 text-xs font-semibold bg-slate-100/50 dark:bg-slate-950/40">
-                <button class="px-4 py-2 border-r border-slate-200 dark:border-slate-800/60 active-tab-btn" onclick="switchSnippetTab(this, 'curl')">cURL</button>
-                <button class="px-4 py-2 border-r border-slate-200 dark:border-slate-800/60" onclick="switchSnippetTab(this, 'python')">Python</button>
-                <button class="px-4 py-2 ml-auto text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/20" onclick="executeApiCall('{{ method }}', '{{ path }}', this)">Send Request</button>
-            </div>
-            
-            <!-- Code Block display -->
-            <div class="p-4 bg-slate-900 dark:bg-slate-950/80 font-mono text-[11px] text-slate-200 overflow-x-auto select-all snippet-container">
-                <pre class="snippet-curl">Generating snippet...</pre>
-                <pre class="snippet-python hidden">Generating snippet...</pre>
-            </div>
-        </div>
-
-        <!-- Response Console -->
-        <div class="hidden response-console border border-slate-200 dark:border-slate-800/80 rounded-2xl overflow-hidden">
-            <div class="flex justify-between items-center px-4 py-2 border-b border-slate-200 dark:border-slate-800/60 bg-slate-100/50 dark:bg-slate-950/40 text-xs font-semibold">
-                <span class="text-slate-500">Response Status: <span class="status-badge font-bold">---</span></span>
-                <button class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-[10px]" onclick="clearConsole(this)">Clear</button>
-            </div>
-            <pre class="p-4 bg-slate-900 dark:bg-slate-950 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-80 select-all response-pre"></pre>
-        </div>
-    </div>
-</div>
-{% endmacro %}
-
 <script>
 function toggleCardBody(id) {
     const body = document.getElementById('body-' + id);
@@ -292,10 +292,8 @@ function updateSnippets() {
 function updateSnippetsForCard(card) {
     const idParts = card.id.replace('card-', '').split('-');
     const method = idParts[0];
-    // Reconstruct route from parameters if input
     let path = card.querySelector('.font-mono').innerText;
     
-    // Read input parameters
     card.querySelectorAll('input[data-param-type="path"]').forEach(input => {
         path = path.replace(`{${input.dataset.paramName}}`, input.value || `{${input.dataset.paramName}}`);
     });
@@ -304,18 +302,15 @@ function updateSnippetsForCard(card) {
     const secret = document.getElementById('global-api-secret').value || 'YOUR_API_SECRET';
     const domain = window.location.origin;
     
-    // Read payload
     const bodyArea = card.querySelector('[data-body-payload]');
     const payload = bodyArea ? bodyArea.value.trim() : null;
     
-    // cURL Snippet
     let curl = `curl -X ${method} "${domain}${path}" \\\n  -H "X-API-Key: ${key}" \\\n  -H "X-API-Secret: ${secret}"`;
     if (payload && method === 'POST') {
         curl += ` \\\n  -H "Content-Type: application/json" \\\n  -d '${payload.replace(/'/g, "'\\''")}'`;
     }
     card.querySelector('.snippet-curl').innerText = curl;
     
-    // Python Snippet
     let py = `import requests\n\nurl = "${domain}${path}"\nheaders = {\n    "X-API-Key": "${key}",\n    "X-API-Secret": "${secret}"\n}`;
     if (payload && method === 'POST') {
         py += `\nheaders["Content-Type"] = "application/json"\ndata = ${payload}\nresponse = requests.post(url, json=data, headers=headers)`;
@@ -332,7 +327,6 @@ function executeApiCall(method, templatePath, btn) {
     const statusSpan = consoleDiv.querySelector('.status-badge');
     const pre = consoleDiv.querySelector('.response-pre');
     
-    // Fetch input parameters
     let path = templatePath;
     let queryParams = new URLSearchParams();
     
@@ -349,7 +343,6 @@ function executeApiCall(method, templatePath, btn) {
     const queryString = queryParams.toString();
     const finalUrl = path + (queryString ? '?' + queryString : '');
     
-    // Read credentials
     const key = document.getElementById('global-api-key').value;
     const secret = document.getElementById('global-api-secret').value;
     
@@ -363,14 +356,12 @@ function executeApiCall(method, templatePath, btn) {
         headers: headers
     };
     
-    // Read request body payload if present
     const bodyArea = card.querySelector('[data-body-payload]');
     if (bodyArea && method === 'POST') {
         headers['Content-Type'] = 'application/json';
         options.body = bodyArea.value;
     }
     
-    // Loading State
     btn.innerText = 'Sending...';
     btn.disabled = true;
     
