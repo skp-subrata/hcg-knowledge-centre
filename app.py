@@ -3199,6 +3199,24 @@ def create_app():
 			"wallet": dict(wallet) if wallet else {"user_id": user_id, "current_balance": 0, "total_earned": 0, "total_settled": 0, "total_adjusted": 0}
 		}
 
+
+	@app.put("/api/v1/users/<int:user_id>")
+	@api_admin_required
+	def api_update_user(user_id):
+		data = request.get_json() or {}
+		full_name = data.get("full_name")
+		if not full_name:
+			return {"error": "Missing full_name."}, 400
+		with get_db() as connection:
+			connection.execute("UPDATE users SET full_name = ? WHERE id = ?", (full_name, user_id))
+		return {"message": "User updated successfully."}
+
+	@app.delete("/api/v1/users/<int:user_id>")
+	@api_admin_required
+	def api_delete_user(user_id):
+		with get_db() as connection:
+			connection.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+		return {"message": "User deactivated successfully."}
 	# ── COURSES API ──
 
 	@app.get("/api/v1/courses")
@@ -3719,6 +3737,24 @@ def create_app():
 
 	# ── REWARDS API ──
 
+
+	@app.get("/api/v1/leaderboard")
+	@api_required
+	def api_get_leaderboard():
+		with get_db() as connection:
+			leaders = connection.execute('''
+				SELECT u.id, u.username, u.full_name, w.total_earned 
+				FROM wallets w JOIN users u ON u.id = w.user_id 
+				ORDER BY w.total_earned DESC LIMIT 10
+			''').fetchall()
+		return {"leaderboard": [dict(l) for l in leaders]}
+
+	@app.get("/api/v1/groups")
+	@api_required
+	def api_get_groups():
+		with get_db() as connection:
+			groups = connection.execute("SELECT id, name, description FROM groups ORDER BY id").fetchall()
+		return {"groups": [dict(g) for g in groups]}
 	@app.get("/api/v1/rewards/balance")
 	@api_required
 	def api_get_reward_balance():

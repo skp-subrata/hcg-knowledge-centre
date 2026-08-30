@@ -31,7 +31,7 @@
 
     <!-- Expanded Body (Hidden by Default) -->
     <div id="body-{{ method }}-{{ path|replace('/', '-')|replace('{', '')|replace('}', '') }}" class="hidden p-6 border-t border-slate-100 dark:border-slate-800/60 bg-white/20 dark:bg-slate-950/10 space-y-6">
-        <p class="text-sm text-slate-600 dark:text-slate-400">{{ description }}</p>
+        <div class="text-sm text-slate-600 dark:text-slate-400 space-y-3 leading-relaxed">{{ description|safe }}</div>
 
         <!-- Parameters form -->
         {% if params %}
@@ -147,96 +147,138 @@
         </aside>
 
         <!-- API List / Playground Cards -->
-        <main class="lg:col-span-9 space-y-12">
-            <!-- ─── USERS CATEGORY ─── -->
+                <main class="lg:col-span-9 space-y-12">
+            <!-- 👤 USERS CATEGORY -->
             <section id="users-group" class="space-y-4">
                 <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">User Management</h2>
                 
-                <!-- GET /api/v1/users -->
-                {{ render_api_card("GET", "/api/v1/users", "List all system users.", "staff", [], None) }}
+                {{ render_api_card("GET", "/api/v1/users", 
+                    "<strong>Fetch the User Directory</strong><br>Returns a comprehensive list of all active and inactive users across the system. <br><br><strong>Use Case:</strong> Synchronize your HR system's employee directory with the LMS database to ensure parity.", 
+                    "staff", [], None) }}
                 
-                <!-- POST /api/v1/users -->
-                {{ render_api_card("POST", "/api/v1/users", "Create a new user profile.", "admin", [], '{\n  "username": "developer.jane",\n  "full_name": "Jane Developer",\n  "password": "securepassword123",\n  "role": "basic user"\n}') }}
+                {{ render_api_card("POST", "/api/v1/users", 
+                    "<strong>Provision a New User Account</strong><br>Registers a new student or staff profile in the database. <br><br><strong>Note:</strong> Passwords are hashed immediately upon insertion using PBKDF2 with SHA-256.", 
+                    "admin", [], '{\n  "username": "developer.jane",\n  "full_name": "Jane Developer",\n  "password": "securepassword123",\n  "role": "basic user"\n}') }}
 
-                <!-- GET /api/v1/users/{user_id} -->
-                {{ render_api_card("GET", "/api/v1/users/{user_id}", "Retrieve details of a user by ID.", "self-admin", [{"name": "user_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+                {{ render_api_card("GET", "/api/v1/users/{user_id}", 
+                    "<strong>Get Specific User Profile</strong><br>Retrieves detailed metadata about a single user account by their unique ID.", 
+                    "self-admin", [{"name": "user_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
 
-                <!-- GET /api/v1/users/{user_id}/download -->
-                {{ render_api_card("GET", "/api/v1/users/{user_id}/download", "Download learning progress, certificate records and points balance history.", "self-admin", [{"name": "user_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+                {{ render_api_card("PUT", "/api/v1/users/{user_id}", 
+                    "<strong>Update User Profile</strong><br>Modifies the full name or other attributes of an existing user account.<br><br><strong>Use Case:</strong> Name changes or department transfers.", 
+                    "admin", [{"name": "user_id", "type": "path", "required": True, "placeholder": "1"}], '{\n  "full_name": "Jane Doe Updated"\n}') }}
+
+                {{ render_api_card("DELETE", "/api/v1/users/{user_id}", 
+                    "<strong>Deactivate User Account</strong><br>Soft-deletes a user profile by marking them inactive, preserving historical learning data.<br><br><strong>Use Case:</strong> Employee offboarding.", 
+                    "admin", [{"name": "user_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
+
+                {{ render_api_card("GET", "/api/v1/users/{user_id}/download", 
+                    "<strong>Download User Portfolio JSON</strong><br>Generates a complete data dump of a user's learning history, wallet balances, and completed certificates.<br><br><strong>Note:</strong> Used for GDPR data portability compliance.", 
+                    "self-admin", [{"name": "user_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
             </section>
 
-            <!-- ─── COURSES CATEGORY ─── -->
+            <!-- 📚 COURSES CATEGORY -->
             <section id="courses-group" class="space-y-4">
                 <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">Courses & Access</h2>
                 
-                <!-- GET /api/v1/courses -->
-                {{ render_api_card("GET", "/api/v1/courses", "List all courses visible to you.", "auth", [], None) }}
+                {{ render_api_card("GET", "/api/v1/courses", 
+                    "<strong>List Available Courses</strong><br>Returns all courses that the authenticated user is permitted to view. Staff members see all draft and published courses.", 
+                    "auth", [], None) }}
 
-                <!-- POST /api/v1/courses -->
-                {{ render_api_card("POST", "/api/v1/courses", "Create a new course.", "staff", [], '{\n  "name": "Cloud Native Integrations",\n  "description": "Learn to connect REST APIs dynamically.",\n  "category": "Technology",\n  "content_type": "URL",\n  "content_url": "https://example.com/docs/api",\n  "status": "DRAFT"\n}') }}
+                {{ render_api_card("POST", "/api/v1/courses", 
+                    "<strong>Create Course Content</strong><br>Creates a new course module and linked content URL.<br><br><strong>Integration:</strong> Automatically links with the LMS content delivery network.", 
+                    "staff", [], '{\n  "name": "Cloud Native Integrations",\n  "description": "Learn to connect REST APIs dynamically.",\n  "category": "Technology",\n  "content_type": "URL",\n  "content_url": "https://example.com/docs/api",\n  "status": "DRAFT"\n}') }}
 
-                <!-- GET /api/v1/courses/{course_id} -->
-                {{ render_api_card("GET", "/api/v1/courses/{course_id}", "Retrieve course details, content links, and associated assessments.", "auth", [{"name": "course_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+                {{ render_api_card("GET", "/api/v1/courses/{course_id}", 
+                    "<strong>Inspect Course Details</strong><br>Fetches the syllabus, learning material URLs, and linked assessment tests for a specific course.", 
+                    "auth", [{"name": "course_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
 
-                <!-- POST /api/v1/courses/{course_id}/assign -->
-                {{ render_api_card("POST", "/api/v1/courses/{course_id}/assign", "Assign a course to a student.", "staff", [{"name": "course_id", "type": "path", "required": true, "placeholder": "1"}], '{\n  "student_id": 2\n}') }}
+                {{ render_api_card("PUT", "/api/v1/courses/{course_id}", 
+                    "<strong>Update Course Details</strong><br>Modifies the metadata of an existing course.<br><br><strong>Use Case:</strong> Changing course name, description, or category.", 
+                    "staff", [{"name": "course_id", "type": "path", "required": True, "placeholder": "1"}], '{\n  "name": "Advanced Cloud Integration",\n  "category": "Architecture"\n}') }}
+
+                {{ render_api_card("DELETE", "/api/v1/courses/{course_id}", 
+                    "<strong>Delete a Course</strong><br>Permanently deletes a course and all associated materials and assessments.", 
+                    "admin", [{"name": "course_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
+
+                {{ render_api_card("POST", "/api/v1/courses/{course_id}/assign", 
+                    "<strong>Assign to Student</strong><br>Pushes a course assignment to a student's learning queue and tracks progression.", 
+                    "staff", [{"name": "course_id", "type": "path", "required": True, "placeholder": "1"}], '{\n  "student_id": 2\n}') }}
             </section>
 
-            <!-- ─── SOCIAL FEED CATEGORY ─── -->
+            <!-- 🌍 COMMUNITY CATEGORY -->
             <section id="social-group" class="space-y-4">
                 <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">Community & Social Feed</h2>
                 
-                <!-- GET /api/v1/posts -->
-                {{ render_api_card("GET", "/api/v1/posts", "List published community posts. Supports optional query filters.", "auth", [{"name": "category", "type": "query", "required": false, "placeholder": "General"}], None) }}
+                {{ render_api_card("GET", "/api/v1/posts", 
+                    "<strong>Fetch Community Feed</strong><br>Retrieves all approved community posts in reverse chronological order.<br><br><strong>Use Case:</strong> Building an intranet feed widget.", 
+                    "auth", [{"name": "category", "type": "query", "required": False, "placeholder": "General"}], None) }}
 
-                <!-- POST /api/v1/posts -->
-                {{ render_api_card("POST", "/api/v1/posts", "Create a new community post. Auto-approved for staff/admin, pending for students.", "auth", [], '{\n  "title": "Unlocking API Capabilities",\n  "description": "Exposing REST endpoints for custom applications.",\n  "content_type": "Text/Article",\n  "category": "API",\n  "topic_tag": "api,dev",\n  "content_url": ""\n}') }}
+                {{ render_api_card("POST", "/api/v1/posts", 
+                    "<strong>Create a Post</strong><br>Publishes a new community discussion. If posted by a basic student, it automatically routes to the Admin Approval Queue.", 
+                    "auth", [], '{\n  "title": "Unlocking API Capabilities",\n  "description": "Exposing REST endpoints.",\n  "content_type": "Text/Article",\n  "category": "API",\n  "topic_tag": "api",\n  "content_url": ""\n}') }}
 
-                <!-- GET /api/v1/posts/{post_id} -->
-                {{ render_api_card("GET", "/api/v1/posts/{post_id}", "Retrieve post details along with comments and ratings.", "auth", [{"name": "post_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+                {{ render_api_card("GET", "/api/v1/posts/{post_id}", 
+                    "<strong>Get Post Interactions</strong><br>Returns the post content alongside an array of all comments and aggregated rating statistics.", 
+                    "auth", [{"name": "post_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
 
-                <!-- POST /api/v1/posts/{post_id}/rate -->
-                {{ render_api_card("POST", "/api/v1/posts/{post_id}/rate", "Submit a 1-5 star rating on a post (triggers voter and author points).", "auth", [{"name": "post_id", "type": "path", "required": true, "placeholder": "1"}], '{\n  "rating": 5\n}') }}
+                {{ render_api_card("POST", "/api/v1/posts/{post_id}/rate", 
+                    "<strong>Rate a Post (Triggers Rewards)</strong><br>Submits a 1-5 star rating. <br><br><span class='text-emerald-500 font-bold'>Reward Pipeline:</span> Automatically credits <strong>1 Point</strong> to the rater and <strong>5 Points</strong> to the post author.", 
+                    "auth", [{"name": "post_id", "type": "path", "required": True, "placeholder": "1"}], '{\n  "rating": 5\n}') }}
 
-                <!-- POST /api/v1/posts/{post_id}/comment -->
-                {{ render_api_card("POST", "/api/v1/posts/{post_id}/comment", "Add a comment to a community post.", "auth", [{"name": "post_id", "type": "path", "required": true, "placeholder": "1"}], '{\n  "comment": "This endpoint playground is amazing!"\n}') }}
+                {{ render_api_card("POST", "/api/v1/posts/{post_id}/comment", 
+                    "<strong>Submit a Comment</strong><br>Appends a new comment to a post discussion thread.", 
+                    "auth", [{"name": "post_id", "type": "path", "required": True, "placeholder": "1"}], '{\n  "comment": "This endpoint playground is amazing!"\n}') }}
             </section>
 
-            <!-- ─── ASSESSMENTS CATEGORY ─── -->
+            <!-- 📝 ASSESSMENTS CATEGORY -->
             <section id="assess-group" class="space-y-4">
                 <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">Assessments & Grading</h2>
                 
-                <!-- GET /api/v1/assessments/{assessment_id} -->
-                {{ render_api_card("GET", "/api/v1/assessments/{assessment_id}", "Retrieve details and questions of an assessment (correct options hidden for students).", "auth", [{"name": "assessment_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+                {{ render_api_card("GET", "/api/v1/assessments/{assessment_id}", 
+                    "<strong>Fetch Exam Details</strong><br>Downloads the test paper structure. <br><br><strong>Security:</strong> The `correct_option` and `explanation` fields are strictly hidden for basic student accounts to prevent cheating.", 
+                    "auth", [{"name": "assessment_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
 
-                <!-- POST /api/v1/assessments/{assessment_id}/submit -->
-                {{ render_api_card("POST", "/api/v1/assessments/{assessment_id}/submit", "Submit assessment answers for grading. Triggers certification and rewards upon pass.", "auth", [{"name": "assessment_id", "type": "path", "required": true, "placeholder": "1"}], '{\n  "answers": {\n    "1": "A",\n    "2": "C"\n  }\n}') }}
+                {{ render_api_card("POST", "/api/v1/assessments/{assessment_id}/submit", 
+                    "<strong>Submit Answers & Grade</strong><br>Grades the submitted answers against the database.<br><br><span class='text-emerald-500 font-bold'>Triggers:</span> If passed, it generates a completion certificate and issues wallet points.", 
+                    "auth", [{"name": "assessment_id", "type": "path", "required": True, "placeholder": "1"}], '{\n  "answers": {\n    "1": "A",\n    "2": "C"\n  }\n}') }}
 
-                <!-- GET /api/v1/attempts/{attempt_id} -->
-                {{ render_api_card("GET", "/api/v1/attempts/{attempt_id}", "Retrieve scorecard metrics for a specific attempt.", "self-admin", [{"name": "attempt_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+                {{ render_api_card("GET", "/api/v1/attempts/{attempt_id}", 
+                    "<strong>Review Scorecard</strong><br>Fetches the numerical score and pass/fail status of a historical test attempt.", 
+                    "self-admin", [{"name": "attempt_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
 
-                <!-- GET /api/v1/attempts/{attempt_id}/review -->
-                {{ render_api_card("GET", "/api/v1/attempts/{attempt_id}/review", "Retrieve full question-by-question comparative details (restricted to passed attempts).", "self-admin", [{"name": "attempt_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+                {{ render_api_card("GET", "/api/v1/attempts/{attempt_id}/review", 
+                    "<strong>Detailed Exam Review</strong><br>Provides an in-depth review of each question, highlighting exactly what the student selected vs. the correct answer. <br><br><strong>Constraint:</strong> Only accessible for <i>passed</i> attempts.", 
+                    "self-admin", [{"name": "attempt_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
             </section>
 
-            <!-- ─── REWARDS CATEGORY ─── -->
+            <!-- 💰 REWARDS & DATA CATEGORY -->
             <section id="rewards-group" class="space-y-4">
-                <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">Rewards Wallet & Ledger</h2>
+                <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">Rewards Wallet, Ledgers & Data</h2>
                 
-                <!-- GET /api/v1/rewards/balance -->
-                {{ render_api_card("GET", "/api/v1/rewards/balance", "Retrieve your current wallet reward balance cache.", "auth", [], None) }}
+                {{ render_api_card("GET", "/api/v1/leaderboard", 
+                    "<strong>View Global Leaderboard</strong><br>Fetches the top 10 users ranked by their total accrued points.<br><br><strong>Use Case:</strong> Gamification dashboards and HR shoutouts.", 
+                    "auth", [], None) }}
 
-                <!-- GET /api/v1/rewards/transactions -->
-                {{ render_api_card("GET", "/api/v1/rewards/transactions", "Retrieve your reward transaction history log.", "auth", [], None) }}
+                {{ render_api_card("GET", "/api/v1/groups", 
+                    "<strong>List Active Groups</strong><br>Returns all learning groups and departments in the LMS.", 
+                    "auth", [], None) }}
 
-                <!-- POST /api/v1/rewards/settle -->
-                {{ render_api_card("POST", "/api/v1/rewards/settle", "Deduct points from user balance for settlement (debit).", "admin", [], '{\n  "target_user_id": 2,\n  "points": 50\n}') }}
+                {{ render_api_card("GET", "/api/v1/rewards/balance", 
+                    "<strong>Check Wallet Balance</strong><br>Returns the authenticated user's current point balance and total lifetime earned points.", 
+                    "auth", [], None) }}
 
-                <!-- POST /api/v1/rewards/adjust -->
-                {{ render_api_card("POST", "/api/v1/rewards/adjust", "Manually adjust balance with credit or debit points.", "admin", [], '{\n  "target_user_id": 2,\n  "points": 100,\n  "description": "Bonus for completing technical training session."\n}') }}
+                {{ render_api_card("GET", "/api/v1/rewards/transactions", 
+                    "<strong>Wallet Ledger</strong><br>Pulls a complete chronological log of all points credited or debited to the user's account.", 
+                    "auth", [], None) }}
 
-                <!-- POST /api/v1/rewards/reset -->
-                {{ render_api_card("POST", "/api/v1/rewards/reset", "Reset user balance to zero.", "admin", [], '{\n  "target_user_id": 2\n}') }}
+                {{ render_api_card("POST", "/api/v1/rewards/settle", 
+                    "<strong>Settle Rewards</strong><br>Debits points from a user's wallet when they redeem their points for physical gifts or benefits.", 
+                    "admin", [], '{\n  "target_user_id": 2,\n  "points": 50\n}') }}
+
+                {{ render_api_card("POST", "/api/v1/rewards/adjust", 
+                    "<strong>Manual Adjustment</strong><br>Credits or debits points manually for out-of-band rewards.", 
+                    "admin", [], '{\n  "target_user_id": 2,\n  "points": 100,\n  "description": "Bonus for technical training session."\n}') }}
             </section>
         </main>
     </div>
