@@ -181,7 +181,29 @@
                     <span class="sr-only">Toggle theme</span>
                 </button>
 {% if user %}
-                                  <!-- Profile Dropdown -->
+                                                    {% if user %}
+                  <!-- Notification Bell -->
+                  <div class="relative group" id="notification-bell-container">
+                      <button id="notification-btn" class="relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 dark:border-slate-800 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-slate-600 dark:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                          </svg>
+                          <span id="notification-badge" class="absolute top-1.5 right-1.5 flex h-2 w-2 rounded-full bg-red-500 hidden"></span>
+                      </button>
+                      
+                      <!-- Notification Dropdown -->
+                      <div class="absolute right-0 mt-2 w-80 bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-[70] hidden group-hover:block transition-all duration-200 backdrop-blur-md overflow-hidden">
+                          <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center">
+                              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-50">Notifications</h4>
+                              <span id="notification-count-text" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full hidden">0 New</span>
+                          </div>
+                          <div id="notification-list" class="max-h-[300px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                              <div class="px-4 py-6 text-center text-slate-500 dark:text-slate-400 text-sm">No new notifications.</div>
+                          </div>
+                      </div>
+                  </div>
+                  {% endif %}
+                    <!-- Profile Dropdown -->
                   <div class="relative">
                       <button id="profile-btn" class="flex items-center justify-center w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-800 hover:ring-2 ring-indigo-500 transition-all focus:outline-none overflow-hidden border border-slate-300 dark:border-slate-700 bg-cover bg-center" {% if profile_picture %}style="background-image: url('/uploads/{{ profile_picture }}')"{% endif %}>
                           {% if not profile_picture %}
@@ -612,7 +634,83 @@
             sideMenuOverlay.addEventListener('click', closeDrawer);
         }
     </script>
+<!-- Notification Engine -->
+{% if user %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let unreadCount = 0;
+    const badge = document.getElementById('notification-badge');
+    const countText = document.getElementById('notification-count-text');
+    const list = document.getElementById('notification-list');
+    
+    function playChime() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5);
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.5);
+        } catch(e) { console.error('Audio play failed', e); }
+    }
+    
+    function fetchNotifications() {
+        fetch('/api/notifications/unread')
+            .then(r => r.json())
+            .then(data => {
+                if (data.count > unreadCount) {
+                    playChime();
+                }
+                unreadCount = data.count;
+                
+                if (unreadCount > 0) {
+                    badge.classList.remove('hidden');
+                    countText.classList.remove('hidden');
+                    countText.textContent = unreadCount + ' New';
+                    
+                    let html = '';
+                    data.notifications.forEach(n => {
+                        const targetUrl = n.target_url || '#';
+                        html += 
+                            <a href="javascript:void(0)" onclick="markRead( + n.id + , ' + targetUrl + ')" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                <p class="text-sm text-slate-800 dark:text-slate-200"> + n.message + </p>
+                                <p class="text-[10px] text-slate-400 mt-1"> + new Date(n.created_at).toLocaleString() + </p>
+                            </a>
+                        ;
+                    });
+                    list.innerHTML = html;
+                } else {
+                    badge.classList.add('hidden');
+                    countText.classList.add('hidden');
+                    list.innerHTML = '<div class="px-4 py-6 text-center text-slate-500 dark:text-slate-400 text-sm">No new notifications.</div>';
+                }
+            })
+            .catch(e => console.error(e));
+    }
+    
+    window.markRead = function(id, targetUrl) {
+        fetch('/api/notifications/' + id + '/read', { method: 'POST' })
+            .then(() => {
+                window.location.href = targetUrl;
+            });
+    }
+    
+    // Poll every 30 seconds
+    setInterval(fetchNotifications, 30000);
+    // Initial fetch
+    fetchNotifications();
+});
+</script>
+{% endif %}
 </body>
 </html>
+
+
 
 
