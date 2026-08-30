@@ -874,7 +874,9 @@ def create_app():
 					ca.completed_at AS completion_date,
 					ca.created_at AS assigned_on,
 					cc.certification_status,
-					cc.badge
+					cc.badge,
+					(SELECT ROUND(AVG(CAST(feedback_rating AS FLOAT)), 1) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS avg_rating,
+					(SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
 				FROM courses c 
 				JOIN course_assignments ca ON ca.course_id = c.id 
 				LEFT JOIN users creator ON c.created_by = creator.id
@@ -909,7 +911,9 @@ def create_app():
 			).fetchall()
 			
 			available_courses = connection.execute(
-				"""SELECT c.*, creator.full_name AS course_owner
+				"""SELECT c.*, creator.full_name AS course_owner,
+				   (SELECT ROUND(AVG(CAST(feedback_rating AS FLOAT)), 1) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS avg_rating,
+				   (SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
 				   FROM courses c
 				   LEFT JOIN users creator ON c.created_by = creator.id
 				   WHERE c.status = 'published'
