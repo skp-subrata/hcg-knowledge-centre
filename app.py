@@ -20,7 +20,7 @@ UPLOAD_FOLDER = Path(os.getenv("LMS_UPLOAD_FOLDER", Path(__file__).with_name("up
 ROLES = ("admin", "moderator", "basic user")
 
 CONTENT_TYPES = ("URL", "PDF", "Video", "PPT")
-QUESTION_COLUMNS = ("course_id", "course_name", "assessment_title", "assessment_type", "question_text", "option_a", "option_b", "option_c", "option_d", "correct_option", "marks", "difficulty", "topic_tag")
+QUESTION_COLUMNS = ("course_id", "course_name", "assessment_title", "assessment_type", "question_text", "option_a", "option_b", "option_c", "option_d", "correct_option", "marks", "difficulty", "topic_tag", "explanation")
 
 
 def get_db():
@@ -268,10 +268,17 @@ def init_db():
 				connection.execute("ALTER TABLE course_assignments ADD COLUMN status TEXT DEFAULT 'not_started'")
 				connection.execute("ALTER TABLE course_assignments ADD COLUMN completed_at TEXT")
 
+		# ── Migrate questions table: add explanation if missing ────────────────
+		questions_sql = connection.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'questions'").fetchone()
+		if questions_sql:
+			questions_sql = questions_sql[0]
+			if "explanation" not in questions_sql:
+				connection.execute("ALTER TABLE questions ADD COLUMN explanation TEXT")
+
 		# ── Remaining tables (assessments, questions, etc.) ───────────────────
 		connection.executescript("""
 			CREATE TABLE IF NOT EXISTS question_banks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT DEFAULT 'General', created_by INTEGER NOT NULL REFERENCES users(id));
-			CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY AUTOINCREMENT, question_bank_id INTEGER NOT NULL REFERENCES question_banks(id) ON DELETE CASCADE, question_text TEXT NOT NULL, option_a TEXT NOT NULL, option_b TEXT NOT NULL, option_c TEXT NOT NULL, option_d TEXT NOT NULL, correct_option TEXT NOT NULL, marks INTEGER DEFAULT 1, difficulty TEXT DEFAULT 'medium', topic_tag TEXT DEFAULT '', created_by INTEGER NOT NULL REFERENCES users(id));
+			CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY AUTOINCREMENT, question_bank_id INTEGER NOT NULL REFERENCES question_banks(id) ON DELETE CASCADE, question_text TEXT NOT NULL, option_a TEXT NOT NULL, option_b TEXT NOT NULL, option_c TEXT NOT NULL, option_d TEXT NOT NULL, correct_option TEXT NOT NULL, marks INTEGER DEFAULT 1, difficulty TEXT DEFAULT 'medium', topic_tag TEXT DEFAULT '', created_by INTEGER NOT NULL REFERENCES users(id), explanation TEXT);
 			CREATE TABLE IF NOT EXISTS assessments (id INTEGER PRIMARY KEY AUTOINCREMENT, course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE, type TEXT NOT NULL, title TEXT NOT NULL, pass_percentage INTEGER DEFAULT 60, max_attempts INTEGER DEFAULT 1);
 			CREATE TABLE IF NOT EXISTS assessment_questions (assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, PRIMARY KEY(assessment_id, question_id));
 			CREATE TABLE IF NOT EXISTS assessment_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE, student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, attempt_no INTEGER DEFAULT 1, score INTEGER DEFAULT 0, percentage REAL DEFAULT 0, status TEXT DEFAULT 'in_progress', result TEXT DEFAULT 'fail', started_at TEXT DEFAULT CURRENT_TIMESTAMP, submitted_at TEXT);
@@ -669,7 +676,7 @@ def question_template():
 	# Pre-fill one sample row for guidance
 	workbook.active.append((
 		1, "Sample Course", "Final Assessment", "post", 
-		"What is the capital of France?", "London", "Paris", "Berlin", "Rome", "b", 1, "easy", "Geography"
+		"What is the capital of France?", "London", "Paris", "Berlin", "Rome", "b", 1, "easy", "Geography", "Paris is the capital of France."
 	))
 	stream = BytesIO()
 	workbook.save(stream)
@@ -688,7 +695,7 @@ def question_csv(assessment_id, user_id, role):
 			return None
 		questions = connection.execute("SELECT q.* FROM questions q JOIN assessment_questions aq ON aq.question_id = q.id WHERE aq.assessment_id = ? ORDER BY q.id", (assessment_id,)).fetchall()
 	for question in questions:
-		writer.writerow({"course_id": assessment["course_id"], "course_name": assessment["course_name"], "assessment_title": assessment["title"], "assessment_type": assessment["type"], "question_text": question["question_text"], "option_a": question["option_a"], "option_b": question["option_b"], "option_c": question["option_c"], "option_d": question["option_d"], "correct_option": question["correct_option"], "marks": question["marks"], "difficulty": question["difficulty"], "topic_tag": question["topic_tag"]})
+		writer.writerow({"course_id": assessment["course_id"], "course_name": assessment["course_name"], "assessment_title": assessment["title"], "assessment_type": assessment["type"], "question_text": question["question_text"], "option_a": question["option_a"], "option_b": question["option_b"], "option_c": question["option_c"], "option_d": question["option_d"], "correct_option": question["correct_option"], "marks": question["marks"], "difficulty": question["difficulty"], "topic_tag": question["topic_tag"], "explanation": question["explanation"]})
 	return BytesIO(stream.getvalue().encode("utf-8-sig"))
 
 
@@ -719,7 +726,8 @@ def import_questions(file_obj, user_id, role="admin"):
 			bank = connection.execute("SELECT id FROM question_banks WHERE name = ?", (bank_name,)).fetchone()
 			if not bank:
 				bank = (connection.execute("INSERT INTO question_banks (name, category, created_by) VALUES (?, 'Imported', ?)", (bank_name, user_id)).lastrowid,)
-			question = connection.execute("INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, difficulty, topic_tag, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (bank[0], data["question_text"], data["option_a"], data["option_b"], data["option_c"], data["option_d"], correct, int(data.get("marks") or 1), data.get("difficulty") or "medium", data.get("topic_tag") or "", user_id)).lastrowid
+			explanation = str(data.get("explanation", "")).strip() if data.get("explanation") else None
+			question = connection.execute("INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, difficulty, topic_tag, created_by, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (bank[0], data["question_text"], data["option_a"], data["option_b"], data["option_c"], data["option_d"], correct, int(data.get("marks") or 1), data.get("difficulty") or "medium", data.get("topic_tag") or "", user_id, explanation)).lastrowid
 			title = data.get("assessment_title") or f"{course['name']} assessment"
 			assessment = connection.execute("SELECT id FROM assessments WHERE course_id = ? AND title = ?", (course_id, title)).fetchone()
 			if not assessment:
@@ -1068,9 +1076,10 @@ def create_app():
 						bank = connection.execute("SELECT id FROM question_banks WHERE name = ?", (bank_name,)).fetchone()
 						if not bank:
 							bank = (connection.execute("INSERT INTO question_banks (name, category, created_by) VALUES (?, 'Manual', ?)", (bank_name, session["user_id"])).lastrowid,)
+						explanation = request.form.get("explanation", "").strip() or None
 						question_id = connection.execute(
-							"INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, difficulty, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-							(bank[0], request.form["question_text"].strip(), request.form["option_a"].strip(), request.form["option_b"].strip(), request.form["option_c"].strip(), request.form["option_d"].strip(), request.form["correct_option"], int(request.form.get("marks", 1)), request.form.get("difficulty", "medium"), session["user_id"]),
+							"INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, difficulty, created_by, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+							(bank[0], request.form["question_text"].strip(), request.form["option_a"].strip(), request.form["option_b"].strip(), request.form["option_c"].strip(), request.form["option_d"].strip(), request.form["correct_option"], int(request.form.get("marks", 1)), request.form.get("difficulty", "medium"), session["user_id"], explanation),
 						).lastrowid
 						connection.execute("INSERT INTO assessment_questions (assessment_id, question_id) VALUES (?, ?)", (request.form["assessment_id"], question_id))
 						flash("Question added and linked to assessment successfully.")
@@ -1230,11 +1239,107 @@ def create_app():
 					connection.execute("UPDATE course_assignments SET status = 'feedback_pending', completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (assessment_row["course_id"], session["user_id"]))
 				else:
 					connection.execute("UPDATE course_assignments SET status = 'assessment_failed', completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (assessment_row["course_id"], session["user_id"]))
-				if result == "pass":
-					return redirect(url_for("feedback_form", course_id=assessment_row["course_id"]))
-				flash("Assessment Not Passed. Review the course again and try the assessment for another chance.")
-				return render_template("assessment.html", assessment=assessment_row, score=score, percentage=percentage, result=result)
+				return redirect(url_for("assessment_result", attempt_id=attempt.lastrowid))
 		return render_template("assessment.html", assessment=assessment_row, questions=questions)
+
+	@app.get("/assessment/result/<int:attempt_id>")
+	def assessment_result(attempt_id):
+		if not session.get("user_id"):
+			return redirect(url_for("home"))
+		with get_db() as connection:
+			attempt = connection.execute(
+				"""SELECT a.*, ast.title, ast.pass_percentage, ast.id AS assessment_id, c.name AS course_name, c.id AS course_id
+				   FROM assessment_attempts a
+				   JOIN assessments ast ON ast.id = a.assessment_id
+				   JOIN courses c ON c.id = ast.course_id
+				   WHERE a.id = ?""",
+				(attempt_id,)
+			).fetchone()
+			
+			if not attempt:
+				flash("Assessment attempt not found.")
+				return redirect(url_for("home"))
+				
+			if attempt["student_id"] != session["user_id"]:
+				flash("Unauthorized access to this assessment attempt.")
+				return redirect(url_for("home"))
+				
+			total_questions = connection.execute(
+				"SELECT COUNT(*) AS count FROM attempt_answers WHERE attempt_id = ?",
+				(attempt_id,)
+			).fetchone()["count"]
+			
+			correct_answers = connection.execute(
+				"SELECT COUNT(*) AS count FROM attempt_answers WHERE attempt_id = ? AND is_correct = 1",
+				(attempt_id,)
+			).fetchone()["count"]
+			
+			incorrect_answers = total_questions - correct_answers
+			
+			total_marks = connection.execute(
+				"""SELECT SUM(q.marks) AS total 
+				   FROM questions q
+				   JOIN assessment_questions aq ON aq.question_id = q.id
+				   WHERE aq.assessment_id = ?""",
+				(attempt["assessment_id"],)
+			).fetchone()["total"] or 0
+			
+			marks_obtained = attempt["score"]
+			
+		return render_template(
+			"assessment_result.html",
+			attempt=attempt,
+			total_questions=total_questions,
+			correct_answers=correct_answers,
+			incorrect_answers=incorrect_answers,
+			total_marks=total_marks,
+			marks_obtained=marks_obtained,
+			user=session.get("user"),
+			role=session.get("role"),
+			actual_role=session.get("actual_role"),
+			profile_picture=session.get("profile_picture")
+		)
+
+	@app.get("/assessment/review/<int:attempt_id>")
+	def assessment_review(attempt_id):
+		if not session.get("user_id"):
+			return redirect(url_for("home"))
+		with get_db() as connection:
+			attempt = connection.execute(
+				"""SELECT a.*, ast.title, ast.id AS assessment_id, c.name AS course_name, c.id AS course_id
+				   FROM assessment_attempts a
+				   JOIN assessments ast ON ast.id = a.assessment_id
+				   JOIN courses c ON c.id = ast.course_id
+				   WHERE a.id = ?""",
+				(attempt_id,)
+			).fetchone()
+			
+			if not attempt:
+				flash("Assessment attempt not found.")
+				return redirect(url_for("home"))
+				
+			if attempt["student_id"] != session["user_id"]:
+				flash("Unauthorized access to this assessment attempt.")
+				return redirect(url_for("home"))
+				
+			questions_reviews = connection.execute(
+				"""SELECT q.*, aa.selected_option, aa.is_correct, aa.marks_awarded
+				   FROM questions q
+				   JOIN attempt_answers aa ON aa.question_id = q.id
+				   WHERE aa.attempt_id = ?
+				   ORDER BY q.id""",
+				(attempt_id,)
+			).fetchall()
+			
+		return render_template(
+			"assessment_review.html",
+			attempt=attempt,
+			questions_reviews=questions_reviews,
+			user=session.get("user"),
+			role=session.get("role"),
+			actual_role=session.get("actual_role"),
+			profile_picture=session.get("profile_picture")
+		)
 
 	@app.get("/admin/reports")
 	@admin_required

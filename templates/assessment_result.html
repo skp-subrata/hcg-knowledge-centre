@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Assessment Result | HCG knowledge centre{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto glass-panel p-8 md:p-10">
+    <div class="text-center py-6">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full mb-6 {% if attempt.result == 'pass' %}bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400{% else %}bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400{% endif %}">
+            {% if attempt.result == 'pass' %}
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+            {% else %}
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+            {% endif %}
+        </div>
+
+        {% if attempt.result == 'pass' %}
+        <h1 class="text-3xl font-extrabold tracking-tight text-green-600 dark:text-green-400 mb-2">Congratulations!</h1>
+        <p class="text-lg text-slate-600 dark:text-slate-300 max-w-xl mx-auto">You have successfully passed the assessment and met all requirements.</p>
+        {% else %}
+        <h1 class="text-3xl font-extrabold tracking-tight text-red-600 dark:text-red-400 mb-2">Assessment Not Passed</h1>
+        <p class="text-lg text-slate-600 dark:text-slate-300 max-w-xl mx-auto">Please review the course material and try the assessment again.</p>
+        {% endif %}
+    </div>
+
+    <!-- Result Card metrics -->
+    <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 text-center shadow-sm">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Percentage Score</span>
+            <span class="text-3xl font-extrabold text-slate-900 dark:text-slate-50 mt-1 block">{{ "%.0f"|format(attempt.percentage) }}%</span>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 text-center shadow-sm">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pass Mark</span>
+            <span class="text-3xl font-extrabold text-slate-900 dark:text-slate-50 mt-1 block">{{ attempt.pass_percentage }}%</span>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 text-center shadow-sm">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Correct Answers</span>
+            <span class="text-3xl font-extrabold text-slate-900 dark:text-slate-50 mt-1 block">{{ correct_answers }} / {{ total_questions }}</span>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 text-center shadow-sm">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Marks</span>
+            <span class="text-3xl font-extrabold text-slate-900 dark:text-slate-50 mt-1 block">{{ marks_obtained }} / {{ total_marks }}</span>
+        </div>
+    </div>
+
+    <!-- Details Metadata list -->
+    <div class="mt-8 p-6 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-200 dark:border-slate-800 rounded-2xl">
+        <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-4 uppercase tracking-wider">Attempt Summary</h3>
+        <dl class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <dt class="text-slate-500">LMS Course</dt>
+                <dd class="font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[200px]" title="{{ attempt.course_name }}">{{ attempt.course_name }}</dd>
+            </div>
+            <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <dt class="text-slate-500">Assessment</dt>
+                <dd class="font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[200px]" title="{{ attempt.title }}">{{ attempt.title }}</dd>
+            </div>
+            <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <dt class="text-slate-500">Status</dt>
+                <dd class="font-bold {% if attempt.result == 'pass' %}text-green-600{% else %}text-red-500{% endif %} uppercase tracking-wide">
+                    {% if attempt.result == 'pass' %}PASSED{% else %}FAILED{% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <dt class="text-slate-500">Submitted At</dt>
+                <dd class="font-semibold text-slate-900 dark:text-slate-100">{{ attempt.submitted_at }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="mt-10 pt-8 border-t border-slate-200 dark:border-slate-800 flex flex-col md:flex-row justify-center items-center gap-4">
+        <a href="{{ url_for('assessment_review', attempt_id=attempt.id) }}" class="btn-secondary w-full md:w-auto px-8 py-3 rounded-full font-bold text-center">
+            Review Your Answers
+        </a>
+        
+        {% if attempt.result == 'pass' %}
+        <a href="{{ url_for('feedback_form', course_id=attempt.course_id) }}" class="btn-primary w-full md:w-auto px-8 py-3 rounded-full font-bold text-center shadow-lg">
+            Continue to Feedback
+        </a>
+        {% else %}
+        <a href="{{ url_for('course_detail', course_id=attempt.course_id) }}" class="btn-secondary w-full md:w-auto px-8 py-3 rounded-full font-bold text-center">
+            Go Through Course Again
+        </a>
+        <a href="{{ url_for('assessment', assessment_id=attempt.assessment_id) }}" class="btn-primary w-full md:w-auto px-8 py-3 rounded-full font-bold text-center shadow-lg">
+            Try Assessment Again
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
