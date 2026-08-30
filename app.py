@@ -703,8 +703,8 @@ def embed_url(value):
 
 
 def course_is_visible(connection, course_id, user_id):
-	"""Return whether a user is assigned to or created a course."""
-	return connection.execute("SELECT 1 FROM courses c LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE c.id = ? AND (c.created_by = ? OR ca.student_id IS NOT NULL)", (user_id, course_id, user_id)).fetchone() is not None
+	"""Return whether a user is assigned to, created, or if the course is published."""
+	return connection.execute("SELECT 1 FROM courses c LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE c.id = ? AND (c.created_by = ? OR ca.student_id IS NOT NULL OR c.status = 'published')", (user_id, course_id, user_id)).fetchone() is not None
 
 
 def course_is_manageable(connection, course_id, user_id, role):
@@ -900,6 +900,17 @@ def create_app():
 				   ORDER BY p.id DESC
 				   LIMIT 4"""
 			).fetchall()
+			
+			available_courses = connection.execute(
+				"""SELECT c.*, creator.full_name AS course_owner
+				   FROM courses c
+				   LEFT JOIN users creator ON c.created_by = creator.id
+				   WHERE c.status = 'published'
+				     AND c.id NOT IN (SELECT course_id FROM course_assignments WHERE student_id = ?)
+				     AND c.created_by != ?
+				   ORDER BY c.id DESC""",
+				(session.get("user_id", 0), session.get("user_id", 0))
+			).fetchall()
 
 		with get_db() as connection:
 			if session.get("role") in ("admin", "moderator"):
@@ -919,7 +930,8 @@ def create_app():
 			user_certifications=user_certifications,
 			leaderboard=leaderboard,
 			new_courses=new_courses,
-			latest_posts=latest_posts
+			latest_posts=latest_posts,
+			available_courses=available_courses
 		)
 
 
@@ -1582,6 +1594,11 @@ def create_app():
 			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
 			allowed = course_is_visible(connection, course_id, session["user_id"])
 			assignment = connection.execute("SELECT status, completed_at FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"])).fetchone()
+			if not assignment and course and course["status"] == 'published' and course["created_by"] != session["user_id"]:
+				connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', NULL)", (course_id, session["user_id"]))
+				connection.execute("INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Self', ?, ?, 'assigned', 'new')", (course_id, course["name"], session["user_id"], session["user"], session["user_id"], session["user"]))
+				assignment = connection.execute("SELECT status, completed_at FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"])).fetchone()
+			
 			certification = get_user_course_record(connection, session["user_id"], course_id)
 			progress = get_course_status_label(assignment["status"]) if assignment else "NOT_STARTED"
 			if certification and certification["certification_status"] == "CERTIFIED":
