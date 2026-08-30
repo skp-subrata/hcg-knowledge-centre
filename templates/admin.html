@@ -8,7 +8,24 @@
     <p class="text-slate-500 dark:text-slate-400 text-lg">Manage content, assessments, assignments, and users.</p>
 </div>
 
-<section class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
+<div class="flex flex-wrap gap-2 mb-8 bg-slate-100/50 dark:bg-slate-900/30 p-1.5 rounded-2xl border border-slate-200/50 dark:border-slate-800/40 w-fit">
+    <a href="#creation-tools" class="px-4 py-2 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm transition">
+        Creation Tools
+    </a>
+    <a href="#courses-section" class="px-4 py-2 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm transition">
+        Courses List
+    </a>
+    <a href="#users-section" class="px-4 py-2 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm transition">
+        Users Directory
+    </a>
+    {% if role == 'admin' %}
+    <a href="#api-creds-section" class="px-4 py-2 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm transition">
+        API Developer Access
+    </a>
+    {% endif %}
+</div>
+
+<section class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-12" id="creation-tools">
     <!-- Create Course -->
     <form class="glass-panel p-6 flex flex-col" method="post" enctype="multipart/form-data">
         <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Create course</h2>
