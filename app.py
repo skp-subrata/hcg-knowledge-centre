@@ -1603,7 +1603,7 @@ def create_app():
 			assignment = connection.execute("SELECT status, completed_at FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"])).fetchone()
 			if not assignment and course and course["status"] == 'published' and course["created_by"] != session["user_id"]:
 				connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', NULL)", (course_id, session["user_id"]))
-				connection.execute("INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Self', ?, ?, 'assigned', 'new')", (course_id, course["name"], session["user_id"], session["user"], session["user_id"], session["user"]))
+				connection.execute("INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', ?, ?, 'assigned', 'new')", (course_id, course["name"], session["user_id"], session["user"], session["user_id"], "Self-Enrolled"))
 				assignment = connection.execute("SELECT status, completed_at FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"])).fetchone()
 			
 			certification = get_user_course_record(connection, session["user_id"], course_id)
