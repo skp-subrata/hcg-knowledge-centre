@@ -378,7 +378,11 @@ def init_db():
 			('COURSE_CERTIFICATION', 'active', 'MULTIPLIER', 100.0, 0),
 			('COURSE_OWNER_RATING', 'active', 'MULTIPLIER', 10.0, 0),
 			('COMMUNITY_POST_RATING', 'active', 'MULTIPLIER', 1.0, 0),
-			('RATING_GIVEN', 'active', 'FIXED', 0.0, 2);
+			('RATING_GIVEN', 'active', 'FIXED', 0.0, 2),
+			('MANUAL_SETTLEMENT', 'active', 'FIXED', 0.0, 0),
+			('MANUAL_ADJUSTMENT', 'active', 'FIXED', 0.0, 0),
+			('GLOBAL_RESET', 'active', 'FIXED', 0.0, 0),
+			('USER_RESET', 'active', 'FIXED', 0.0, 0);
 			
 			CREATE INDEX IF NOT EXISTS idx_questions_bank ON questions(question_bank_id);
 			CREATE INDEX IF NOT EXISTS idx_attempt_student ON assessment_attempts(student_id);
