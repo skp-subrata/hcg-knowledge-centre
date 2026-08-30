@@ -1035,6 +1035,8 @@ def create_app():
 			members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ? ORDER BY user_id", (group_id,)).fetchall()
 			for row in members:
 				user_id = row["user_id"]
+				if user_id == course["created_by"]:
+					continue
 				user = connection.execute("SELECT full_name FROM users WHERE id = ?", (user_id,)).fetchone()
 				if user and not user_has_course_access(connection, user_id, int(course_id)):
 					connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (int(course_id), user_id))
@@ -1306,7 +1308,7 @@ def create_app():
 					with get_db() as connection:
 						assignment_type = request.form.get("assignment_type", "individual")
 						course_id = int(request.form["course_id"])
-						course_row = connection.execute("SELECT name FROM courses WHERE id = ?", (course_id,)).fetchone()
+						course_row = connection.execute("SELECT name, created_by FROM courses WHERE id = ?", (course_id,)).fetchone()
 						if course_row is None:
 							flash("Select a valid course.")
 							return redirect(url_for("admin_panel"))
@@ -1320,6 +1322,8 @@ def create_app():
 							members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ? ORDER BY user_id", (group_id,)).fetchall()
 							for member in members:
 								user_id = member["user_id"]
+								if user_id == course_row["created_by"]:
+									continue
 								user = connection.execute("SELECT full_name FROM users WHERE id = ?", (user_id,)).fetchone()
 								if user and not user_has_course_access(connection, user_id, course_id):
 									connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (course_id, user_id))
@@ -1335,6 +1339,9 @@ def create_app():
 										)
 						else:
 							user_id = int(request.form["student_id"])
+							if user_id == course_row["created_by"]:
+								flash("Cannot assign a course to its owner.")
+								return redirect(url_for("admin_panel"))
 							user = connection.execute("SELECT full_name FROM users WHERE id = ?", (user_id,)).fetchone()
 							if user and not user_has_course_access(connection, user_id, course_id):
 								connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (course_id, user_id))
@@ -3417,6 +3424,8 @@ def create_app():
 			student = connection.execute("SELECT * FROM users WHERE id = ? AND role = 'basic user'", (student_id,)).fetchone()
 			if not student:
 				return {"error": "Student user not found."}, 404
+			if student_id == course["created_by"]:
+				return {"error": "Cannot assign a course to its owner."}, 400
 				
 			if user_has_course_access(connection, student_id, course_id):
 				return {"message": "User already has access to this course."}, 200
