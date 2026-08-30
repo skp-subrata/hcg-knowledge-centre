@@ -37,6 +37,130 @@
     <span class="eyebrow">{{ courses|length }} courses assigned</span>
 </section>
 
+</section>
+
+<!-- Interactive Dashboard Carousel Banner (Amazon-style) -->
+<section class="relative rounded-3xl overflow-hidden mb-10 border border-slate-200 dark:border-slate-800 shadow-xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white h-[320px] md:h-[280px] select-none group" id="dashboard-carousel">
+    
+    <!-- Carousel Track -->
+    <div class="relative w-full h-full">
+        
+        <!-- Slide 1: Leaderboard -->
+        <div class="carousel-slide absolute inset-0 opacity-0 transition-opacity duration-700 ease-in-out flex flex-col md:flex-row justify-between items-center p-8 gap-6 bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950">
+            <div class="max-w-md space-y-3">
+                <span class="px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase bg-indigo-500/20 border border-indigo-400/30 text-indigo-300">
+                    🏆 Daily Leaderboard
+                </span>
+                <h3 class="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-yellow-300 to-amber-500 bg-clip-text text-transparent">Top Points Earners</h3>
+                <p class="text-xs text-slate-400 leading-relaxed">Submit ratings, complete certificates, and earn rewards across HCG Knowledge Centre.</p>
+                <a href="{{ url_for('rewards_dashboard') }}" class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors">
+                    View my wallet
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                </a>
+            </div>
+            
+            <div class="w-full md:w-[350px] bg-slate-950/40 border border-white/10 rounded-2xl p-4 backdrop-blur-md shadow-2xl">
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center justify-between">
+                    <span>Rank / Member</span>
+                    <span>Points</span>
+                </h4>
+                <div class="space-y-2">
+                    {% for item in leaderboard %}
+                    <div class="flex items-center justify-between text-xs py-1 border-b border-white/5 last:border-0">
+                        <div class="flex items-center gap-2">
+                            <span class="w-5 h-5 flex items-center justify-center rounded-full font-bold text-[10px] {% if loop.index == 1 %}bg-yellow-500 text-slate-950{% elif loop.index == 2 %}bg-slate-300 text-slate-950{% elif loop.index == 3 %}bg-amber-700 text-white{% else %}bg-slate-800 text-slate-400{% endif %}">
+                                {{ loop.index }}
+                            </span>
+                            <span class="font-semibold text-slate-200 truncate max-w-[150px]">{{ item.full_name }}</span>
+                            <span class="text-[10px] text-slate-500">@{{ item.username }}</span>
+                        </div>
+                        <span class="font-mono font-bold text-emerald-400">{{ item.current_balance }} pts</span>
+                    </div>
+                    {% else %}
+                    <p class="text-center text-slate-500 text-xs py-4">No active reward earnings logged yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 2: New Courses Added -->
+        <div class="carousel-slide absolute inset-0 opacity-0 transition-opacity duration-700 ease-in-out flex flex-col md:flex-row justify-between items-center p-8 gap-6 bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950">
+            <div class="max-w-md space-y-3">
+                <span class="px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
+                    📚 Newly Published
+                </span>
+                <h3 class="text-2xl md:text-3xl font-extrabold tracking-tight text-emerald-300 font-serif">Expand Your Knowledge</h3>
+                <p class="text-xs text-slate-400 leading-relaxed">Check out our latest added study modules, complete assessments, and claim badges.</p>
+                <a href="#courses-grid" class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors">
+                    Explore all courses
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 13l-7 7-7-7m14-6l-7 7-7-7"/></svg>
+                </a>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3 w-full md:w-[350px]">
+                {% for course in new_courses %}
+                <a href="{{ url_for('course_detail', course_id=course.id) }}" class="p-3 bg-slate-950/40 hover:bg-slate-950/70 border border-white/5 hover:border-emerald-500/40 rounded-xl transition-all duration-300 flex flex-col justify-between h-20 shadow-md">
+                    <span class="text-[9px] uppercase tracking-wider text-emerald-400 font-bold truncate">{{ course.category or 'General' }}</span>
+                    <h4 class="font-bold text-slate-200 text-xs truncate leading-snug mt-1">{{ course.name }}</h4>
+                    <span class="text-[9px] text-slate-500 mt-2">{{ course.content_type }}</span>
+                </a>
+                {% else %}
+                <div class="col-span-2 text-center text-slate-500 text-xs py-8 bg-slate-950/20 rounded-xl">No courses cataloged yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Slide 3: Latest Community Posts -->
+        <div class="carousel-slide absolute inset-0 opacity-0 transition-opacity duration-700 ease-in-out flex flex-col md:flex-row justify-between items-center p-8 gap-6 bg-gradient-to-r from-blue-950 via-slate-900 to-blue-950">
+            <div class="max-w-md space-y-3">
+                <span class="px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase bg-blue-500/20 border border-blue-400/30 text-blue-300">
+                    💬 Community Spotlights
+                </span>
+                <h3 class="text-2xl md:text-3xl font-extrabold tracking-tight text-blue-300">Trending Social Feeds</h3>
+                <p class="text-xs text-slate-400 leading-relaxed">Engage with peer articles, download resources, rate, and participate in discussions.</p>
+                <a href="{{ url_for('community_feed') }}" class="inline-flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors">
+                    Open Community Feed
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                </a>
+            </div>
+            
+            <div class="space-y-3 w-full md:w-[350px]">
+                {% for post in latest_posts %}
+                <a href="{{ url_for('post_detail', post_id=post.id) }}" class="flex items-center justify-between p-2.5 bg-slate-950/40 hover:bg-slate-950/70 border border-white/5 hover:border-blue-500/40 rounded-xl transition-all duration-300 shadow-md">
+                    <div class="flex items-center gap-2 truncate">
+                        <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                        <div class="truncate">
+                            <h4 class="font-bold text-slate-200 text-xs truncate max-w-[200px]">{{ post.title }}</h4>
+                            <p class="text-[9px] text-slate-500 truncate">By {{ post.creator_name }} · {{ post.category }}</p>
+                        </div>
+                    </div>
+                    <span class="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        {{ post.views }}
+                    </span>
+                </a>
+                {% else %}
+                <div class="text-center text-slate-500 text-xs py-8 bg-slate-950/20 rounded-xl">No public posts visible.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Navigation Arrows -->
+    <button id="carousel-prev" class="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-950/30 hover:bg-slate-950/60 border border-white/10 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 focus:outline-none">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+    </button>
+    <button id="carousel-next" class="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-950/30 hover:bg-slate-950/60 border border-white/10 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 focus:outline-none">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+    </button>
+
+    <!-- Indicators -->
+    <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2" id="carousel-indicators"></div>
+
+</section>
+
+<div id="courses-grid"></div>
 <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     {% for course in courses %}
     <article class="glass-panel glass-panel-hover p-6 flex flex-col h-full hover:-translate-y-1">
@@ -124,4 +248,89 @@
 </section>
 {% endif %}
 {% endif %}
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const slides = document.querySelectorAll(".carousel-slide");
+        const prevBtn = document.getElementById("carousel-prev");
+        const nextBtn = document.getElementById("carousel-next");
+        const indicatorsContainer = document.getElementById("carousel-indicators");
+        let activeIdx = 0;
+        let slideInterval;
+        
+        if (slides.length === 0) return;
+
+        // Generate dot indicators
+        slides.forEach((_, idx) => {
+            const dot = document.createElement("button");
+            dot.className = `w-2 h-2 rounded-full transition-all duration-300 focus:outline-none ${idx === 0 ? 'bg-white w-5' : 'bg-white/40'}`;
+            dot.addEventListener("click", () => showSlide(idx));
+            indicatorsContainer.appendChild(dot);
+        });
+
+        const dots = indicatorsContainer.querySelectorAll("button");
+
+        function showSlide(index) {
+            // Boundaries check
+            if (index >= slides.length) index = 0;
+            if (index < 0) index = slides.length - 1;
+            
+            // Set transitions
+            slides.forEach((slide, idx) => {
+                if (idx === index) {
+                    slide.classList.remove("opacity-0", "pointer-events-none");
+                    slide.classList.add("opacity-100", "z-10");
+                    dots[idx].classList.add("bg-white", "w-5");
+                    dots[idx].classList.remove("bg-white/40");
+                } else {
+                    slide.classList.remove("opacity-100", "z-10");
+                    slide.classList.add("opacity-0", "pointer-events-none");
+                    dots[idx].classList.remove("bg-white", "w-5");
+                    dots[idx].classList.add("bg-white/40");
+                }
+            });
+            
+            activeIdx = index;
+        }
+
+        // Initialize first slide
+        showSlide(0);
+
+        function startAutoScroll() {
+            slideInterval = setInterval(() => {
+                showSlide(activeIdx + 1);
+            }, 6000); // 6 seconds slide duration
+        }
+
+        function stopAutoScroll() {
+            clearInterval(slideInterval);
+        }
+
+        // Attach listeners for controls
+        if (prevBtn) {
+            prevBtn.addEventListener("click", () => {
+                showSlide(activeIdx - 1);
+                stopAutoScroll();
+                startAutoScroll();
+            });
+        }
+        if (nextBtn) {
+            nextBtn.addEventListener("click", () => {
+                showSlide(activeIdx + 1);
+                stopAutoScroll();
+                startAutoScroll();
+            });
+        }
+
+        // Hover handling
+        const carousel = document.getElementById("dashboard-carousel");
+        if (carousel) {
+            carousel.addEventListener("mouseenter", stopAutoScroll);
+            carousel.addEventListener("mouseleave", startAutoScroll);
+        }
+
+        startAutoScroll();
+    });
+</script>
 {% endblock %}
+

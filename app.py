@@ -757,13 +757,51 @@ def create_app():
 			flash("Invalid username or password.")
 		with get_db() as connection:
 			courses = connection.execute("SELECT DISTINCT c.* FROM courses c LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE c.created_by = ? OR ca.student_id IS NOT NULL ORDER BY c.id DESC", (session.get("user_id", 0), session.get("user_id", 0))).fetchall()
+			
+			leaderboard = connection.execute(
+				"""SELECT w.current_balance, u.full_name, u.username
+				   FROM user_wallets w
+				   JOIN users u ON u.id = w.user_id
+				   ORDER BY w.current_balance DESC
+				   LIMIT 5"""
+			).fetchall()
+			
+			new_courses = connection.execute(
+				"""SELECT id, name, category, content_type
+				   FROM courses
+				   ORDER BY id DESC
+				   LIMIT 4"""
+			).fetchall()
+			
+			latest_posts = connection.execute(
+				"""SELECT p.id, p.title, p.category, p.views, u.full_name AS creator_name
+				   FROM posts p
+				   JOIN users u ON u.id = p.created_by
+				   WHERE p.status = 'PUBLISHED'
+				   ORDER BY p.id DESC
+				   LIMIT 4"""
+			).fetchall()
+
 		with get_db() as connection:
 			if session.get("role") in ("admin", "moderator"):
 				assessments = connection.execute("SELECT DISTINCT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE c.created_by = ? OR ca.student_id IS NOT NULL ORDER BY a.id DESC", (session.get("user_id", 0), session.get("user_id", 0))).fetchall()
 			else:
 				assessments = connection.execute("SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE ca.status = 'completed' ORDER BY a.id DESC", (session.get("user_id", 0),)).fetchall()
 			user_certifications = connection.execute("SELECT * FROM course_certifications WHERE user_id = ? AND certification_status = 'CERTIFIED' ORDER BY course_name", (session.get("user_id", 0),)).fetchall() if session.get("user_id") else []
-		return render_template("index.html", user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"), impersonating=session.get("impersonator_id"), courses=courses, assessments=assessments, user_certifications=user_certifications)
+		return render_template(
+			"index.html", 
+			user=session.get("user"), 
+			role=session.get("role"), 
+			actual_role=session.get("actual_role"), 
+			profile_picture=session.get("profile_picture"), 
+			impersonating=session.get("impersonator_id"), 
+			courses=courses, 
+			assessments=assessments, 
+			user_certifications=user_certifications,
+			leaderboard=leaderboard,
+			new_courses=new_courses,
+			latest_posts=latest_posts
+		)
 
 
 	@app.route("/groups", methods=["GET", "POST"])
