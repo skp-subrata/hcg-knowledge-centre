@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 import os
 import csv
 from io import BytesIO
@@ -118,7 +118,7 @@ def process_reward_event(connection, user_id, event_name, source_reference_id, s
 def init_db():
 	"""Create the LMS schema and seed the first administrator."""
 	with get_db() as connection:
-		# â”€â”€ Core tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		# ── Core tables ──────────────────────────────────────────────────────────
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS users (
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -248,7 +248,7 @@ def init_db():
 		connection.execute("CREATE INDEX IF NOT EXISTS idx_courses_creator ON courses(created_by)")
 		connection.execute("CREATE INDEX IF NOT EXISTS idx_course_certifications_user_course ON course_certifications(user_id, course_id)")
 
-		# â”€â”€ Migrate users table for group metadata â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		# ── Migrate users table for group metadata ──────────────────────────────
 		user_columns = [col[1] for col in connection.execute("PRAGMA table_info(users)").fetchall()]
 		for column, column_sql in (
 			("employee_id", "ALTER TABLE users ADD COLUMN employee_id TEXT DEFAULT ''"),
@@ -259,7 +259,7 @@ def init_db():
 			if column not in user_columns:
 				connection.execute(column_sql)
 
-		# â”€â”€ Migrate courses table if old schema (missing PPT or extra columns) â”€â”€
+		# ── Migrate courses table if old schema (missing PPT or extra columns) ──
 		table_sql = connection.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'courses'").fetchone()[0]
 		if "'PPT'" not in table_sql:
 			connection.execute("ALTER TABLE courses RENAME TO courses_legacy")
@@ -267,7 +267,7 @@ def init_db():
 			connection.execute("INSERT INTO courses (id, name, content_type, content_url, created_by) SELECT id, name, content_type, content_url, created_by FROM courses_legacy")
 			connection.execute("DROP TABLE courses_legacy")
 
-		# â”€â”€ Migrate course_assignments: add status/completed_at if missing â”€â”€â”€â”€â”€â”€
+		# ── Migrate course_assignments: add status/completed_at if missing ──────
 		assignment_sql = connection.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'course_assignments'").fetchone()
 		if assignment_sql:
 			assignment_sql = assignment_sql[0]
@@ -283,14 +283,14 @@ def init_db():
 				connection.execute("ALTER TABLE course_assignments ADD COLUMN status TEXT DEFAULT 'not_started'")
 				connection.execute("ALTER TABLE course_assignments ADD COLUMN completed_at TEXT")
 
-		# â”€â”€ Migrate questions table: add explanation if missing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		# ── Migrate questions table: add explanation if missing ────────────────
 		cursor = connection.execute("PRAGMA table_info(questions)")
 		columns = [row[1] for row in cursor.fetchall()]
 		cursor.close()
 		if columns and "explanation" not in columns:
 			connection.execute("ALTER TABLE questions ADD COLUMN explanation TEXT")
 
-		# â”€â”€ Remaining tables (assessments, questions, etc.) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		# ── Remaining tables (assessments, questions, etc.) ───────────────────
 		connection.executescript("""
 			CREATE TABLE IF NOT EXISTS question_banks (
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -1040,7 +1040,7 @@ def create_app():
 					connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (int(course_id), user_id))
 					create_group_assignment_history(connection, int(course_id), course["name"], user_id, user["full_name"], 'Group', group_id, group["name"], session["user_id"], session["user"], 'new', 'assigned')
 				else:
-					create_group_assignment_history(connection, int(course_id), course["name"], user_id, user["full_name"], 'Group', group_id, group["name"], session["user_id"], session["user"], 'Existing Access â€” No Action Taken', 'duplicate')
+					create_group_assignment_history(connection, int(course_id), course["name"], user_id, user["full_name"], 'Group', group_id, group["name"], session["user_id"], session["user"], 'Existing Access — No Action Taken', 'duplicate')
 		flash("Course assigned to the group. Existing access was preserved for users who already had the course.")
 		return redirect(url_for("group_detail", group_id=group_id))
 
@@ -1330,7 +1330,7 @@ def create_app():
 								else:
 									if user:
 										connection.execute(
-											"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Group', ?, ?, ?, ?, 'duplicate', 'Existing Access â€” No Action Taken')",
+											"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Group', ?, ?, ?, ?, 'duplicate', 'Existing Access — No Action Taken')",
 											(course_id, course_name, user_id, user["full_name"], group_id, group["name"], session["user_id"], session["user"]),
 										)
 						else:
@@ -1345,7 +1345,7 @@ def create_app():
 							else:
 								if user:
 									connection.execute(
-										"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', NULL, NULL, ?, ?, 'duplicate', 'Existing Access â€” No Action Taken')",
+										"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', NULL, NULL, ?, ?, 'duplicate', 'Existing Access — No Action Taken')",
 										(course_id, course_name, user_id, user["full_name"], session["user_id"], session["user"]),
 									)
 					flash("Course assignment processed. Existing course access was preserved when present.")
@@ -1572,7 +1572,7 @@ def create_app():
 	@app.post("/course/<int:course_id>/complete")
 	def complete_course(course_id):
 		"""Mark course as completed for the current student."""
-		if not session.get("user_id"):
+		if not session.get("user_id") or session.get("role") != "basic user":
 			return redirect(url_for("home"))
 		with get_db() as connection:
 			certification = get_user_course_record(connection, session["user_id"], course_id)
@@ -1585,7 +1585,7 @@ def create_app():
 	@app.route("/course/<int:course_id>/feedback", methods=["GET", "POST"])
 	def feedback_form(course_id):
 		"""Collect mandatory feedback and issue the certificate if valid."""
-		if not session.get("user_id"):
+		if not session.get("user_id") or session.get("role") != "basic user":
 			return redirect(url_for("home"))
 		with get_db() as connection:
 			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
@@ -3222,7 +3222,7 @@ def create_app():
 		session.clear()
 		return redirect(url_for("home"))
 
-	# â”€â”€ API v1 Authentication & Routing Block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+	# ── API v1 Authentication & Routing Block ──────────────────────────────────
 
 	@app.get("/api/v1/docs")
 	def api_docs_playground():
@@ -3235,7 +3235,7 @@ def create_app():
 			profile_picture=session.get("profile_picture")
 		)
 
-	# â”€â”€ USERS API â”€â”€
+	# ── USERS API ──
 
 	@app.get("/api/v1/users")
 	@api_staff_required
@@ -3338,7 +3338,7 @@ def create_app():
 		with get_db() as connection:
 			connection.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
 		return {"message": "User deactivated successfully."}
-	# â”€â”€ COURSES API â”€â”€
+	# ── COURSES API ──
 
 	@app.get("/api/v1/courses")
 	@api_required
@@ -3431,7 +3431,7 @@ def create_app():
 				return {"error": f"Failed to assign course: {str(e)}"}, 500
 		return {"message": "Course assigned successfully."}, 200
 
-	# â”€â”€ COMMUNITY/SOCIAL API â”€â”€
+	# ── COMMUNITY/SOCIAL API ──
 
 	@app.get("/api/v1/posts")
 	@api_required
@@ -3610,7 +3610,7 @@ def create_app():
 				return {"error": f"Comment submission failed: {str(e)}"}, 500
 		return {"message": "Comment submitted successfully.", "comment_id": comment_id}, 201
 
-	# â”€â”€ ASSESSMENTS & GRADING API â”€â”€
+	# ── ASSESSMENTS & GRADING API ──
 
 	@app.get("/api/v1/assessments/<int:assessment_id>")
 	@api_required
@@ -3856,7 +3856,7 @@ def create_app():
 			"questions": [dict(r) for r in reviews]
 		}
 
-	# â”€â”€ REWARDS API â”€â”€
+	# ── REWARDS API ──
 
 
 	@app.get("/api/v1/leaderboard")
@@ -4019,4 +4019,3 @@ app = create_app()
 
 if __name__ == "__main__":
 	app.run(debug=True)
-
