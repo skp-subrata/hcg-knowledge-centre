@@ -858,7 +858,23 @@ def create_app():
 				return redirect(url_for("home"))
 			flash("Invalid username or password.")
 		with get_db() as connection:
-			courses = connection.execute("SELECT c.* FROM courses c JOIN course_assignments ca ON ca.course_id = c.id WHERE ca.student_id = ? ORDER BY c.id DESC", (session.get("user_id", 0),)).fetchall()
+			courses = connection.execute("""
+				SELECT 
+					c.*,
+					creator.full_name AS course_owner,
+					(SELECT assigned_by_name FROM assignment_history ah WHERE ah.course_id = c.id AND ah.user_id = ca.student_id ORDER BY ah.assigned_at DESC LIMIT 1) AS assigned_by,
+					ca.status AS progress_status,
+					ca.updated_at AS last_accessed,
+					ca.completed_at AS completion_date,
+					cc.certification_status,
+					cc.badge
+				FROM courses c 
+				JOIN course_assignments ca ON ca.course_id = c.id 
+				LEFT JOIN users creator ON c.created_by = creator.id
+				LEFT JOIN course_certifications cc ON cc.course_id = c.id AND cc.user_id = ca.student_id
+				WHERE ca.student_id = ? 
+				ORDER BY c.id DESC
+			""", (session.get("user_id", 0),)).fetchall()
 			
 			leaderboard = connection.execute(
 				"""SELECT w.current_balance, u.full_name, u.username
