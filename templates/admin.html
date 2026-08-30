@@ -130,10 +130,6 @@
                 <label class="form-label">Question Text</label>
                 <input name="question_text" class="form-input" required>
             </div>
-            <div>
-                <label class="form-label">Explanation (Optional)</label>
-                <input name="explanation" class="form-input" placeholder="Brief explanation for incorrect responses...">
-            </div>
             <div class="grid grid-cols-2 gap-4">
                 <div><label class="form-label text-xs">Option A</label><input name="option_a" class="form-input" required></div>
                 <div><label class="form-label text-xs">Option B</label><input name="option_b" class="form-input" required></div>
@@ -356,6 +352,103 @@
         </div>
         <p id="users-empty" class="hidden text-center text-slate-400 text-sm py-6">No users match your search or filter.</p>
     </section>
+
+    <!-- ═══ API CREDENTIALS TABLE ═══ -->
+    {% if role == 'admin' %}
+    <section class="glass-panel p-6 overflow-hidden" id="api-creds-section">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 border-b border-slate-200 dark:border-slate-800 pb-4">
+            <div>
+                <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">API Developer Access</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Manage developers' API credentials, view doc site and launch playground.</p>
+            </div>
+            <div class="flex gap-3">
+                <a href="/admin/api-docs" class="btn-secondary text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 font-semibold">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                    API Docs & Playground
+                </a>
+            </div>
+        </div>
+
+        <!-- Generate Creds Form -->
+        <form class="flex flex-col sm:flex-row gap-4 items-end mb-8 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800" method="post">
+            <input type="hidden" name="action" value="generate_api_creds">
+            <div class="flex-grow max-w-sm">
+                <label class="form-label">Select User for API Key</label>
+                <select name="target_user_id" class="form-input text-sm" required>
+                    {% for item in users %}
+                    <option value="{{ item.id }}">{{ item.full_name }} ({{ item.username }} - {{ item.role|title }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn-primary px-5 py-2.5 rounded-xl font-bold text-xs shadow-md">
+                Generate API Key & Secret
+            </button>
+        </form>
+
+        <!-- Credentials List Table -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-800">
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">User</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Role</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">API Key</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">API Secret</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Status</th>
+                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                    {% for item in api_creds %}
+                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
+                        <td class="p-3 font-semibold">
+                            <span class="block text-slate-900 dark:text-slate-50">{{ item.full_name }}</span>
+                            <span class="text-xs text-slate-400 font-medium">@{{ item.username }}</span>
+                        </td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                                {% if item.role == 'admin' %}bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400
+                                {% elif item.role == 'moderator' %}bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400
+                                {% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+                                {{ item.role|title }}
+                            </span>
+                        </td>
+                        <td class="p-3 font-mono text-xs text-slate-700 dark:text-slate-300">{{ item.api_key }}</td>
+                        <td class="p-3 font-mono text-xs text-slate-400">
+                            {% if item.status == 'active' %}
+                            <span class="select-none">••••••••••••••••</span>
+                            {% else %}
+                            <span class="line-through">{{ item.api_secret[:8] }}...</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                                {% if item.status == 'active' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400
+                                {% else %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% endif %}">
+                                {{ item.status }}
+                            </span>
+                        </td>
+                        <td class="p-3 text-right space-x-2">
+                            {% if item.status == 'active' %}
+                            <a href="/admin/api-credentials/{{ item.user_id }}/download" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">Download JSON</a>
+                            <form class="inline" method="post" onsubmit="return confirm('Revoke credentials for @{{ item.username }}?')">
+                                <input type="hidden" name="action" value="revoke_api_creds">
+                                <input type="hidden" name="target_user_id" value="{{ item.user_id }}">
+                                <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Revoke</button>
+                            </form>
+                            {% else %}
+                            <span class="text-xs text-slate-400 italic">Revoked</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="p-8 text-center text-slate-400 text-sm">No API keys generated yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
 
     <!-- ═══ ASSESSMENTS TABLE ═══ -->
     <section class="glass-panel p-6 overflow-hidden" id="assessments-section">

@@ -286,6 +286,7 @@ def init_db():
 			CREATE TABLE IF NOT EXISTS certificates (id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER NOT NULL REFERENCES users(id), course_id INTEGER NOT NULL REFERENCES courses(id), cert_uid TEXT UNIQUE NOT NULL, issued_date TEXT DEFAULT CURRENT_DATE, file_url TEXT);
 			CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), message TEXT NOT NULL, type TEXT DEFAULT 'system', is_read INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 			CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER REFERENCES users(id), action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+			CREATE TABLE IF NOT EXISTS api_credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, api_key TEXT UNIQUE NOT NULL, api_secret TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, status TEXT CHECK(status IN ('active', 'inactive')) DEFAULT 'active');
 			
 			CREATE TABLE IF NOT EXISTS posts (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -531,6 +532,60 @@ def admin_required(view):
 	def wrapped(*args, **kwargs):
 		if session.get("role") != "admin" or session.get("impersonator_id"):
 			return redirect(url_for("home"))
+		return view(*args, **kwargs)
+	return wrapped
+
+
+def api_required(view):
+	"""Decorator to authenticate API requests using X-API-Key and X-API-Secret headers."""
+	@wraps(view)
+	def wrapped(*args, **kwargs):
+		api_key = request.headers.get("X-API-Key")
+		api_secret = request.headers.get("X-API-Secret")
+		if not api_key or not api_secret:
+			return {"error": "Missing X-API-Key or X-API-Secret header."}, 401
+		
+		with get_db() as connection:
+			creds = connection.execute(
+				"SELECT ac.*, u.username, u.role, u.full_name FROM api_credentials ac JOIN users u ON u.id = ac.user_id WHERE ac.api_key = ? AND ac.api_secret = ? AND ac.status = 'active'",
+				(api_key, api_secret)
+			).fetchone()
+			
+			if not creds:
+				return {"error": "Invalid or inactive API credentials."}, 401
+				
+			# Store authenticated user in request context
+			from flask import g
+			g.api_user = {
+				"id": creds["user_id"],
+				"username": creds["username"],
+				"role": creds["role"],
+				"full_name": creds["full_name"]
+			}
+		return view(*args, **kwargs)
+	return wrapped
+
+
+def api_staff_required(view):
+	"""Restrict API endpoint to administrators and moderators."""
+	@wraps(view)
+	@api_required
+	def wrapped(*args, **kwargs):
+		from flask import g
+		if g.api_user["role"] not in ("admin", "moderator"):
+			return {"error": "Access forbidden: staff permissions required."}, 403
+		return view(*args, **kwargs)
+	return wrapped
+
+
+def api_admin_required(view):
+	"""Restrict API endpoint to administrators only."""
+	@wraps(view)
+	@api_required
+	def wrapped(*args, **kwargs):
+		from flask import g
+		if g.api_user["role"] != "admin":
+			return {"error": "Access forbidden: administrator permissions required."}, 403
 		return view(*args, **kwargs)
 	return wrapped
 
@@ -1108,6 +1163,23 @@ def create_app():
 					if course and course_is_manageable(connection, course["course_id"], session["user_id"], session["role"]):
 						connection.execute("UPDATE assessments SET title = ?, type = ?, pass_percentage = ?, max_attempts = ? WHERE id = ?", (request.form["title"].strip(), request.form["type"], request.form["pass_percentage"], request.form["max_attempts"], request.form["record_id"]))
 						flash("Assessment updated successfully.")
+			elif action == "generate_api_creds":
+				target_user_id = int(request.form["target_user_id"])
+				import os
+				api_key = "ak_" + os.urandom(16).hex()
+				api_secret = "as_" + os.urandom(24).hex()
+				with get_db() as connection:
+					connection.execute("UPDATE api_credentials SET status = 'inactive' WHERE user_id = ?", (target_user_id,))
+					connection.execute(
+						"INSERT INTO api_credentials (user_id, api_key, api_secret, status) VALUES (?, ?, ?, 'active')",
+						(target_user_id, api_key, api_secret)
+					)
+				flash("API credentials generated successfully.")
+			elif action == "revoke_api_creds":
+				target_user_id = int(request.form["target_user_id"])
+				with get_db() as connection:
+					connection.execute("UPDATE api_credentials SET status = 'inactive' WHERE user_id = ?", (target_user_id,))
+				flash("API credentials revoked successfully.")
 			elif action == "assign_course":
 				try:
 					with get_db() as connection:
@@ -1166,7 +1238,8 @@ def create_app():
 			banks = connection.execute("SELECT * FROM question_banks ORDER BY id DESC").fetchall()
 			assessments = connection.execute("SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY a.id DESC", (session["user_id"], session["user_id"])).fetchall()
 			groups = connection.execute("SELECT * FROM groups ORDER BY id DESC").fetchall()
-		return render_template("admin.html", users=users, courses=courses, students=students, banks=banks, assessments=assessments, groups=groups, content_types=CONTENT_TYPES, roles=ROLES, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+			api_creds = connection.execute("SELECT ac.*, u.username, u.full_name, u.role FROM api_credentials ac JOIN users u ON u.id = ac.user_id ORDER BY ac.id DESC").fetchall()
+		return render_template("admin.html", users=users, courses=courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.route("/assessments/<int:assessment_id>", methods=["GET", "POST"])
 	def assessment(assessment_id):
@@ -1519,6 +1592,36 @@ def create_app():
 	def download_question_template():
 		"""Download the Excel question and assessment template."""
 		return send_file(question_template(), as_attachment=True, download_name="learnly_questions_template.xlsx", mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+	@app.get("/admin/api-credentials/<int:user_id>/download")
+	@admin_required
+	def download_api_credentials(user_id):
+		"""Download the API Key and Secret for a specific user as a JSON file."""
+		with get_db() as connection:
+			creds = connection.execute(
+				"SELECT ac.*, u.username, u.full_name FROM api_credentials ac JOIN users u ON u.id = ac.user_id WHERE ac.user_id = ? AND ac.status = 'active'",
+				(user_id,)
+			).fetchone()
+			if not creds:
+				flash("No active API credentials found for this user.")
+				return redirect(url_for("admin_panel"))
+				
+			import json
+			output = {
+				"username": creds["username"],
+				"full_name": creds["full_name"],
+				"api_key": creds["api_key"],
+				"api_secret": creds["api_secret"],
+				"api_base_url": request.url_root.rstrip("/") + "/api/v1",
+				"status": creds["status"]
+			}
+			return send_file(
+				BytesIO(json.dumps(output, indent=4).encode("utf-8")),
+				as_attachment=True,
+				download_name=f"api_credentials_{creds['username']}.json",
+				mimetype="application/json"
+			)
 
 	@app.post("/admin/delete/<resource>/<int:record_id>")
 	@staff_required
@@ -2997,6 +3100,747 @@ def create_app():
 		"""End the current session."""
 		session.clear()
 		return redirect(url_for("home"))
+
+	# ── API v1 Authentication & Routing Block ──────────────────────────────────
+
+	@app.get("/admin/api-docs")
+	def api_docs_playground():
+		"""Display interactive API v1 documentation and sandbox playground."""
+		if not session.get("user_id"):
+			return redirect(url_for("home"))
+		return render_template(
+			"api_docs.html",
+			user=session.get("user"),
+			role=session.get("role"),
+			actual_role=session.get("actual_role"),
+			profile_picture=session.get("profile_picture")
+		)
+
+	# ── USERS API ──
+
+	@app.get("/api/v1/users")
+	@api_staff_required
+	def api_list_users():
+		"""List all system users."""
+		with get_db() as connection:
+			users = connection.execute("SELECT id, username, full_name, role FROM users ORDER BY id").fetchall()
+		return {"users": [dict(u) for u in users]}
+
+	@app.post("/api/v1/users")
+	@api_admin_required
+	def api_create_user():
+		"""Create a new user profile."""
+		data = request.get_json() or {}
+		username = (data.get("username") or "").strip()
+		full_name = (data.get("full_name") or "").strip()
+		password = data.get("password")
+		role = data.get("role", "basic user").strip()
+		
+		if not username or not full_name or not password:
+			return {"error": "Missing required fields: username, full_name, password."}, 400
+		if len(password) < 6:
+			return {"error": "Password must be at least 6 characters."}, 400
+		if role not in ROLES:
+			return {"error": f"Invalid role. Must be one of: {list(ROLES)}."}, 400
+			
+		with get_db() as connection:
+			existing = connection.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+			if existing:
+				return {"error": "Username already exists."}, 409
+			try:
+				user_id = connection.execute(
+					"INSERT INTO users (username, password, role, full_name) VALUES (?, ?, ?, ?)",
+					(username, generate_password_hash(password), role, full_name)
+				).lastrowid
+			except Exception as e:
+				return {"error": f"Database insertion failed: {str(e)}"}, 500
+		return {"message": "User created successfully.", "user_id": user_id}, 201
+
+	@app.get("/api/v1/users/<int:user_id>")
+	@api_required
+	def api_get_user(user_id):
+		"""Retrieve a user's details."""
+		from flask import g
+		if g.api_user["role"] not in ("admin", "moderator") and g.api_user["id"] != user_id:
+			return {"error": "Access forbidden: you can only query your own profile."}, 403
+		with get_db() as connection:
+			u = connection.execute("SELECT id, username, full_name, role FROM users WHERE id = ?", (user_id,)).fetchone()
+		if not u:
+			return {"error": "User not found."}, 404
+		return {"user": dict(u)}
+
+	@app.get("/api/v1/users/<int:user_id>/download")
+	@api_required
+	def api_download_user_data(user_id):
+		"""Retrieve and download a user's progress and wallet statistics."""
+		from flask import g
+		if g.api_user["role"] not in ("admin", "moderator") and g.api_user["id"] != user_id:
+			return {"error": "Access forbidden: you can only download your own data."}, 403
+			
+		with get_db() as connection:
+			user = connection.execute("SELECT id, username, full_name, role FROM users WHERE id = ?", (user_id,)).fetchone()
+			if not user:
+				return {"error": "User not found."}, 404
+			
+			assignments = connection.execute(
+				"SELECT ca.*, c.name AS course_name, c.category FROM course_assignments ca JOIN courses c ON c.id = ca.course_id WHERE ca.student_id = ?",
+				(user_id,)
+			).fetchall()
+			
+			attempts = connection.execute(
+				"SELECT a.*, ast.title AS assessment_title FROM assessment_attempts a JOIN assessments ast ON ast.id = a.assessment_id WHERE a.student_id = ?",
+				(user_id,)
+			).fetchall()
+			
+			wallet = connection.execute("SELECT * FROM user_wallets WHERE user_id = ?", (user_id,)).fetchone()
+			
+		return {
+			"user": dict(user),
+			"assignments": [dict(a) for a in assignments],
+			"attempts": [dict(at) for at in attempts],
+			"wallet": dict(wallet) if wallet else {"user_id": user_id, "current_balance": 0, "total_earned": 0, "total_settled": 0, "total_adjusted": 0}
+		}
+
+	# ── COURSES API ──
+
+	@app.get("/api/v1/courses")
+	@api_required
+	def api_list_courses():
+		"""List all courses."""
+		from flask import g
+		with get_db() as connection:
+			if g.api_user["role"] in ("admin", "moderator"):
+				courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by ORDER BY c.id DESC").fetchall()
+			else:
+				courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.status = 'published' OR c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (g.api_user["id"], g.api_user["id"])).fetchall()
+		return {"courses": [dict(c) for c in courses]}
+
+	@app.post("/api/v1/courses")
+	@api_staff_required
+	def api_create_course():
+		"""Create a new course."""
+		from flask import g
+		data = request.get_json() or {}
+		name = (data.get("name") or "").strip()
+		description = (data.get("description") or "").strip()
+		category = (data.get("category") or "General").strip()
+		content_type = (data.get("content_type") or "Text/Article").strip()
+		content_url = (data.get("content_url") or "").strip()
+		status = (data.get("status") or "draft").strip().upper()
+		
+		if not name:
+			return {"error": "Missing required field: name."}, 400
+		if content_type not in ("URL", "PDF", "Video", "PPT"):
+			return {"error": "Invalid content type. Must be one of: URL, PDF, Video, PPT."}, 400
+		if status not in ("DRAFT", "PUBLISHED"):
+			return {"error": "Invalid status. Must be DRAFT or PUBLISHED."}, 400
+			
+		with get_db() as connection:
+			try:
+				course_id = connection.execute(
+					"INSERT INTO courses (name, description, category, content_type, content_url, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+					(name, description, category, content_type, content_url, status, g.api_user["id"])
+				).lastrowid
+			except Exception as e:
+				return {"error": f"Database insertion failed: {str(e)}"}, 500
+		return {"message": "Course created successfully.", "course_id": course_id}, 201
+
+	@app.get("/api/v1/courses/<int:course_id>")
+	@api_required
+	def api_get_course(course_id):
+		"""Retrieve a course's contents and assessments."""
+		from flask import g
+		with get_db() as connection:
+			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
+			if not course:
+				return {"error": "Course not found."}, 404
+			if not course_is_visible(connection, course_id, g.api_user["id"]):
+				return {"error": "Access forbidden: you do not have access to this course."}, 403
+			
+			assessments = connection.execute("SELECT id, title, type, pass_percentage, max_attempts FROM assessments WHERE course_id = ?", (course_id,)).fetchall()
+		return {
+			"course": dict(course),
+			"assessments": [dict(a) for a in assessments]
+		}
+
+	@app.post("/api/v1/courses/<int:course_id>/assign")
+	@api_staff_required
+	def api_assign_course(course_id):
+		"""Assign a course to a basic student user."""
+		from flask import g
+		data = request.get_json() or {}
+		student_id = data.get("student_id")
+		if not student_id:
+			return {"error": "Missing student_id in request body."}, 400
+			
+		with get_db() as connection:
+			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
+			if not course:
+				return {"error": "Course not found."}, 404
+			student = connection.execute("SELECT * FROM users WHERE id = ? AND role = 'basic user'", (student_id,)).fetchone()
+			if not student:
+				return {"error": "Student user not found."}, 404
+				
+			if user_has_course_access(connection, student_id, course_id):
+				return {"message": "User already has access to this course."}, 200
+				
+			try:
+				connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (course_id, student_id))
+				connection.execute(
+					"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', NULL, NULL, ?, ?, 'assigned', 'new')",
+					(course_id, course["name"], student_id, student["full_name"], g.api_user["id"], g.api_user["full_name"])
+				)
+			except Exception as e:
+				return {"error": f"Failed to assign course: {str(e)}"}, 500
+		return {"message": "Course assigned successfully."}, 200
+
+	# ── COMMUNITY/SOCIAL API ──
+
+	@app.get("/api/v1/posts")
+	@api_required
+	def api_list_posts():
+		"""List all published community feed posts."""
+		category = request.args.get("category")
+		with get_db() as connection:
+			if category:
+				rows = connection.execute("SELECT p.*, u.full_name AS creator FROM posts p JOIN users u ON u.id = p.created_by WHERE p.status = 'PUBLISHED' AND p.category = ? ORDER BY p.id DESC", (category,)).fetchall()
+			else:
+				rows = connection.execute("SELECT p.*, u.full_name AS creator FROM posts p JOIN users u ON u.id = p.created_by WHERE p.status = 'PUBLISHED' ORDER BY p.id DESC").fetchall()
+		return {"posts": [dict(r) for r in rows]}
+
+	@app.post("/api/v1/posts")
+	@api_required
+	def api_create_post():
+		"""Create a new community feed post."""
+		from flask import g
+		data = request.get_json() or {}
+		title = (data.get("title") or "").strip()
+		description = (data.get("description") or "").strip()
+		content_type = (data.get("content_type") or "Text/Article").strip()
+		category = (data.get("category") or "General").strip()
+		topic_tag = (data.get("topic_tag") or "").strip()
+		content_url = (data.get("content_url") or "").strip()
+		
+		if not title or not description:
+			return {"error": "Missing title or description."}, 400
+		if content_type not in ("Text/Article", "PDF", "Video", "Image", "PPT/PowerPoint"):
+			return {"error": "Invalid content_type. Must be Text/Article, PDF, Video, Image, or PPT/PowerPoint."}, 400
+			
+		status = "PUBLISHED" if g.api_user["role"] in ("admin", "moderator") else "PENDING_APPROVAL"
+		
+		with get_db() as connection:
+			try:
+				cursor = connection.execute(
+					"""INSERT INTO posts (title, description, content_type, category, topic_tag, content_url, created_by, status, version_number)
+					   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+					(title, description, content_type, category, topic_tag, content_url, g.api_user["id"], status)
+				)
+				post_id = cursor.lastrowid
+				cursor.close()
+				
+				connection.execute(
+					"""INSERT INTO post_approval_history (post_id, version_number, submitted_by, action, comments, previous_status, new_status)
+					   VALUES (?, 1, ?, 'SUBMIT', 'Initial creation via API', 'NONE', ?)""",
+					(post_id, g.api_user["id"], status)
+				)
+				
+				if status == "PENDING_APPROVAL":
+					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
+					for r in reviewers:
+						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review")
+				else:
+					# Author Post reward trigger
+					process_reward_event(
+						connection=connection,
+						user_id=g.api_user["id"],
+						event_name="MY_POST_RATING",
+						source_reference_id=f"POST-{post_id}",
+						source_reference_type="POST_CREATION",
+						description=f"Approved community post: {title}",
+						input_value=0,
+						actor_id=g.api_user["id"]
+					)
+			except Exception as e:
+				return {"error": f"Database insertion failed: {str(e)}"}, 500
+		return {"message": "Post created successfully.", "post_id": post_id, "status": status}, 201
+
+	@app.get("/api/v1/posts/<int:post_id>")
+	@api_required
+	def api_get_post(post_id):
+		"""Retrieve a community post's details, comments, and ratings."""
+		with get_db() as connection:
+			post = connection.execute("SELECT p.*, u.full_name AS creator FROM posts p JOIN users u ON u.id = p.created_by WHERE p.id = ?", (post_id,)).fetchone()
+			if not post:
+				return {"error": "Post not found."}, 404
+				
+			comments = connection.execute("SELECT pc.*, u.full_name AS author FROM post_comments pc JOIN users u ON u.id = pc.user_id WHERE pc.post_id = ? ORDER BY pc.id ASC", (post_id,)).fetchall()
+			rating_row = connection.execute("SELECT AVG(rating) as avg_rating, COUNT(rating) as rating_count FROM post_ratings WHERE post_id = ?", (post_id,)).fetchone()
+			
+		return {
+			"post": dict(post),
+			"comments": [dict(c) for c in comments],
+			"ratings": {
+				"average": round(rating_row["avg_rating"], 1) if rating_row and rating_row["avg_rating"] is not None else 0,
+				"count": rating_row["rating_count"] if rating_row else 0
+			}
+		}
+
+	@app.post("/api/v1/posts/<int:post_id>/rate")
+	@api_required
+	def api_rate_post(post_id):
+		"""Submit a rating (1-5 stars) for a community post."""
+		from flask import g
+		data = request.get_json() or {}
+		rating = data.get("rating")
+		if rating is None or not (1 <= int(rating) <= 5):
+			return {"error": "Rating must be an integer between 1 and 5."}, 400
+		rating = int(rating)
+		
+		with get_db() as connection:
+			post = connection.execute("SELECT created_by, status FROM posts WHERE id = ?", (post_id,)).fetchone()
+			if not post:
+				return {"error": "Post not found."}, 404
+			if post["created_by"] == g.api_user["id"]:
+				return {"error": "You cannot rate your own post."}, 400
+				
+			existing = connection.execute("SELECT * FROM post_ratings WHERE post_id = ? AND user_id = ?", (post_id, g.api_user["id"])).fetchone()
+			if existing:
+				return {"error": "You have already rated this post."}, 409
+				
+			try:
+				connection.execute(
+					"""INSERT INTO post_ratings (post_id, user_id, rating, updated_at)
+					   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+					   ON CONFLICT(post_id, user_id) DO UPDATE SET rating = excluded.rating, updated_at = CURRENT_TIMESTAMP""",
+					(post_id, g.api_user["id"], rating)
+				)
+				
+				ref_id = f"PRATE-{post_id}-{g.api_user['id']}"
+				# 1. Post Owner Reward
+				process_reward_event(
+					connection=connection,
+					user_id=post["created_by"],
+					event_name="COMMUNITY_POST_RATING",
+					source_reference_id=ref_id,
+					source_reference_type="POST_RATING",
+					description=f"Community Post Rating received (Post ID: {post_id}, Rating: {rating}/5)",
+					input_value=rating,
+					actor_id=g.api_user["id"]
+				)
+				# 2. Rating Giver Reward
+				process_reward_event(
+					connection=connection,
+					user_id=g.api_user["id"],
+					event_name="RATING_GIVEN",
+					source_reference_id=ref_id,
+					source_reference_type="POST_RATING",
+					description=f"Rated community post (Post ID: {post_id})",
+					actor_id=g.api_user["id"]
+				)
+			except Exception as e:
+				return {"error": f"Rating transaction failed: {str(e)}"}, 500
+		return {"message": "Rating submitted successfully."}, 200
+
+	@app.post("/api/v1/posts/<int:post_id>/comment")
+	@api_required
+	def api_comment_post(post_id):
+		"""Add a text comment to a community post."""
+		from flask import g
+		data = request.get_json() or {}
+		comment_text = (data.get("comment") or "").strip()
+		if not comment_text:
+			return {"error": "Missing comment text in request body."}, 400
+			
+		with get_db() as connection:
+			post = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
+			if not post:
+				return {"error": "Post not found."}, 404
+			try:
+				comment_id = connection.execute(
+					"INSERT INTO post_comments (post_id, user_id, comment) VALUES (?, ?, ?)",
+					(post_id, g.api_user["id"], comment_text)
+				).lastrowid
+			except Exception as e:
+				return {"error": f"Comment submission failed: {str(e)}"}, 500
+		return {"message": "Comment submitted successfully.", "comment_id": comment_id}, 201
+
+	# ── ASSESSMENTS & GRADING API ──
+
+	@app.get("/api/v1/assessments/<int:assessment_id>")
+	@api_required
+	def api_get_assessment(assessment_id):
+		"""Retrieve assessment details and questions (excluding correct options for students)."""
+		from flask import g
+		with get_db() as connection:
+			assessment = connection.execute(
+				"SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id WHERE a.id = ?",
+				(assessment_id,)
+			).fetchone()
+			if not assessment:
+				return {"error": "Assessment not found."}, 404
+				
+			if not course_is_visible(connection, assessment["course_id"], g.api_user["id"]):
+				return {"error": "Access forbidden: you do not have access to this course content."}, 403
+				
+			q_rows = connection.execute(
+				"""SELECT q.id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option, q.marks, q.difficulty, q.topic_tag 
+				   FROM questions q
+				   JOIN assessment_questions aq ON aq.question_id = q.id
+				   WHERE aq.assessment_id = ?
+				   ORDER BY q.id""",
+				(assessment_id,)
+			).fetchall()
+			
+		questions = []
+		is_staff = g.api_user["role"] in ("admin", "moderator")
+		for q in q_rows:
+			item = {
+				"id": q["id"],
+				"question_text": q["question_text"],
+				"option_a": q["option_a"],
+				"option_b": q["option_b"],
+				"option_c": q["option_c"],
+				"option_d": q["option_d"],
+				"marks": q["marks"],
+				"difficulty": q["difficulty"],
+				"topic_tag": q["topic_tag"]
+			}
+			if is_staff:
+				item["correct_option"] = q["correct_option"]
+			questions.append(item)
+			
+		return {
+			"assessment": dict(assessment),
+			"questions": questions
+		}
+
+	@app.post("/api/v1/assessments/<int:assessment_id>/submit")
+	@api_required
+	def api_submit_assessment(assessment_id):
+		"""Submit answers to an assessment for scoring, status tracking, and certification."""
+		from flask import g
+		data = request.get_json() or {}
+		answers = data.get("answers")
+		if not isinstance(answers, dict):
+			return {"error": "Missing or invalid 'answers' dictionary in request body."}, 400
+			
+		with get_db() as connection:
+			assessment = connection.execute(
+				"SELECT a.*, c.name AS course_name, c.created_by AS course_owner_id FROM assessments a JOIN courses c ON c.id = a.course_id WHERE a.id = ?",
+				(assessment_id,)
+			).fetchone()
+			if not assessment:
+				return {"error": "Assessment not found."}, 404
+				
+			if not course_is_visible(connection, assessment["course_id"], g.api_user["id"]):
+				return {"error": "Access forbidden: you do not have access to this course content."}, 403
+				
+			prior_attempts = connection.execute(
+				"SELECT COUNT(*) as count FROM assessment_attempts WHERE assessment_id = ? AND student_id = ?",
+				(assessment_id, g.api_user["id"])
+			).fetchone()
+			attempt_no = (prior_attempts["count"] or 0) + 1
+			
+			if attempt_no > assessment["max_attempts"]:
+				return {"error": f"You have already reached the maximum limit of {assessment['max_attempts']} attempts."}, 403
+				
+			questions = connection.execute(
+				"""SELECT q.* FROM questions q
+				   JOIN assessment_questions aq ON aq.question_id = q.id
+				   WHERE aq.assessment_id = ?""",
+				(assessment_id,)
+			).fetchall()
+			
+			if not questions:
+				return {"error": "This assessment has no questions configured."}, 400
+				
+			total_marks = 0
+			marks_obtained = 0
+			correct_count = 0
+			incorrect_count = 0
+			
+			answers_to_insert = []
+			for q in questions:
+				q_id_str = str(q["id"])
+				user_ans = (answers.get(q_id_str) or "").strip().upper()
+				total_marks += q["marks"]
+				
+				is_correct = 1 if user_ans == q["correct_option"].upper() else 0
+				marks_awarded = q["marks"] if is_correct else 0
+				
+				if is_correct:
+					correct_count += 1
+				else:
+					incorrect_count += 1
+				marks_obtained += marks_awarded
+				answers_to_insert.append((q["id"], user_ans, is_correct, marks_awarded))
+				
+			percentage = (marks_obtained / total_marks) * 100 if total_marks > 0 else 0
+			result = "pass" if percentage >= assessment["pass_percentage"] else "fail"
+			
+			try:
+				cursor = connection.execute(
+					"""INSERT INTO assessment_attempts (assessment_id, student_id, attempt_no, score, percentage, status, result, submitted_at)
+					   VALUES (?, ?, ?, ?, ?, 'submitted', ?, CURRENT_TIMESTAMP)""",
+					(assessment_id, g.api_user["id"], attempt_no, marks_obtained, percentage, result)
+				)
+				attempt_id = cursor.lastrowid
+				cursor.close()
+				
+				for q_id, selected, is_corr, awarded in answers_to_insert:
+					connection.execute(
+						"INSERT INTO attempt_answers (attempt_id, question_id, selected_option, is_correct, marks_awarded) VALUES (?, ?, ?, ?, ?)",
+						(attempt_id, q_id, selected, is_corr, awarded)
+					)
+					
+				if result == "pass" and assessment["type"] == "post":
+					import string
+					import random
+					cert_uid = "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
+					
+					cursor_cert = connection.execute(
+						"INSERT INTO certificates (student_id, course_id, cert_uid) VALUES (?, ?, ?)",
+						(g.api_user["id"], assessment["course_id"], cert_uid)
+					)
+					certificate_id = cursor_cert.lastrowid
+					cursor_cert.close()
+					
+					connection.execute(
+						"UPDATE course_assignments SET status='certified', completed_at=COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?",
+						(assessment["course_id"], g.api_user["id"])
+					)
+					
+					# 1. Course Certification Reward
+					process_reward_event(
+						connection=connection,
+						user_id=g.api_user["id"],
+						event_name="COURSE_CERTIFICATION",
+						source_reference_id=certificate_id,
+						source_reference_type="CERTIFICATE",
+						description=f"Course Certification - {assessment['course_name']} (Score: {marks_obtained})",
+						input_value=marks_obtained,
+						actor_id=g.api_user["id"]
+					)
+					# 2. Owner Course Reward
+					ref_id = f"CRATE-{assessment['course_id']}-{g.api_user['id']}"
+					process_reward_event(
+						connection=connection,
+						user_id=assessment["course_owner_id"],
+						event_name="COURSE_OWNER_RATING",
+						source_reference_id=ref_id,
+						source_reference_type="COURSE_RATING",
+						description=f"Course Rating received - {assessment['course_name']} (Rating: 5/10)",
+						input_value=5,
+						actor_id=g.api_user["id"]
+					)
+			except Exception as e:
+				return {"error": f"Submission transaction failed: {str(e)}"}, 500
+				
+		return {
+			"message": "Assessment submitted and graded successfully.",
+			"attempt_id": attempt_id,
+			"score": marks_obtained,
+			"total_questions": len(questions),
+			"correct_answers": correct_count,
+			"incorrect_answers": incorrect_count,
+			"percentage": round(percentage, 1),
+			"pass_percentage": assessment["pass_percentage"],
+			"result": result.upper()
+		}, 201
+
+	@app.get("/api/v1/attempts/<int:attempt_id>")
+	@api_required
+	def api_get_attempt(attempt_id):
+		"""Retrieve attempts score scorecard metrics."""
+		from flask import g
+		with get_db() as connection:
+			attempt = connection.execute(
+				"""SELECT a.*, ast.title AS assessment_title, ast.course_id, c.name AS course_name
+				   FROM assessment_attempts a
+				   JOIN assessments ast ON ast.id = a.assessment_id
+				   JOIN courses c ON c.id = ast.course_id
+				   WHERE a.id = ?""",
+				(attempt_id,)
+			).fetchone()
+			if not attempt:
+				return {"error": "Attempt not found."}, 404
+			if g.api_user["role"] not in ("admin", "moderator") and g.api_user["id"] != attempt["student_id"]:
+				return {"error": "Access forbidden: you do not have permission to view this scorecard."}, 403
+				
+			total_q = connection.execute("SELECT COUNT(*) as count FROM attempt_answers WHERE attempt_id = ?", (attempt_id,)).fetchone()
+			correct_q = connection.execute("SELECT COUNT(*) as count FROM attempt_answers WHERE attempt_id = ? AND is_correct = 1", (attempt_id,)).fetchone()
+			incorrect_q = connection.execute("SELECT COUNT(*) as count FROM attempt_answers WHERE attempt_id = ? AND is_correct = 0", (attempt_id,)).fetchone()
+			
+		return {
+			"attempt": dict(attempt),
+			"metrics": {
+				"total_questions": total_q["count"] if total_q else 0,
+				"correct_answers": correct_q["count"] if correct_q else 0,
+				"incorrect_answers": incorrect_q["count"] if incorrect_q else 0
+			}
+		}
+
+	@app.get("/api/v1/attempts/<int:attempt_id>/review")
+	@api_required
+	def api_get_attempt_review(attempt_id):
+		"""Retrieve question-by-question response details (restricted to pass attempts)."""
+		from flask import g
+		with get_db() as connection:
+			attempt = connection.execute("SELECT * FROM assessment_attempts WHERE id = ?", (attempt_id,)).fetchone()
+			if not attempt:
+				return {"error": "Attempt not found."}, 404
+			if g.api_user["role"] not in ("admin", "moderator") and g.api_user["id"] != attempt["student_id"]:
+				return {"error": "Access forbidden: unauthorized attempt access."}, 403
+			if attempt["result"] != "pass":
+				return {"error": "Access forbidden: answer reviews are restricted to passed attempts only."}, 403
+				
+			reviews = connection.execute(
+				"""SELECT q.id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option, q.explanation,
+						  aa.selected_option, aa.is_correct, aa.marks_awarded
+				   FROM questions q
+				   JOIN attempt_answers aa ON aa.question_id = q.id
+				   WHERE aa.attempt_id = ?
+				   ORDER BY q.id""",
+				(attempt_id,)
+			).fetchall()
+			
+		return {
+			"attempt_id": attempt_id,
+			"result": attempt["result"].upper(),
+			"questions": [dict(r) for r in reviews]
+		}
+
+	# ── REWARDS API ──
+
+	@app.get("/api/v1/rewards/balance")
+	@api_required
+	def api_get_reward_balance():
+		"""Retrieve reward wallet points balance cache."""
+		from flask import g
+		with get_db() as connection:
+			wallet = connection.execute("SELECT * FROM user_wallets WHERE user_id = ?", (g.api_user["id"],)).fetchone()
+		if not wallet:
+			return {"user_id": g.api_user["id"], "current_balance": 0, "total_earned": 0, "total_settled": 0, "total_adjusted": 0}
+		return {"wallet": dict(wallet)}
+
+	@app.get("/api/v1/rewards/transactions")
+	@api_required
+	def api_get_reward_transactions():
+		"""Retrieve reward transactions history ledger."""
+		from flask import g
+		with get_db() as connection:
+			txs = connection.execute("SELECT * FROM reward_transactions WHERE user_id = ? ORDER BY id DESC", (g.api_user["id"],)).fetchall()
+		return {"transactions": [dict(t) for t in txs]}
+
+	@app.post("/api/v1/rewards/settle")
+	@api_admin_required
+	def api_settle_rewards():
+		"""Perform admin settlement on user reward points balance."""
+		data = request.get_json() or {}
+		target_user_id = data.get("target_user_id")
+		points = data.get("points")
+		if not target_user_id or points is None or int(points) <= 0:
+			return {"error": "Missing or invalid target_user_id or positive points parameter."}, 400
+		points = int(points)
+		
+		with get_db() as connection:
+			user = connection.execute("SELECT id FROM users WHERE id = ?", (target_user_id,)).fetchone()
+			if not user:
+				return {"error": "User not found."}, 404
+				
+			wallet = connection.execute("SELECT current_balance FROM user_wallets WHERE user_id = ?", (target_user_id,)).fetchone()
+			balance = wallet["current_balance"] if wallet else 0
+			if balance < points:
+				return {"error": f"Insufficient reward balance. User only has {balance} points."}, 400
+				
+			try:
+				connection.execute(
+					"""INSERT INTO reward_transactions (user_id, reward_source, description, points, transaction_type, balance_before, balance_after)
+					   VALUES (?, 'ADMIN_SETTLEMENT', 'Points settled by Administrator', ?, 'DEBIT', ?, ?)""",
+					(target_user_id, points, balance, balance - points)
+				)
+				connection.execute(
+					"UPDATE user_wallets SET current_balance = current_balance - ?, total_settled = total_settled + ? WHERE user_id = ?",
+					(points, points, target_user_id)
+				)
+			except Exception as e:
+				return {"error": f"Settlement transaction failed: {str(e)}"}, 500
+		return {"message": "Rewards settled successfully."}, 200
+
+	@app.post("/api/v1/rewards/adjust")
+	@api_admin_required
+	def api_adjust_rewards():
+		"""Manually adjust user wallet points balance (CREDIT or DEBIT)."""
+		data = request.get_json() or {}
+		target_user_id = data.get("target_user_id")
+		points = data.get("points")
+		description = (data.get("description") or "Balance manual adjustment by Administrator").strip()
+		
+		if not target_user_id or points is None:
+			return {"error": "Missing target_user_id or points parameters."}, 400
+		points = int(points)
+		
+		with get_db() as connection:
+			user = connection.execute("SELECT id FROM users WHERE id = ?", (target_user_id,)).fetchone()
+			if not user:
+				return {"error": "User not found."}, 404
+				
+			connection.execute("INSERT OR IGNORE INTO user_wallets (user_id, current_balance, total_earned, total_settled, total_adjusted) VALUES (?, 0, 0, 0, 0)", (target_user_id,))
+			wallet = connection.execute("SELECT current_balance FROM user_wallets WHERE user_id = ?", (target_user_id,)).fetchone()
+			balance = wallet["current_balance"] if wallet else 0
+			
+			if points < 0 and balance < abs(points):
+				return {"error": f"Cannot deduct {abs(points)} points. Wallet balance is only {balance}."}, 400
+				
+			tx_type = "CREDIT" if points >= 0 else "DEBIT"
+			new_balance = balance + points
+			
+			try:
+				connection.execute(
+					"""INSERT INTO reward_transactions (user_id, reward_source, description, points, transaction_type, balance_before, balance_after)
+					   VALUES (?, 'ADMIN_ADJUSTMENT', ?, ?, ?, ?, ?)""",
+					(target_user_id, description, abs(points), tx_type, balance, new_balance)
+				)
+				connection.execute(
+					"UPDATE user_wallets SET current_balance = ?, total_adjusted = total_adjusted + ? WHERE user_id = ?",
+					(new_balance, points, target_user_id)
+				)
+			except Exception as e:
+				return {"error": f"Adjustment failed: {str(e)}"}, 500
+		return {"message": "Rewards adjusted successfully.", "new_balance": new_balance}, 200
+
+	@app.post("/api/v1/rewards/reset")
+	@api_admin_required
+	def api_reset_rewards():
+		"""Reset user reward balance to zero."""
+		data = request.get_json() or {}
+		target_user_id = data.get("target_user_id")
+		if not target_user_id:
+			return {"error": "Missing target_user_id parameter in request body."}, 400
+			
+		with get_db() as connection:
+			user = connection.execute("SELECT id FROM users WHERE id = ?", (target_user_id,)).fetchone()
+			if not user:
+				return {"error": "User not found."}, 404
+				
+			wallet = connection.execute("SELECT current_balance FROM user_wallets WHERE user_id = ?", (target_user_id,)).fetchone()
+			balance = wallet["current_balance"] if wallet else 0
+			if balance == 0:
+				return {"message": "User balance is already 0."}, 200
+				
+			try:
+				connection.execute(
+					"""INSERT INTO reward_transactions (user_id, reward_source, description, points, transaction_type, balance_before, balance_after)
+					   VALUES (?, 'ADMIN_RESET', 'Rewards wallet reset to zero by Administrator', ?, 'DEBIT', ?, 0)""",
+					(target_user_id, balance, balance)
+				)
+				connection.execute(
+					"UPDATE user_wallets SET current_balance = 0, total_adjusted = total_adjusted - ? WHERE user_id = ?",
+					(balance, target_user_id)
+				)
+			except Exception as e:
+				return {"error": f"Reset operation failed: {str(e)}"}, 500
+		return {"message": "Rewards balance reset to zero successfully."}, 200
 
 	return app
 

@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+
+{% block title %}Developer Tools & API v1 Docs | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto py-4">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div>
+            <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50 mb-2">API v1 Documentation & Playground</h1>
+            <p class="text-slate-500 dark:text-slate-400 text-sm">Explore core LMS functionalities, query statistics, submit answers, and test integrations dynamically.</p>
+        </div>
+        <a href="{{ url_for('admin_panel') }}" class="btn-secondary text-xs px-4 py-2.5 rounded-xl font-bold flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+            Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Credentials Configurator -->
+    <div class="glass-panel p-6 mb-8 border border-indigo-100 dark:border-indigo-950/40 bg-gradient-to-r from-indigo-50/40 to-emerald-50/30 dark:from-slate-950 dark:to-slate-900">
+        <h2 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m-2 4a2 2 0 012 2m-2-4a2 2 0 11-4 0 2 2 0 014 0zM12 18a6 6 0 100-12 6 6 0 000 12z"/></svg>
+            1. Authorize API Requests
+        </h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Input your credentials here to authenticate the live "Try it Out" playground requests. Get your credentials from the Admin settings page.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="form-label text-xs">X-API-Key</label>
+                <input id="global-api-key" type="text" class="form-input text-xs font-mono" placeholder="ak_..." oninput="updateSnippets()">
+            </div>
+            <div>
+                <label class="form-label text-xs">X-API-Secret</label>
+                <input id="global-api-secret" type="password" class="form-input text-xs font-mono" placeholder="as_..." oninput="updateSnippets()">
+            </div>
+        </div>
+    </div>
+
+    <!-- Playground Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <!-- Categories Navigation -->
+        <aside class="lg:col-span-3 space-y-2">
+            <h3 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 mb-3">Categories</h3>
+            <button onclick="scrollToCategory('users-group')" class="w-full text-left px-3 py-2 text-xs font-bold rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 flex items-center justify-between">
+                <span>User Management</span>
+                <span class="bg-slate-200 dark:bg-slate-800 text-[10px] px-1.5 py-0.5 rounded-full text-slate-500">4</span>
+            </button>
+            <button onclick="scrollToCategory('courses-group')" class="w-full text-left px-3 py-2 text-xs font-bold rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 flex items-center justify-between">
+                <span>Courses & Access</span>
+                <span class="bg-slate-200 dark:bg-slate-800 text-[10px] px-1.5 py-0.5 rounded-full text-slate-500">4</span>
+            </button>
+            <button onclick="scrollToCategory('social-group')" class="w-full text-left px-3 py-2 text-xs font-bold rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 flex items-center justify-between">
+                <span>Community & Social</span>
+                <span class="bg-slate-200 dark:bg-slate-800 text-[10px] px-1.5 py-0.5 rounded-full text-slate-500">5</span>
+            </button>
+            <button onclick="scrollToCategory('assess-group')" class="w-full text-left px-3 py-2 text-xs font-bold rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 flex items-center justify-between">
+                <span>Assessments & Grading</span>
+                <span class="bg-slate-200 dark:bg-slate-800 text-[10px] px-1.5 py-0.5 rounded-full text-slate-500">4</span>
+            </button>
+            <button onclick="scrollToCategory('rewards-group')" class="w-full text-left px-3 py-2 text-xs font-bold rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 flex items-center justify-between">
+                <span>Rewards Wallet</span>
+                <span class="bg-slate-200 dark:bg-slate-800 text-[10px] px-1.5 py-0.5 rounded-full text-slate-500">5</span>
+            </button>
+        </aside>
+
+        <!-- API List / Playground Cards -->
+        <main class="lg:col-span-9 space-y-12">
+            <!-- ─── USERS CATEGORY ─── -->
+            <section id="users-group" class="space-y-4">
+                <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">User Management</h2>
+                
+                <!-- GET /api/v1/users -->
+                {{ render_api_card("GET", "/api/v1/users", "List all system users.", "staff", [], None) }}
+                
+                <!-- POST /api/v1/users -->
+                {{ render_api_card("POST", "/api/v1/users", "Create a new user profile.", "admin", [], '{\n  "username": "developer.jane",\n  "full_name": "Jane Developer",\n  "password": "securepassword123",\n  "role": "basic user"\n}') }}
+
+                <!-- GET /api/v1/users/{user_id} -->
+                {{ render_api_card("GET", "/api/v1/users/{user_id}", "Retrieve details of a user by ID.", "self-admin", [{"name": "user_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+
+                <!-- GET /api/v1/users/{user_id}/download -->
+                {{ render_api_card("GET", "/api/v1/users/{user_id}/download", "Download learning progress, certificate records and points balance history.", "self-admin", [{"name": "user_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+            </section>
+
+            <!-- ─── COURSES CATEGORY ─── -->
+            <section id="courses-group" class="space-y-4">
+                <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">Courses & Access</h2>
+                
+                <!-- GET /api/v1/courses -->
+                {{ render_api_card("GET", "/api/v1/courses", "List all courses visible to you.", "auth", [], None) }}
+
+                <!-- POST /api/v1/courses -->
+                {{ render_api_card("POST", "/api/v1/courses", "Create a new course.", "staff", [], '{\n  "name": "Cloud Native Integrations",\n  "description": "Learn to connect REST APIs dynamically.",\n  "category": "Technology",\n  "content_type": "URL",\n  "content_url": "https://example.com/docs/api",\n  "status": "DRAFT"\n}') }}
+
+                <!-- GET /api/v1/courses/{course_id} -->
+                {{ render_api_card("GET", "/api/v1/courses/{course_id}", "Retrieve course details, content links, and associated assessments.", "auth", [{"name": "course_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+
+                <!-- POST /api/v1/courses/{course_id}/assign -->
+                {{ render_api_card("POST", "/api/v1/courses/{course_id}/assign", "Assign a course to a student.", "staff", [{"name": "course_id", "type": "path", "required": true, "placeholder": "1"}], '{\n  "student_id": 2\n}') }}
+            </section>
+
+            <!-- ─── SOCIAL FEED CATEGORY ─── -->
+            <section id="social-group" class="space-y-4">
+                <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">Community & Social Feed</h2>
+                
+                <!-- GET /api/v1/posts -->
+                {{ render_api_card("GET", "/api/v1/posts", "List published community posts. Supports optional query filters.", "auth", [{"name": "category", "type": "query", "required": false, "placeholder": "General"}], None) }}
+
+                <!-- POST /api/v1/posts -->
+                {{ render_api_card("POST", "/api/v1/posts", "Create a new community post. Auto-approved for staff/admin, pending for students.", "auth", [], '{\n  "title": "Unlocking API Capabilities",\n  "description": "Exposing REST endpoints for custom applications.",\n  "content_type": "Text/Article",\n  "category": "API",\n  "topic_tag": "api,dev",\n  "content_url": ""\n}') }}
+
+                <!-- GET /api/v1/posts/{post_id} -->
+                {{ render_api_card("GET", "/api/v1/posts/{post_id}", "Retrieve post details along with comments and ratings.", "auth", [{"name": "post_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+
+                <!-- POST /api/v1/posts/{post_id}/rate -->
+                {{ render_api_card("POST", "/api/v1/posts/{post_id}/rate", "Submit a 1-5 star rating on a post (triggers voter and author points).", "auth", [{"name": "post_id", "type": "path", "required": true, "placeholder": "1"}], '{\n  "rating": 5\n}') }}
+
+                <!-- POST /api/v1/posts/{post_id}/comment -->
+                {{ render_api_card("POST", "/api/v1/posts/{post_id}/comment", "Add a comment to a community post.", "auth", [{"name": "post_id", "type": "path", "required": true, "placeholder": "1"}], '{\n  "comment": "This endpoint playground is amazing!"\n}') }}
+            </section>
+
+            <!-- ─── ASSESSMENTS CATEGORY ─── -->
+            <section id="assess-group" class="space-y-4">
+                <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">Assessments & Grading</h2>
+                
+                <!-- GET /api/v1/assessments/{assessment_id} -->
+                {{ render_api_card("GET", "/api/v1/assessments/{assessment_id}", "Retrieve details and questions of an assessment (correct options hidden for students).", "auth", [{"name": "assessment_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+
+                <!-- POST /api/v1/assessments/{assessment_id}/submit -->
+                {{ render_api_card("POST", "/api/v1/assessments/{assessment_id}/submit", "Submit assessment answers for grading. Triggers certification and rewards upon pass.", "auth", [{"name": "assessment_id", "type": "path", "required": true, "placeholder": "1"}], '{\n  "answers": {\n    "1": "A",\n    "2": "C"\n  }\n}') }}
+
+                <!-- GET /api/v1/attempts/{attempt_id} -->
+                {{ render_api_card("GET", "/api/v1/attempts/{attempt_id}", "Retrieve scorecard metrics for a specific attempt.", "self-admin", [{"name": "attempt_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+
+                <!-- GET /api/v1/attempts/{attempt_id}/review -->
+                {{ render_api_card("GET", "/api/v1/attempts/{attempt_id}/review", "Retrieve full question-by-question comparative details (restricted to passed attempts).", "self-admin", [{"name": "attempt_id", "type": "path", "required": true, "placeholder": "1"}], None) }}
+            </section>
+
+            <!-- ─── REWARDS CATEGORY ─── -->
+            <section id="rewards-group" class="space-y-4">
+                <h2 class="text-lg font-bold border-b border-slate-200 dark:border-slate-800 pb-2 text-slate-900 dark:text-slate-100">Rewards Wallet & Ledger</h2>
+                
+                <!-- GET /api/v1/rewards/balance -->
+                {{ render_api_card("GET", "/api/v1/rewards/balance", "Retrieve your current wallet reward balance cache.", "auth", [], None) }}
+
+                <!-- GET /api/v1/rewards/transactions -->
+                {{ render_api_card("GET", "/api/v1/rewards/transactions", "Retrieve your reward transaction history log.", "auth", [], None) }}
+
+                <!-- POST /api/v1/rewards/settle -->
+                {{ render_api_card("POST", "/api/v1/rewards/settle", "Deduct points from user balance for settlement (debit).", "admin", [], '{\n  "target_user_id": 2,\n  "points": 50\n}') }}
+
+                <!-- POST /api/v1/rewards/adjust -->
+                {{ render_api_card("POST", "/api/v1/rewards/adjust", "Manually adjust balance with credit or debit points.", "admin", [], '{\n  "target_user_id": 2,\n  "points": 100,\n  "description": "Bonus for completing technical training session."\n}') }}
+
+                <!-- POST /api/v1/rewards/reset -->
+                {{ render_api_card("POST", "/api/v1/rewards/reset", "Reset user balance to zero.", "admin", [], '{\n  "target_user_id": 2\n}') }}
+            </section>
+        </main>
+    </div>
+</div>
+
+<!-- Macros for standard card rendering -->
+{% macro render_api_card(method, path, description, permission, params, body_schema) %}
+<div class="glass-panel p-0 overflow-hidden border border-slate-200 dark:border-slate-800/80 rounded-2xl mb-4 group" id="card-{{ method }}-{{ path|replace('/', '-')|replace('{', '')|replace('}', '') }}">
+    <!-- Card Header -->
+    <div class="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer select-none bg-slate-50/50 dark:bg-slate-900/10 hover:bg-slate-100/50 dark:hover:bg-white/5 transition" onclick="toggleCardBody('{{ method }}-{{ path|replace('/', '-')|replace('{', '')|replace('}', '') }}')">
+        <div class="flex items-center gap-3">
+            <span class="px-3 py-1 text-xs font-extrabold uppercase rounded-lg tracking-wider text-white shadow-sm
+                {% if method == 'GET' %}bg-sky-500
+                {% elif method == 'POST' %}bg-emerald-500
+                {% elif method == 'PUT' %}bg-amber-500
+                {% else %}bg-rose-500{% endif %}">
+                {{ method }}
+            </span>
+            <span class="font-mono text-sm font-bold text-slate-800 dark:text-slate-200">{{ path }}</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider
+                {% if permission == 'admin' %}bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400
+                {% elif permission == 'staff' %}bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400
+                {% elif permission == 'self-admin' %}bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400
+                {% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+                Role: {{ permission|title }}
+            </span>
+            <svg class="w-4 h-4 text-slate-400 transform transition-transform duration-200 arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+    </div>
+
+    <!-- Expanded Body (Hidden by Default) -->
+    <div id="body-{{ method }}-{{ path|replace('/', '-')|replace('{', '')|replace('}', '') }}" class="hidden p-6 border-t border-slate-100 dark:border-slate-800/60 bg-white/20 dark:bg-slate-950/10 space-y-6">
+        <p class="text-sm text-slate-600 dark:text-slate-400">{{ description }}</p>
+
+        <!-- Parameters form -->
+        {% if params %}
+        <div>
+            <h4 class="text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Parameters</h4>
+            <div class="space-y-3">
+                {% for p in params %}
+                <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                    <span class="w-32 font-mono text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <span class="font-bold">{{ p.name }}</span>
+                        {% if p.required %}<span class="text-red-500">*</span>{% endif %}
+                    </span>
+                    <input type="text" data-param-name="{{ p.name }}" data-param-type="{{ p.type }}" class="form-input text-xs font-mono max-w-sm" placeholder="{{ p.placeholder }}" value="{{ p.placeholder }}">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Body Payload Textarea -->
+        {% if body_schema %}
+        <div>
+            <h4 class="text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Request Body (JSON)</h4>
+            <textarea data-body-payload class="form-input text-xs font-mono h-32 w-full p-3 bg-slate-900 text-slate-200 border-none rounded-xl" placeholder="JSON input">{{ body_schema }}</textarea>
+        </div>
+        {% endif %}
+
+        <!-- Integration Tabs (Curl / Python / Live Console) -->
+        <div class="border border-slate-200 dark:border-slate-800/80 rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-900/20">
+            <div class="flex border-b border-slate-200 dark:border-slate-800/60 text-xs font-semibold bg-slate-100/50 dark:bg-slate-950/40">
+                <button class="px-4 py-2 border-r border-slate-200 dark:border-slate-800/60 active-tab-btn" onclick="switchSnippetTab(this, 'curl')">cURL</button>
+                <button class="px-4 py-2 border-r border-slate-200 dark:border-slate-800/60" onclick="switchSnippetTab(this, 'python')">Python</button>
+                <button class="px-4 py-2 ml-auto text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/20" onclick="executeApiCall('{{ method }}', '{{ path }}', this)">Send Request</button>
+            </div>
+            
+            <!-- Code Block display -->
+            <div class="p-4 bg-slate-900 dark:bg-slate-950/80 font-mono text-[11px] text-slate-200 overflow-x-auto select-all snippet-container">
+                <pre class="snippet-curl">Generating snippet...</pre>
+                <pre class="snippet-python hidden">Generating snippet...</pre>
+            </div>
+        </div>
+
+        <!-- Response Console -->
+        <div class="hidden response-console border border-slate-200 dark:border-slate-800/80 rounded-2xl overflow-hidden">
+            <div class="flex justify-between items-center px-4 py-2 border-b border-slate-200 dark:border-slate-800/60 bg-slate-100/50 dark:bg-slate-950/40 text-xs font-semibold">
+                <span class="text-slate-500">Response Status: <span class="status-badge font-bold">---</span></span>
+                <button class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-[10px]" onclick="clearConsole(this)">Clear</button>
+            </div>
+            <pre class="p-4 bg-slate-900 dark:bg-slate-950 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-80 select-all response-pre"></pre>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+<script>
+function toggleCardBody(id) {
+    const body = document.getElementById('body-' + id);
+    const card = document.getElementById('card-' + id);
+    const arrow = card.querySelector('.arrow-icon');
+    
+    body.classList.toggle('hidden');
+    arrow.classList.toggle('rotate-180');
+    
+    if (!body.classList.contains('hidden')) {
+        updateSnippetsForCard(card);
+    }
+}
+
+function scrollToCategory(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function switchSnippetTab(btn, mode) {
+    const parent = btn.closest('.overflow-hidden');
+    parent.querySelectorAll('.active-tab-btn').forEach(b => b.classList.remove('active-tab-btn', 'border-b-2', 'border-indigo-500'));
+    btn.classList.add('active-tab-btn', 'border-b-2', 'border-indigo-500');
+    
+    const curlPre = parent.querySelector('.snippet-curl');
+    const pyPre = parent.querySelector('.snippet-python');
+    
+    if (mode === 'curl') {
+        curlPre.classList.remove('hidden');
+        pyPre.classList.add('hidden');
+    } else {
+        curlPre.classList.add('hidden');
+        pyPre.classList.remove('hidden');
+    }
+}
+
+function updateSnippets() {
+    document.querySelectorAll('.group').forEach(card => {
+        const body = card.querySelector('div[id^="body-"]');
+        if (body && !body.classList.contains('hidden')) {
+            updateSnippetsForCard(card);
+        }
+    });
+}
+
+function updateSnippetsForCard(card) {
+    const idParts = card.id.replace('card-', '').split('-');
+    const method = idParts[0];
+    // Reconstruct route from parameters if input
+    let path = card.querySelector('.font-mono').innerText;
+    
+    // Read input parameters
+    card.querySelectorAll('input[data-param-type="path"]').forEach(input => {
+        path = path.replace(`{${input.dataset.paramName}}`, input.value || `{${input.dataset.paramName}}`);
+    });
+    
+    const key = document.getElementById('global-api-key').value || 'YOUR_API_KEY';
+    const secret = document.getElementById('global-api-secret').value || 'YOUR_API_SECRET';
+    const domain = window.location.origin;
+    
+    // Read payload
+    const bodyArea = card.querySelector('[data-body-payload]');
+    const payload = bodyArea ? bodyArea.value.trim() : null;
+    
+    // cURL Snippet
+    let curl = `curl -X ${method} "${domain}${path}" \\\n  -H "X-API-Key: ${key}" \\\n  -H "X-API-Secret: ${secret}"`;
+    if (payload && method === 'POST') {
+        curl += ` \\\n  -H "Content-Type: application/json" \\\n  -d '${payload.replace(/'/g, "'\\''")}'`;
+    }
+    card.querySelector('.snippet-curl').innerText = curl;
+    
+    // Python Snippet
+    let py = `import requests\n\nurl = "${domain}${path}"\nheaders = {\n    "X-API-Key": "${key}",\n    "X-API-Secret": "${secret}"\n}`;
+    if (payload && method === 'POST') {
+        py += `\nheaders["Content-Type"] = "application/json"\ndata = ${payload}\nresponse = requests.post(url, json=data, headers=headers)`;
+    } else {
+        py += `\nresponse = requests.${method.toLowerCase()}(url, headers=headers)`;
+    }
+    py += `\n\nprint(response.status_code)\nprint(response.json())`;
+    card.querySelector('.snippet-python').innerText = py;
+}
+
+function executeApiCall(method, templatePath, btn) {
+    const card = btn.closest('.group');
+    const consoleDiv = card.querySelector('.response-console');
+    const statusSpan = consoleDiv.querySelector('.status-badge');
+    const pre = consoleDiv.querySelector('.response-pre');
+    
+    // Fetch input parameters
+    let path = templatePath;
+    let queryParams = new URLSearchParams();
+    
+    card.querySelectorAll('input[data-param-type="path"]').forEach(input => {
+        path = path.replace(`{${input.dataset.paramName}}`, input.value || `{${input.dataset.paramName}}`);
+    });
+    
+    card.querySelectorAll('input[data-param-type="query"]').forEach(input => {
+        if (input.value) {
+            queryParams.append(input.dataset.paramName, input.value);
+        }
+    });
+    
+    const queryString = queryParams.toString();
+    const finalUrl = path + (queryString ? '?' + queryString : '');
+    
+    // Read credentials
+    const key = document.getElementById('global-api-key').value;
+    const secret = document.getElementById('global-api-secret').value;
+    
+    const headers = {
+        'X-API-Key': key,
+        'X-API-Secret': secret
+    };
+    
+    const options = {
+        method: method,
+        headers: headers
+    };
+    
+    // Read request body payload if present
+    const bodyArea = card.querySelector('[data-body-payload]');
+    if (bodyArea && method === 'POST') {
+        headers['Content-Type'] = 'application/json';
+        options.body = bodyArea.value;
+    }
+    
+    // Loading State
+    btn.innerText = 'Sending...';
+    btn.disabled = true;
+    
+    fetch(finalUrl, options)
+        .then(res => {
+            statusSpan.innerText = `${res.status} ${res.statusText}`;
+            statusSpan.className = 'status-badge font-bold ' + 
+                (res.status >= 200 && res.status < 300 ? 'text-green-500' : 'text-red-500');
+            return res.json().catch(() => ({}));
+        })
+        .then(json => {
+            consoleDiv.classList.remove('hidden');
+            pre.innerText = JSON.stringify(json, null, 2);
+            pre.className = 'p-4 bg-slate-900 dark:bg-slate-950 font-mono text-[11px] overflow-x-auto max-h-80 select-all response-pre text-green-400';
+        })
+        .catch(err => {
+            consoleDiv.classList.remove('hidden');
+            statusSpan.innerText = 'Error';
+            statusSpan.className = 'status-badge font-bold text-red-500';
+            pre.innerText = err.message;
+            pre.className = 'p-4 bg-slate-900 dark:bg-slate-950 font-mono text-[11px] overflow-x-auto max-h-80 select-all response-pre text-red-400';
+        })
+        .finally(() => {
+            btn.innerText = 'Send Request';
+            btn.disabled = false;
+        });
+}
+
+function clearConsole(btn) {
+    const parent = btn.closest('.response-console');
+    parent.classList.add('hidden');
+    parent.querySelector('.response-pre').innerText = '';
+}
+</script>
+{% endblock %}
