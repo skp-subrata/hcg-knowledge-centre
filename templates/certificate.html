@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="max-w-5xl mx-auto py-4">
-    <div class="glass-panel p-8 md:p-12 border-4 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-yellow-50 via-white to-emerald-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 shadow-[0_20px_60px_rgba(251,191,36,0.20)]">
+    <div id="certificate-card" class="glass-panel p-8 md:p-12 border-4 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-yellow-50 via-white to-emerald-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 shadow-[0_20px_60px_rgba(251,191,36,0.20)]">
         <div class="text-center">
             <div class="inline-flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-4 py-2 text-xs font-bold uppercase tracking-[0.35em] text-amber-800 dark:text-amber-200">Certificate of Completion</div>
             <div class="mt-8 text-4xl md:text-5xl font-black tracking-tight text-slate-900 dark:text-slate-50">HCG Academy</div>
@@ -47,10 +47,76 @@
             </div>
         </div>
 
-        <div class="mt-12 flex flex-col sm:flex-row justify-center gap-4">
+        <div data-html2canvas-ignore="true" class="mt-12 flex flex-col sm:flex-row justify-center gap-4">
             <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn-secondary px-6 py-3 rounded-full">Review Course</a>
-            <a href="{{ url_for('download_certificate', course_id=course.id) }}" class="btn-primary px-6 py-3 rounded-full">Download Certificate</a>
+            <button id="download-pdf-btn" class="btn-primary px-6 py-3 rounded-full font-bold shadow-md hover:shadow-lg transition">Download Certificate</button>
         </div>
     </div>
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const downloadBtn = document.getElementById("download-pdf-btn");
+    if (downloadBtn) {
+        downloadBtn.addEventListener("click", function() {
+            const element = document.getElementById("certificate-card");
+            
+            // Clean filename by replacing problematic characters
+            const cleanName = "{{ course.name }}".replace(/[^a-zA-Z0-9]/g, "_").replace(/__+/g, "_");
+            const filename = `Certificate_${cleanName}.pdf`;
+            
+            const opt = {
+                margin:       0.2,
+                filename:     filename,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2.5, useCORS: true },
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' }
+            };
+            
+            // Temporarily disable dark mode on html element to print clean white bg
+            const htmlElement = document.documentElement;
+            const isDark = htmlElement.classList.contains("dark");
+            if (isDark) {
+                htmlElement.classList.remove("dark");
+            }
+            
+            // Apply a temporary white bg style on the card to ensure high quality print matching yellow/emerald gradient
+            const originalStyle = element.getAttribute("style") || "";
+            element.style.color = "#0f172a"; // force slate-900 color for text visibility
+            
+            // Show loading state
+            const originalText = downloadBtn.innerHTML;
+            downloadBtn.innerText = "Generating PDF...";
+            downloadBtn.disabled = true;
+            
+            html2pdf().set(opt).from(element).save().then(() => {
+                // Restore original styling
+                if (isDark) {
+                    htmlElement.classList.add("dark");
+                }
+                element.setAttribute("style", originalStyle);
+                downloadBtn.innerHTML = originalText;
+                downloadBtn.disabled = false;
+            }).catch(err => {
+                console.error("PDF generation failed:", err);
+                if (isDark) {
+                    htmlElement.classList.add("dark");
+                }
+                element.setAttribute("style", originalStyle);
+                downloadBtn.innerHTML = originalText;
+                downloadBtn.disabled = false;
+                alert("Failed to download certificate as PDF. Try again.");
+            });
+        });
+        
+        {% if download_mode %}
+        // Automatically start the download if directed from download route
+        setTimeout(() => {
+            downloadBtn.click();
+        }, 1000);
+        {% endif %}
+    }
+});
+</script>
 {% endblock %}
