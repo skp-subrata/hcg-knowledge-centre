@@ -74,23 +74,42 @@
                 <div>
                     <label class="form-label">Course</label>
                     <select name="course_id" class="form-input" required>
-                        {% for item in courses %}
+                        <option value="" disabled selected>Select a Course</option>
+                        {% for item in assignable_courses %}
                         <option value="{{ item.id }}">#{{ item.id }} - {{ item.name }}</option>
                         {% else %}
-                        <option disabled>No courses</option>
+                        <option disabled>No eligible courses</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Student</label>
-                    <select name="student_id" class="form-input" required>
-                        {% for item in students %}
-                        <option value="{{ item.id }}">{{ item.full_name }}</option>
-                        {% else %}
-                        <option disabled>No students</option>
-                        {% endfor %}
-                    </select>
-                </div>
+    <label class="form-label">Assign To</label>
+    <div class="flex items-center gap-4 mb-2">
+        <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="radio" name="assignment_type" value="individual" checked onchange="document.getElementById('student_select').style.display='block'; document.getElementById('group_select').style.display='none'; document.getElementById('student_id_input').required=true; document.getElementById('group_id_input').required=false;"> Individual</label>
+        <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="radio" name="assignment_type" value="group" onchange="document.getElementById('student_select').style.display='none'; document.getElementById('group_select').style.display='block'; document.getElementById('student_id_input').required=false; document.getElementById('group_id_input').required=true;"> Group</label>
+    </div>
+</div>
+<div id="student_select">
+    <label class="form-label">Student</label>
+    <select name="student_id" id="student_id_input" class="form-input" required>
+        {% for item in students %}
+        <option value="{{ item.id }}">{{ item.full_name }}</option>
+        {% else %}
+        <option disabled>No students</option>
+        {% endfor %}
+    </select>
+</div>
+<div id="group_select" style="display: none;">
+    <label class="form-label">Group</label>
+    <select name="group_id" id="group_id_input" class="form-input">
+        <option value="" disabled selected>Select Group</option>
+        {% for item in groups %}
+        <option value="{{ item.id }}">{{ item.name }}</option>
+        {% else %}
+        <option disabled>No groups</option>
+        {% endfor %}
+    </select>
+</div>
             </div>
             <button class="btn-primary w-full mt-6 flex justify-center py-3.5" title="Assign Course"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg></button>
         </form>

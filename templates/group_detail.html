@@ -111,6 +111,64 @@
 </section>
 
 <section class="glass-panel p-6 mt-8">
+    <div class="flex justify-between items-center mb-5">
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-slate-50">Moderators</h2>
+        {% if role == 'admin' %}
+        <form method="post" action="{{ url_for('add_group_moderator', group_id=group.id) }}" class="flex gap-2">
+            <select name="moderator_id" class="form-input text-sm" required>
+                <option value="" disabled selected>Select Moderator</option>
+                {% for mod in eligible_moderators %}
+                <option value="{{ mod.id }}">{{ mod.full_name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn-primary px-4 py-2 text-sm rounded-lg">Add</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b border-slate-200 dark:border-slate-800">
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Moderator</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Role</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Assigned Date</th>
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Status</th>
+                    {% if role == 'admin' %}
+                    <th class="p-3 font-bold text-slate-500 uppercase text-xs text-right">Action</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for mod in moderators %}
+                <tr class="border-b border-slate-200 dark:border-slate-800">
+                    <td class="p-3 text-slate-800 dark:text-slate-200">{{ mod.full_name }}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">Moderator</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ mod.assigned_at.split(' ')[0] }}</td>
+                    <td class="p-3">
+                        <span class="px-2 py-1 rounded-full text-xs font-medium {% if mod.status|lower == 'active' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300{% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400{% endif %}">
+                            {{ mod.status }}
+                        </span>
+                    </td>
+                    {% if role == 'admin' %}
+                    <td class="p-3 flex justify-end gap-3">
+                        <form method="post" action="{{ url_for('toggle_group_moderator', group_id=group.id, user_id=mod.user_id) }}">
+                            <button class="text-indigo-600 dark:text-indigo-400 font-medium text-sm">Toggle Status</button>
+                        </form>
+                        <form method="post" action="{{ url_for('remove_group_moderator', group_id=group.id, user_id=mod.user_id) }}">
+                            <button class="text-red-600 dark:text-red-400 font-medium text-sm">Remove</button>
+                        </form>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="p-5 text-center text-slate-500 dark:text-slate-400">No moderators assigned.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="glass-panel p-6 mt-8">
     <h2 class="text-2xl font-semibold mb-5 text-slate-900 dark:text-slate-50">Assigned Courses</h2>
     <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">

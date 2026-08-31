@@ -149,6 +149,16 @@ def init_db():
 			)
 		""")
 		connection.execute("""
+			CREATE TABLE IF NOT EXISTS group_moderators (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				status TEXT DEFAULT 'Active',
+				assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(group_id, user_id)
+			)
+		""")
+		connection.execute("""
 			CREATE TABLE IF NOT EXISTS groups (
 				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -976,14 +986,26 @@ def create_app():
 			flash("Group created successfully.")
 			return redirect(url_for("groups_page"))
 		with get_db() as connection:
-			groups = connection.execute("""
-				SELECT g.*, u.full_name AS creator_name,
-				(SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS member_count,
-				(SELECT COUNT(DISTINCT gca.course_id) FROM group_course_assignments gca WHERE gca.group_id = g.id) AS course_count
-				FROM groups g
-				JOIN users u ON u.id = g.created_by
-				ORDER BY g.id DESC
-			""").fetchall()
+			if session.get("role") == "admin":
+				groups = connection.execute("""
+					SELECT g.*, u.full_name AS creator_name,
+					(SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS member_count,
+					(SELECT COUNT(DISTINCT gca.course_id) FROM group_course_assignments gca WHERE gca.group_id = g.id) AS course_count
+					FROM groups g
+					JOIN users u ON u.id = g.created_by
+					ORDER BY g.id DESC
+				""").fetchall()
+			else:
+				groups = connection.execute("""
+					SELECT g.*, u.full_name AS creator_name,
+					(SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS member_count,
+					(SELECT COUNT(DISTINCT gca.course_id) FROM group_course_assignments gca WHERE gca.group_id = g.id) AS course_count
+					FROM groups g
+					JOIN group_moderators gmod ON g.id = gmod.group_id
+					JOIN users u ON u.id = g.created_by
+					WHERE gmod.user_id = ? AND gmod.status = 'Active'
+					ORDER BY g.id DESC
+				""", (session["user_id"],)).fetchall()
 			users = connection.execute("SELECT id, full_name, username, role, employee_id, department, location, COALESCE(is_active, 1) AS is_active FROM users ORDER BY full_name").fetchall()
 		return render_template("groups.html", groups=groups, users=users, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
@@ -1020,7 +1042,50 @@ def create_app():
 			certified_count = connection.execute("SELECT COUNT(DISTINCT cc.user_id) AS certified FROM course_certifications cc JOIN group_members gm ON gm.user_id = cc.user_id WHERE gm.group_id = ? AND cc.certification_status = 'CERTIFIED'", (group_id,)).fetchone()["certified"]
 			user_count = len(members)
 			course_count = len(assigned_courses)
-		return render_template("group_detail.html", group=group, members=members, assigned_courses=assigned_courses, all_courses=all_courses, user_count=user_count, course_count=course_count, overall_progress=overall_progress, certified_count=certified_count, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+			moderators = connection.execute("""
+				SELECT gm.id, u.id AS user_id, u.full_name, u.role, gm.assigned_at, gm.status
+				FROM group_moderators gm
+				JOIN users u ON u.id = gm.user_id
+				WHERE gm.group_id = ?
+				ORDER BY u.full_name
+			""", (group_id,)).fetchall()
+			eligible_moderators = connection.execute("SELECT id, full_name FROM users WHERE role = 'moderator' AND id NOT IN (SELECT user_id FROM group_moderators WHERE group_id = ?) ORDER BY full_name", (group_id,)).fetchall()
+		return render_template("group_detail.html", group=group, members=members, moderators=moderators, eligible_moderators=eligible_moderators, assigned_courses=assigned_courses, all_courses=all_courses, user_count=user_count, course_count=course_count, overall_progress=overall_progress, certified_count=certified_count, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+
+	@app.post("/groups/<int:group_id>/moderators")
+	@admin_required
+	def add_group_moderator(group_id):
+		"""Add a moderator to the group."""
+		user_id = request.form.get("moderator_id")
+		if user_id:
+			with get_db() as connection:
+				try:
+					connection.execute("INSERT INTO group_moderators (group_id, user_id) VALUES (?, ?)", (group_id, int(user_id)))
+					flash("Moderator added to group.")
+				except Exception:
+					flash("Could not add moderator.")
+		return redirect(url_for("group_detail", group_id=group_id))
+
+	@app.post("/groups/<int:group_id>/moderators/<int:user_id>/remove")
+	@admin_required
+	def remove_group_moderator(group_id, user_id):
+		"""Remove a moderator from the group."""
+		with get_db() as connection:
+			connection.execute("DELETE FROM group_moderators WHERE group_id = ? AND user_id = ?", (group_id, user_id))
+			flash("Moderator removed.")
+		return redirect(url_for("group_detail", group_id=group_id))
+
+	@app.post("/groups/<int:group_id>/moderators/<int:user_id>/toggle")
+	@admin_required
+	def toggle_group_moderator(group_id, user_id):
+		"""Activate or deactivate a moderator."""
+		with get_db() as connection:
+			mod = connection.execute("SELECT status FROM group_moderators WHERE group_id = ? AND user_id = ?", (group_id, user_id)).fetchone()
+			if mod:
+				new_status = 'Inactive' if mod['status'].lower() == 'active' else 'Active'
+				connection.execute("UPDATE group_moderators SET status = ? WHERE group_id = ? AND user_id = ?", (new_status, group_id, user_id))
+				flash(f"Moderator status updated to {new_status}.")
+		return redirect(url_for("group_detail", group_id=group_id))
 
 	@app.post("/groups/<int:group_id>/members")
 	@staff_required
@@ -1359,6 +1424,11 @@ def create_app():
 							if not group:
 								flash("Select a valid group.")
 								return redirect(url_for("admin_panel"))
+							if session.get("role") != "admin":
+								is_mod = connection.execute("SELECT 1 FROM group_moderators WHERE group_id = ? AND user_id = ? AND status = 'Active'", (group_id, session["user_id"])).fetchone()
+								if not is_mod:
+									flash("You can only assign courses to groups you moderate.")
+									return redirect(url_for("admin_panel"))
 							members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ? ORDER BY user_id", (group_id,)).fetchall()
 							for member in members:
 								user_id = member["user_id"]
@@ -1405,9 +1475,14 @@ def create_app():
 			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
 			banks = connection.execute("SELECT * FROM question_banks ORDER BY id DESC").fetchall()
 			assessments = connection.execute("SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY a.id DESC", (session["user_id"], session["user_id"])).fetchall()
-			groups = connection.execute("SELECT * FROM groups ORDER BY id DESC").fetchall()
+			if session.get("role") == "admin":
+				groups = connection.execute("SELECT * FROM groups ORDER BY id DESC").fetchall()
+			else:
+				groups = connection.execute("SELECT g.* FROM groups g JOIN group_moderators gm ON g.id = gm.group_id WHERE gm.user_id = ? AND gm.status = 'Active' ORDER BY g.id DESC", (session["user_id"],)).fetchall()
 			api_creds = connection.execute("SELECT ac.*, u.username, u.full_name, u.role FROM api_credentials ac JOIN users u ON u.id = ac.user_id ORDER BY ac.id DESC").fetchall()
-		return render_template("admin.html", users=users, courses=courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+			
+			assignable_courses = connection.execute("SELECT id, name FROM courses WHERE status = 'published' ORDER BY name").fetchall()
+		return render_template("admin.html", users=users, courses=courses, assignable_courses=assignable_courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.route("/assessments/<int:assessment_id>", methods=["GET", "POST"])
 	def assessment(assessment_id):
