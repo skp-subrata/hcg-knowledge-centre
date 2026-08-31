@@ -715,7 +715,7 @@ def course_is_visible(connection, course_id, user_id):
 
 def course_is_manageable(connection, course_id, user_id, role):
 	"""Return whether a staff user may manage a course."""
-	return role in ("admin", "moderator") or connection.execute("SELECT 1 FROM courses WHERE id = ? AND created_by = ?", (course_id, user_id)).fetchone() is not None
+	return role == "admin" or connection.execute("SELECT 1 FROM courses WHERE id = ? AND created_by = ?", (course_id, user_id)).fetchone() is not None
 
 
 def get_course_status_label(value):
@@ -1401,10 +1401,7 @@ def create_app():
 
 		with get_db() as connection:
 			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, COALESCE(GROUP_CONCAT(ca.course_id), '') AS course_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
-			if session.get("role") == "admin" or session.get("role") == "moderator":
-				courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by ORDER BY c.id DESC").fetchall()
-			else:
-				courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (session["user_id"], session["user_id"])).fetchall()
+			courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (session["user_id"], session["user_id"])).fetchall()
 			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
 			banks = connection.execute("SELECT * FROM question_banks ORDER BY id DESC").fetchall()
 			assessments = connection.execute("SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY a.id DESC", (session["user_id"], session["user_id"])).fetchall()
