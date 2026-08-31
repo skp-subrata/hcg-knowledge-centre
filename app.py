@@ -1439,6 +1439,11 @@ def create_app():
 								user = connection.execute("SELECT full_name FROM users WHERE id = ?", (user_id,)).fetchone()
 								if user and not user_has_course_access(connection, user_id, course_id):
 									connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (course_id, user_id))
+									if user_id != session.get("user_id"):
+										try:
+											_c_name = connection.execute("SELECT name FROM courses WHERE id=?", (course_id,)).fetchone()["name"]
+											create_notification(connection, user_id, f"You have been assigned a new course: {_c_name}", "course_assigned", url_for("course_detail", course_id=course_id))
+										except Exception: pass
 									connection.execute(
 										"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) SELECT ?, c.name, u.id, u.full_name, 'Group', ?, g.name, ?, ?, 'assigned', 'new' FROM users u JOIN courses c ON c.id = ? JOIN groups g ON g.id = ? WHERE u.id = ?",
 										(course_id, group_id, session["user_id"], session["user"], course_id, group_id, user_id),
@@ -1457,6 +1462,11 @@ def create_app():
 							user = connection.execute("SELECT full_name FROM users WHERE id = ?", (user_id,)).fetchone()
 							if user and not user_has_course_access(connection, user_id, course_id):
 								connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (course_id, user_id))
+								if user_id != session.get("user_id"):
+									try:
+										_c_name = connection.execute("SELECT name FROM courses WHERE id=?", (course_id,)).fetchone()["name"]
+										create_notification(connection, user_id, f"You have been assigned a new course: {_c_name}", "course_assigned", url_for("course_detail", course_id=course_id))
+									except Exception: pass
 								connection.execute(
 									"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', NULL, NULL, ?, ?, 'assigned', 'new')",
 									(course_id, course_name, user_id, user["full_name"], session["user_id"], session["user"]),
@@ -1763,6 +1773,9 @@ def create_app():
 					"INSERT INTO course_certifications (user_id, course_id, user_name, course_name, course_start_date, course_completion_date, assessment_score, pass_mark, assessment_attempts, latest_assessment_status, feedback_rating, feedback_comments, feedback_submitted_at, certificate_id, certificate_generated_at, badge, certification_status) VALUES (?, ?, ?, ?, DATE('now'), DATE('now'), ?, ?, (SELECT COUNT(*) FROM assessment_attempts WHERE student_id = ? AND assessment_id IN (SELECT id FROM assessments WHERE course_id = ?)), 'CERTIFIED', ?, ?, CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP, ?, 'CERTIFIED') ON CONFLICT(user_id, course_id) DO UPDATE SET user_name = excluded.user_name, course_name = excluded.course_name, assessment_score = excluded.assessment_score, pass_mark = excluded.pass_mark, assessment_attempts = excluded.assessment_attempts, latest_assessment_status = 'CERTIFIED', feedback_rating = excluded.feedback_rating, feedback_comments = excluded.feedback_comments, feedback_submitted_at = CURRENT_TIMESTAMP, certificate_id = excluded.certificate_id, certificate_generated_at = CURRENT_TIMESTAMP, badge = excluded.badge, certification_status = 'CERTIFIED'",
 					(session["user_id"], course_id, session["user"], course["name"], final_score, pass_mark, session["user_id"], course_id, int(rating), comments, certificate_id, badge)
 				)
+				try:
+					create_notification(connection, session["user_id"], f"Congratulations! You've earned a certificate for '{course['name']}'.", "certificate_earned", url_for("course_certificate", course_id=course_id))
+				except Exception: pass
 				connection.execute("UPDATE course_assignments SET status='certified', completed_at=COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"]))
 				
 				# Reward Engine integration
@@ -2003,6 +2016,12 @@ def create_app():
 				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)",
 				(session["user_id"], cursor.lastrowid)
 			)
+			if status == "published":
+				try:
+					_users = connection.execute("SELECT id FROM users WHERE COALESCE(is_active, 1) = 1 AND id != ?", (session["user_id"],)).fetchall()
+					for _u in _users:
+						create_notification(connection, _u["id"], f"New course launched: {name}", "course_launch", url_for("course_detail", course_id=cursor.lastrowid))
+				except Exception: pass
 		flash(f"Course '{name}' created successfully.")
 		return redirect(url_for("courses_page"))
 
@@ -2740,6 +2759,11 @@ def create_app():
 				   ON CONFLICT(post_id, user_id) DO UPDATE SET rating = excluded.rating, updated_at = CURRENT_TIMESTAMP""",
 				(post_id, user_id, rating)
 			)
+			try:
+				_post = connection.execute("SELECT created_by, title FROM posts WHERE id=?", (post_id,)).fetchone()
+				if _post and _post["created_by"] != user_id:
+					create_notification(connection, _post["created_by"], f"Someone rated your post '{_post['title']}'", "post_interaction", url_for("community_post_detail", post_id=post_id))
+			except Exception: pass
 			
 			# Reward Engine Integration
 			ref_id = f"PRATE-{post_id}-{user_id}"
@@ -2798,6 +2822,11 @@ def create_app():
 				   VALUES (?, ?, ?)""",
 				(post_id, user_id, comment_text)
 			)
+			try:
+				_post = connection.execute("SELECT created_by, title FROM posts WHERE id=?", (post_id,)).fetchone()
+				if _post and _post["created_by"] != user_id:
+					create_notification(connection, _post["created_by"], f"Someone commented on your post '{_post['title']}'", "post_interaction", url_for("community_post_detail", post_id=post_id))
+			except Exception: pass
 			
 		flash("Comment submitted successfully!")
 		return redirect(url_for("post_detail", post_id=post_id))
@@ -3566,6 +3595,11 @@ def create_app():
 				
 			try:
 				connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status = course_assignments.status", (course_id, student_id))
+				if student_id != getattr(g, "api_user", {}).get("id"):
+					try:
+						_c_name = connection.execute("SELECT name FROM courses WHERE id=?", (course_id,)).fetchone()["name"]
+						create_notification(connection, student_id, f"You have been assigned a new course: {_c_name}", "course_assigned", f"/course/{course_id}")
+					except Exception: pass
 				connection.execute(
 					"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', NULL, NULL, ?, ?, 'assigned', 'new')",
 					(course_id, course["name"], student_id, student["full_name"], g.api_user["id"], g.api_user["full_name"])
@@ -3703,6 +3737,11 @@ def create_app():
 					   ON CONFLICT(post_id, user_id) DO UPDATE SET rating = excluded.rating, updated_at = CURRENT_TIMESTAMP""",
 					(post_id, g.api_user["id"], rating)
 				)
+				try:
+					_post = connection.execute("SELECT created_by, title FROM posts WHERE id=?", (post_id,)).fetchone()
+					if _post and _post["created_by"] != g.api_user["id"]:
+						create_notification(connection, _post["created_by"], f"Someone rated your post '{_post['title']}'", "post_interaction", f"/community/post/{post_id}")
+				except Exception: pass
 				
 				ref_id = f"PRATE-{post_id}-{g.api_user['id']}"
 				# 1. Post Owner Reward
@@ -3749,6 +3788,11 @@ def create_app():
 					"INSERT INTO post_comments (post_id, user_id, comment) VALUES (?, ?, ?)",
 					(post_id, g.api_user["id"], comment_text)
 				).lastrowid
+				try:
+					_post = connection.execute("SELECT created_by, title FROM posts WHERE id=?", (post_id,)).fetchone()
+					if _post and _post["created_by"] != g.api_user["id"]:
+						create_notification(connection, _post["created_by"], f"Someone commented on your post '{_post['title']}'", "post_interaction", f"/community/post/{post_id}")
+				except Exception: pass
 			except Exception as e:
 				return {"error": f"Comment submission failed: {str(e)}"}, 500
 		return {"message": "Comment submitted successfully.", "comment_id": comment_id}, 201
