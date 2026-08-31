@@ -961,8 +961,8 @@ def create_app():
 	def groups_page():
 		"""Create groups and manage memberships for course assignment."""
 		if request.method == "POST":
-			if session.get("role") != "admin":
-				flash("Only administrators can create groups.")
+			if session.get("role") not in ("admin", "moderator"):
+				flash("Only administrators and moderators can create groups.")
 				return redirect(url_for("groups_page"))
 			name = request.form.get("name", "").strip()
 			description = request.form.get("description", "").strip()
@@ -976,12 +976,14 @@ def create_app():
 					"INSERT INTO groups (name, description, group_type, status, created_by) VALUES (?, ?, ?, ?, ?)",
 					(name, description, group_type, status, session["user_id"])
 				)
+				group_id = cursor.lastrowid
+				connection.execute("INSERT INTO group_moderators (group_id, user_id, status) VALUES (?, ?, 'Active')", (group_id, session["user_id"]))
 				selected = request.form.getlist("selected_users")
 				for raw_user_id in selected:
 					user_id = int(raw_user_id)
 					connection.execute(
 						"INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) SELECT ?, u.id, COALESCE(u.employee_id, ''), COALESCE(u.email, ''), COALESCE(u.department, ''), COALESCE(u.location, ''), CASE WHEN COALESCE(u.is_active, 1) = 1 THEN 'active' ELSE 'inactive' END FROM users u WHERE u.id = ?",
-						(cursor.lastrowid, user_id)
+						(group_id, user_id)
 				)
 			flash("Group created successfully.")
 			return redirect(url_for("groups_page"))
