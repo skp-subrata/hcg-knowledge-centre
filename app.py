@@ -1443,7 +1443,8 @@ def create_app():
 										try:
 											_c_name = connection.execute("SELECT name FROM courses WHERE id=?", (course_id,)).fetchone()["name"]
 											create_notification(connection, user_id, f"You have been assigned a new course: {_c_name}", "course_assigned", url_for("course_detail", course_id=course_id))
-										except Exception: pass
+										except Exception:
+											pass
 									connection.execute(
 										"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) SELECT ?, c.name, u.id, u.full_name, 'Group', ?, g.name, ?, ?, 'assigned', 'new' FROM users u JOIN courses c ON c.id = ? JOIN groups g ON g.id = ? WHERE u.id = ?",
 										(course_id, group_id, session["user_id"], session["user"], course_id, group_id, user_id),
@@ -1466,7 +1467,8 @@ def create_app():
 									try:
 										_c_name = connection.execute("SELECT name FROM courses WHERE id=?", (course_id,)).fetchone()["name"]
 										create_notification(connection, user_id, f"You have been assigned a new course: {_c_name}", "course_assigned", url_for("course_detail", course_id=course_id))
-									except Exception: pass
+									except Exception:
+											pass
 								connection.execute(
 									"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', NULL, NULL, ?, ?, 'assigned', 'new')",
 									(course_id, course_name, user_id, user["full_name"], session["user_id"], session["user"]),
@@ -1774,8 +1776,9 @@ def create_app():
 					(session["user_id"], course_id, session["user"], course["name"], final_score, pass_mark, session["user_id"], course_id, int(rating), comments, certificate_id, badge)
 				)
 				try:
-					create_notification(connection, session["user_id"], f"Congratulations! You've earned a certificate for '{course['name']}'.", "certificate_earned", url_for("course_certificate", course_id=course_id))
-				except Exception: pass
+					create_notification(connection, session["user_id"], f"Congratulations! You've earned a certificate for '{course['name']}'.", "certificate_earned", url_for("certificate", course_id=course_id))
+				except Exception:
+											pass
 				connection.execute("UPDATE course_assignments SET status='certified', completed_at=COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"]))
 				
 				# Reward Engine integration
@@ -2021,7 +2024,8 @@ def create_app():
 					_users = connection.execute("SELECT id FROM users WHERE COALESCE(is_active, 1) = 1 AND id != ?", (session["user_id"],)).fetchall()
 					for _u in _users:
 						create_notification(connection, _u["id"], f"New course launched: {name}", "course_launch", url_for("course_detail", course_id=cursor.lastrowid))
-				except Exception: pass
+				except Exception:
+											pass
 		flash(f"Course '{name}' created successfully.")
 		return redirect(url_for("courses_page"))
 
@@ -2223,7 +2227,7 @@ def create_app():
 					count = connection.execute("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND is_read = 0", (session["user_id"],)).fetchone()["n"]
 					return {"unread_notifications_count": count}
 			except Exception:
-				pass
+											pass
 		return {"unread_notifications_count": 0}
 
 	def create_notification(connection, user_id, message, type_name="system", target_url="#"):
@@ -2328,7 +2332,7 @@ def create_app():
 				if status == "PENDING_APPROVAL":
 					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
 					for r in reviewers:
-						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review", url_for("approval_queue_page"))
+						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review", url_for("approval_queue"))
 						
 			flash("Post created successfully!")
 			return redirect(url_for("my_posts"))
@@ -2390,7 +2394,7 @@ def create_app():
 					try:
 						(UPLOAD_FOLDER / thumbnail_filename).unlink(missing_ok=True)
 					except Exception:
-						pass
+											pass
 					thumbnail_filename = None
 					
 				thumbnail_file = request.files.get("thumbnail")
@@ -2399,7 +2403,7 @@ def create_app():
 						try:
 							(UPLOAD_FOLDER / thumbnail_filename).unlink(missing_ok=True)
 						except Exception:
-							pass
+											pass
 					ext = os.path.splitext(thumbnail_file.filename)[1].lower()
 					if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
 						thumbnail_filename = f"thumb_{uuid4().hex}{ext}"
@@ -2418,7 +2422,7 @@ def create_app():
 						try:
 							(UPLOAD_FOLDER / att_row["file_path"]).unlink(missing_ok=True)
 						except Exception:
-							pass
+											pass
 						connection.execute("DELETE FROM post_attachments WHERE id = ?", (att_id,))
 						
 				new_attachments = request.files.getlist("attachments")
@@ -2450,14 +2454,14 @@ def create_app():
 				)
 				
 				if old_status == "PUBLISHED" and new_status == "PENDING_APPROVAL":
-					create_notification(connection, user_id, f"Your post '{title}' requires approval after modification.", "re_approval_needed", url_for("my_posts_page"))
+					create_notification(connection, user_id, f"Your post '{title}' requires approval after modification.", "re_approval_needed", url_for("my_posts"))
 					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
 					for r in reviewers:
-						create_notification(connection, r["id"], f"Modified post '{title}' (previously published) is waiting for approval.", "pending_review", url_for("approval_queue_page"))
+						create_notification(connection, r["id"], f"Modified post '{title}' (previously published) is waiting for approval.", "pending_review", url_for("approval_queue"))
 				elif new_status == "PENDING_APPROVAL" and old_status != "PENDING_APPROVAL":
 					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
 					for r in reviewers:
-						create_notification(connection, r["id"], f"Post '{title}' is waiting for approval.", "pending_review", url_for("approval_queue_page"))
+						create_notification(connection, r["id"], f"Post '{title}' is waiting for approval.", "pending_review", url_for("approval_queue"))
 						
 			flash("Post updated successfully!")
 			return redirect(url_for("my_posts"))
@@ -2515,13 +2519,13 @@ def create_app():
 				try:
 					(UPLOAD_FOLDER / att["file_path"]).unlink(missing_ok=True)
 				except Exception:
-					pass
+											pass
 					
 			if post["thumbnail"]:
 				try:
 					(UPLOAD_FOLDER / post["thumbnail"]).unlink(missing_ok=True)
 				except Exception:
-					pass
+											pass
 					
 			connection.execute("DELETE FROM post_attachments WHERE post_id = ?", (post_id,))
 			connection.execute("DELETE FROM post_ratings WHERE post_id = ?", (post_id,))
@@ -2763,7 +2767,8 @@ def create_app():
 				_post = connection.execute("SELECT created_by, title FROM posts WHERE id=?", (post_id,)).fetchone()
 				if _post and _post["created_by"] != user_id:
 					create_notification(connection, _post["created_by"], f"Someone rated your post '{_post['title']}'", "post_interaction", url_for("community_post_detail", post_id=post_id))
-			except Exception: pass
+			except Exception:
+											pass
 			
 			# Reward Engine Integration
 			ref_id = f"PRATE-{post_id}-{user_id}"
@@ -2826,7 +2831,8 @@ def create_app():
 				_post = connection.execute("SELECT created_by, title FROM posts WHERE id=?", (post_id,)).fetchone()
 				if _post and _post["created_by"] != user_id:
 					create_notification(connection, _post["created_by"], f"Someone commented on your post '{_post['title']}'", "post_interaction", url_for("community_post_detail", post_id=post_id))
-			except Exception: pass
+			except Exception:
+											pass
 			
 		flash("Comment submitted successfully!")
 		return redirect(url_for("post_detail", post_id=post_id))
@@ -3599,7 +3605,8 @@ def create_app():
 					try:
 						_c_name = connection.execute("SELECT name FROM courses WHERE id=?", (course_id,)).fetchone()["name"]
 						create_notification(connection, student_id, f"You have been assigned a new course: {_c_name}", "course_assigned", f"/course/{course_id}")
-					except Exception: pass
+					except Exception:
+											pass
 				connection.execute(
 					"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', NULL, NULL, ?, ?, 'assigned', 'new')",
 					(course_id, course["name"], student_id, student["full_name"], g.api_user["id"], g.api_user["full_name"])
@@ -3668,7 +3675,7 @@ def create_app():
 				if status == "PENDING_APPROVAL":
 					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
 					for r in reviewers:
-						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review", url_for("approval_queue_page"))
+						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review", url_for("approval_queue"))
 				else:
 					# Author Post reward trigger
 					process_reward_event(
@@ -3741,7 +3748,8 @@ def create_app():
 					_post = connection.execute("SELECT created_by, title FROM posts WHERE id=?", (post_id,)).fetchone()
 					if _post and _post["created_by"] != g.api_user["id"]:
 						create_notification(connection, _post["created_by"], f"Someone rated your post '{_post['title']}'", "post_interaction", f"/community/post/{post_id}")
-				except Exception: pass
+				except Exception:
+											pass
 				
 				ref_id = f"PRATE-{post_id}-{g.api_user['id']}"
 				# 1. Post Owner Reward
@@ -3792,7 +3800,8 @@ def create_app():
 					_post = connection.execute("SELECT created_by, title FROM posts WHERE id=?", (post_id,)).fetchone()
 					if _post and _post["created_by"] != g.api_user["id"]:
 						create_notification(connection, _post["created_by"], f"Someone commented on your post '{_post['title']}'", "post_interaction", f"/community/post/{post_id}")
-				except Exception: pass
+				except Exception:
+											pass
 			except Exception as e:
 				return {"error": f"Comment submission failed: {str(e)}"}, 500
 		return {"message": "Comment submitted successfully.", "comment_id": comment_id}, 201
