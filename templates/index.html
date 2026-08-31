@@ -236,7 +236,7 @@
     {% endfor %}
 </section>
 
-{% if role == 'basic user' and available_courses %}
+{% if available_courses %}
   <section class="mt-12">
       <div class="eyebrow mb-6 text-indigo-600 dark:text-indigo-400">Available Courses</div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -292,7 +292,7 @@
   </section>
   {% endif %}
 
-  {% if role == 'basic user' and user_certifications %}
+  {% if user_certifications %}
 <section class="mt-12">
     <div class="eyebrow mb-6">My Achievements</div>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
