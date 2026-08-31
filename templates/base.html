@@ -677,12 +677,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     let html = '';
                     data.notifications.forEach(n => {
                         const targetUrl = n.target_url || '#';
-                        html += 
-                            <a href="javascript:void(0)" onclick="markRead( + n.id + , ' + targetUrl + ')" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                <p class="text-sm text-slate-800 dark:text-slate-200"> + n.message + </p>
-                                <p class="text-[10px] text-slate-400 mt-1"> + new Date(n.created_at).toLocaleString() + </p>
+                        html += `
+                            <a href="javascript:void(0)" onclick="markRead(${n.id}, '${targetUrl}')" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                <p class="text-sm text-slate-800 dark:text-slate-200">${n.message}</p>
+                                <p class="text-[10px] text-slate-400 mt-1">${new Date(n.created_at).toLocaleString()}</p>
                             </a>
-                        ;
+                        `;
                     });
                     list.innerHTML = html;
                 } else {
