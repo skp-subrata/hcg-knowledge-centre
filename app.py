@@ -1605,10 +1605,7 @@ def create_app():
 			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
 			allowed = course_is_visible(connection, course_id, session["user_id"])
 			assignment = connection.execute("SELECT status, completed_at FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"])).fetchone()
-			if not assignment and course and course["status"] == 'published' and course["created_by"] != session["user_id"]:
-				connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', NULL)", (course_id, session["user_id"]))
-				connection.execute("INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', ?, ?, 'assigned', 'new')", (course_id, course["name"], session["user_id"], session["user"], session["user_id"], "Self-Enrolled"))
-				assignment = connection.execute("SELECT status, completed_at FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"])).fetchone()
+			# Removed auto-assignment on course view as requested by user
 			
 			certification = get_user_course_record(connection, session["user_id"], course_id)
 			progress = get_course_status_label(assignment["status"]) if assignment else "NOT_STARTED"
@@ -1631,6 +1628,13 @@ def create_app():
 			if certification and certification["certification_status"] == "CERTIFIED":
 				flash("Course already certified; you can review the material and view the certificate.")
 				return redirect(url_for("course_detail", course_id=course_id))
+			
+			assignment = connection.execute("SELECT status FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"])).fetchone()
+			if not assignment:
+				course = connection.execute("SELECT name FROM courses WHERE id = ?", (course_id,)).fetchone()
+				if course:
+					connection.execute("INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', ?, ?, 'assigned', 'new')", (course_id, course["name"], session["user_id"], session["user"], session["user_id"], "Self-Enrolled"))
+			
 			connection.execute("INSERT INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, 'in_progress', CURRENT_TIMESTAMP) ON CONFLICT(course_id, student_id) DO UPDATE SET status='in_progress', completed_at=COALESCE(course_assignments.completed_at, CURRENT_TIMESTAMP)", (course_id, session["user_id"]))
 		return redirect(url_for("course_detail", course_id=course_id))
 
