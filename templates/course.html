@@ -12,7 +12,19 @@
         <div>
             <div class="eyebrow mb-2">Course</div>
             <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-4 text-slate-900 dark:text-slate-50">{{ course.name }}</h1>
-            <p class="text-lg text-slate-600 dark:text-slate-400">{{ course.description }}</p>
+            <p class="text-lg text-slate-600 dark:text-slate-400 mb-4">{{ course.description }}</p>
+            <div class="flex flex-wrap gap-4 text-sm text-slate-500 dark:text-slate-400">
+                <div class="flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    <span>Created by <span class="font-semibold text-slate-600 dark:text-slate-300">{{ course.creator_name or 'System' }}</span></span>
+                </div>
+                {% if course.assigned_by %}
+                <div class="flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+                    <span>Assigned by <span class="font-semibold text-slate-600 dark:text-slate-300">{{ course.assigned_by }}</span></span>
+                </div>
+                {% endif %}
+            </div>
         </div>
         <div class="rounded-full border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/60 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             Status: {{ progress or 'NOT_STARTED' }}

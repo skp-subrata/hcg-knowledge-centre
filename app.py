@@ -1691,7 +1691,13 @@ def create_app():
 		if not session.get("user_id"):
 			return redirect(url_for("home"))
 		with get_db() as connection:
-			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
+			course = connection.execute("""
+				SELECT c.*, u.full_name as creator_name,
+				       (SELECT assigned_by_name FROM assignment_history ah WHERE ah.course_id = c.id AND ah.user_id = ? ORDER BY ah.assigned_at DESC LIMIT 1) AS assigned_by
+				FROM courses c
+				LEFT JOIN users u ON c.created_by = u.id
+				WHERE c.id = ?
+			""", (session["user_id"], course_id,)).fetchone()
 			allowed = course_is_visible(connection, course_id, session["user_id"])
 			assignment = connection.execute("SELECT status, completed_at FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"])).fetchone()
 			# Removed auto-assignment on course view as requested by user
@@ -1733,7 +1739,13 @@ def create_app():
 		if not session.get("user_id") or session.get("role") != "basic user":
 			return redirect(url_for("home"))
 		with get_db() as connection:
-			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
+			course = connection.execute("""
+				SELECT c.*, u.full_name as creator_name,
+				       (SELECT assigned_by_name FROM assignment_history ah WHERE ah.course_id = c.id AND ah.user_id = ? ORDER BY ah.assigned_at DESC LIMIT 1) AS assigned_by
+				FROM courses c
+				LEFT JOIN users u ON c.created_by = u.id
+				WHERE c.id = ?
+			""", (session["user_id"], course_id,)).fetchone()
 			certification = get_user_course_record(connection, session["user_id"], course_id)
 			if not course or not course_is_visible(connection, course_id, session["user_id"]):
 				return redirect(url_for("home"))
@@ -1831,7 +1843,13 @@ def create_app():
 		if not session.get("user_id"):
 			return redirect(url_for("home"))
 		with get_db() as connection:
-			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
+			course = connection.execute("""
+				SELECT c.*, u.full_name as creator_name,
+				       (SELECT assigned_by_name FROM assignment_history ah WHERE ah.course_id = c.id AND ah.user_id = ? ORDER BY ah.assigned_at DESC LIMIT 1) AS assigned_by
+				FROM courses c
+				LEFT JOIN users u ON c.created_by = u.id
+				WHERE c.id = ?
+			""", (session["user_id"], course_id,)).fetchone()
 			certification = get_user_course_record(connection, session["user_id"], course_id)
 			if not course or not course_is_visible(connection, course_id, session["user_id"]):
 				return redirect(url_for("home"))
@@ -1846,7 +1864,13 @@ def create_app():
 		if not session.get("user_id"):
 			return redirect(url_for("home"))
 		with get_db() as connection:
-			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
+			course = connection.execute("""
+				SELECT c.*, u.full_name as creator_name,
+				       (SELECT assigned_by_name FROM assignment_history ah WHERE ah.course_id = c.id AND ah.user_id = ? ORDER BY ah.assigned_at DESC LIMIT 1) AS assigned_by
+				FROM courses c
+				LEFT JOIN users u ON c.created_by = u.id
+				WHERE c.id = ?
+			""", (session["user_id"], course_id,)).fetchone()
 			certification = get_user_course_record(connection, session["user_id"], course_id)
 			if not course or not course_is_visible(connection, course_id, session["user_id"]):
 				return redirect(url_for("home"))
@@ -3564,7 +3588,13 @@ def create_app():
 		"""Retrieve a course's contents and assessments."""
 		from flask import g
 		with get_db() as connection:
-			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
+			course = connection.execute("""
+				SELECT c.*, u.full_name as creator_name,
+				       (SELECT assigned_by_name FROM assignment_history ah WHERE ah.course_id = c.id AND ah.user_id = ? ORDER BY ah.assigned_at DESC LIMIT 1) AS assigned_by
+				FROM courses c
+				LEFT JOIN users u ON c.created_by = u.id
+				WHERE c.id = ?
+			""", (session["user_id"], course_id,)).fetchone()
 			if not course:
 				return {"error": "Course not found."}, 404
 			if not course_is_visible(connection, course_id, g.api_user["id"]):
@@ -3587,7 +3617,13 @@ def create_app():
 			return {"error": "Missing student_id in request body."}, 400
 			
 		with get_db() as connection:
-			course = connection.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
+			course = connection.execute("""
+				SELECT c.*, u.full_name as creator_name,
+				       (SELECT assigned_by_name FROM assignment_history ah WHERE ah.course_id = c.id AND ah.user_id = ? ORDER BY ah.assigned_at DESC LIMIT 1) AS assigned_by
+				FROM courses c
+				LEFT JOIN users u ON c.created_by = u.id
+				WHERE c.id = ?
+			""", (session["user_id"], course_id,)).fetchone()
 			if not course:
 				return {"error": "Course not found."}, 404
 			student = connection.execute("SELECT * FROM users WHERE id = ? AND role = 'basic user'", (student_id,)).fetchone()
