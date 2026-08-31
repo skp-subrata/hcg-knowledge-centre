@@ -2207,10 +2207,10 @@ def create_app():
 				pass
 		return {"unread_notifications_count": 0}
 
-	def create_notification(connection, user_id, message, type_name="system"):
+	def create_notification(connection, user_id, message, type_name="system", target_url="#"):
 		connection.execute(
-			"INSERT INTO notifications (user_id, message, type) VALUES (?, ?, ?)",
-			(user_id, message, type_name)
+			"INSERT INTO notifications (user_id, message, type, target_url) VALUES (?, ?, ?, ?)",
+			(user_id, message, type_name, target_url)
 		)
 
 	@app.get("/notifications")
@@ -2309,7 +2309,7 @@ def create_app():
 				if status == "PENDING_APPROVAL":
 					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
 					for r in reviewers:
-						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review")
+						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review", url_for("approval_queue_page"))
 						
 			flash("Post created successfully!")
 			return redirect(url_for("my_posts"))
@@ -2431,14 +2431,14 @@ def create_app():
 				)
 				
 				if old_status == "PUBLISHED" and new_status == "PENDING_APPROVAL":
-					create_notification(connection, user_id, f"Your post '{title}' requires approval after modification.", "re_approval_needed")
+					create_notification(connection, user_id, f"Your post '{title}' requires approval after modification.", "re_approval_needed", url_for("my_posts_page"))
 					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
 					for r in reviewers:
-						create_notification(connection, r["id"], f"Modified post '{title}' (previously published) is waiting for approval.", "pending_review")
+						create_notification(connection, r["id"], f"Modified post '{title}' (previously published) is waiting for approval.", "pending_review", url_for("approval_queue_page"))
 				elif new_status == "PENDING_APPROVAL" and old_status != "PENDING_APPROVAL":
 					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
 					for r in reviewers:
-						create_notification(connection, r["id"], f"Post '{title}' is waiting for approval.", "pending_review")
+						create_notification(connection, r["id"], f"Post '{title}' is waiting for approval.", "pending_review", url_for("approval_queue_page"))
 						
 			flash("Post updated successfully!")
 			return redirect(url_for("my_posts"))
@@ -2602,7 +2602,7 @@ def create_app():
 				(post_id, post["version_number"], post["created_by"], reviewer_id, audit_action, comments, old_status, new_status)
 			)
 			
-			create_notification(connection, post["created_by"], notif_message, notif_type)
+			create_notification(connection, post["created_by"], notif_message, notif_type, url_for("community_post_detail", post_id=post_id))
 			
 		flash(f"Decision '{action}' submitted successfully!")
 		return redirect(url_for("approval_queue"))
@@ -3634,7 +3634,7 @@ def create_app():
 				if status == "PENDING_APPROVAL":
 					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
 					for r in reviewers:
-						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review")
+						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review", url_for("approval_queue_page"))
 				else:
 					# Author Post reward trigger
 					process_reward_event(
