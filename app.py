@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 import os
 import csv
 from io import BytesIO
@@ -920,18 +920,24 @@ def create_app():
 				   LIMIT 4"""
 			).fetchall()
 			
-			available_courses = connection.execute(
-				"""SELECT c.*, creator.full_name AS course_owner,
+			search_query = request.args.get("q", "").strip()
+			avail_sql = """SELECT c.*, creator.full_name AS course_owner,
 				   (SELECT ROUND(AVG(CAST(feedback_rating AS FLOAT)), 1) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS avg_rating,
 				   (SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
 				   FROM courses c
 				   LEFT JOIN users creator ON c.created_by = creator.id
 				   WHERE c.status = 'published'
 				     AND c.id NOT IN (SELECT course_id FROM course_assignments WHERE student_id = ?)
-				     AND c.created_by != ?
-				   ORDER BY c.id DESC""",
-				(session.get("user_id", 0), session.get("user_id", 0))
-			).fetchall()
+				     AND c.created_by != ?"""
+			avail_params = [session.get("user_id", 0), session.get("user_id", 0)]
+			
+			if search_query:
+				avail_sql += " AND (c.name LIKE ? OR c.category LIKE ? OR c.tags LIKE ? OR c.description LIKE ?)"
+				avail_params.extend([f"%{search_query}%"] * 4)
+				
+			avail_sql += " ORDER BY c.id DESC"
+			
+			available_courses = connection.execute(avail_sql, avail_params).fetchall()
 
 		with get_db() as connection:
 			if session.get("role") in ("admin", "moderator"):
@@ -952,7 +958,8 @@ def create_app():
 			leaderboard=leaderboard,
 			new_courses=new_courses,
 			latest_posts=latest_posts,
-			available_courses=available_courses
+			available_courses=available_courses,
+			search_query=search_query
 		)
 
 
@@ -2587,10 +2594,13 @@ def create_app():
 				
 		return render_template("approval_queue.html", pending_posts=pending_posts, role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
-	@app.post("/community/approval-queue/<int:post_id>/action")
+	@app.route("/community/approval-queue/<int:post_id>/action", methods=["GET", "POST"])
 	def approval_action(post_id):
 		if "user_id" not in session or session.get("role") not in ("admin", "moderator"):
 			return redirect(url_for("home"))
+			
+		if request.method == "GET":
+			return redirect(url_for("approval_queue"))
 			
 		reviewer_id = session.get("user_id")
 		action = request.form.get("action")
@@ -2649,7 +2659,7 @@ def create_app():
 				(post_id, post["version_number"], post["created_by"], reviewer_id, audit_action, comments, old_status, new_status)
 			)
 			
-			create_notification(connection, post["created_by"], notif_message, notif_type, url_for("community_post_detail", post_id=post_id))
+			create_notification(connection, post["created_by"], notif_message, notif_type, url_for("post_detail", post_id=post_id))
 			
 		flash(f"Decision '{action}' submitted successfully!")
 		return redirect(url_for("approval_queue"))
@@ -2790,7 +2800,7 @@ def create_app():
 			try:
 				_post = connection.execute("SELECT created_by, title FROM posts WHERE id=?", (post_id,)).fetchone()
 				if _post and _post["created_by"] != user_id:
-					create_notification(connection, _post["created_by"], f"Someone rated your post '{_post['title']}'", "post_interaction", url_for("community_post_detail", post_id=post_id))
+					create_notification(connection, _post["created_by"], f"Someone rated your post '{_post['title']}'", "post_interaction", url_for("post_detail", post_id=post_id))
 			except Exception:
 											pass
 			
@@ -2854,7 +2864,7 @@ def create_app():
 			try:
 				_post = connection.execute("SELECT created_by, title FROM posts WHERE id=?", (post_id,)).fetchone()
 				if _post and _post["created_by"] != user_id:
-					create_notification(connection, _post["created_by"], f"Someone commented on your post '{_post['title']}'", "post_interaction", url_for("community_post_detail", post_id=post_id))
+					create_notification(connection, _post["created_by"], f"Someone commented on your post '{_post['title']}'", "post_interaction", url_for("post_detail", post_id=post_id))
 			except Exception:
 											pass
 			
