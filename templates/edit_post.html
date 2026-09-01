@@ -25,6 +25,35 @@
         </div>
         {% endif %}
 
+        {% if approval_history %}
+        <div class="mb-10">
+            <h2 class="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                Review Comments & History
+            </h2>
+            <div class="space-y-4">
+                {% for log in approval_history %}
+                <div class="glass-panel p-4 border-l-4 {% if log.action == 'APPROVE' %}border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10{% elif log.action == 'REJECT' %}border-l-rose-500 bg-rose-50/50 dark:bg-rose-900/10{% elif log.action == 'REQUEST_CHANGES' %}border-l-amber-500 bg-amber-50/50 dark:bg-amber-900/10{% else %}border-l-indigo-500{% endif %}">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-sm text-slate-800 dark:text-slate-200">{{ log.reviewer_name or 'System' }}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider {% if log.action == 'APPROVE' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300{% elif log.action == 'REJECT' %}bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300{% elif log.action == 'REQUEST_CHANGES' %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300{% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+                                {{ log.action|replace('_', ' ') }}
+                            </span>
+                        </div>
+                        <span class="text-xs text-slate-500 font-medium">{{ log.reviewed_at }}</span>
+                    </div>
+                    {% if log.comments and log.comments != 'NONE' and 'Initial creation' not in log.comments %}
+                    <div class="text-sm text-slate-600 dark:text-slate-300 bg-white/50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+                        {{ log.comments }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <form method="post" action="{{ url_for('edit_post', post_id=post.id) }}" enctype="multipart/form-data" id="post-form" class="space-y-6">
             <!-- Title -->
             <div>

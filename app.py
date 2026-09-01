@@ -2392,6 +2392,11 @@ def create_app():
 			
 		with get_db() as connection:
 			attachments = connection.execute("SELECT * FROM post_attachments WHERE post_id = ?", (post_id,)).fetchall()
+			approval_history = connection.execute('''SELECT h.*, u.full_name as reviewer_name 
+			                                         FROM post_approval_history h 
+			                                         LEFT JOIN users u ON h.reviewed_by = u.id 
+			                                         WHERE h.post_id = ? AND h.action IN ('APPROVE', 'REJECT', 'REQUEST_CHANGES') 
+			                                         ORDER BY h.id DESC''', (post_id,)).fetchall()
 			
 		if request.method == "POST":
 			title = request.form.get("title", "").strip()
@@ -2498,7 +2503,7 @@ def create_app():
 			flash("Post updated successfully!")
 			return redirect(url_for("my_posts"))
 			
-		return render_template("edit_post.html", post=post, attachments=attachments, role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+		return render_template("edit_post.html", post=post, attachments=attachments, approval_history=approval_history, role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.get("/community/my-posts")
 	def my_posts():
@@ -2512,7 +2517,8 @@ def create_app():
 			posts = connection.execute(
 				"""SELECT p.*, 
 						  (SELECT ROUND(AVG(r.rating), 1) FROM post_ratings r WHERE r.post_id = p.id) AS avg_rating,
-						  (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.id) AS comment_count
+						  (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.id) AS comment_count,
+						  (SELECT comments FROM post_approval_history h WHERE h.post_id = p.id AND h.action IN ('APPROVE', 'REJECT', 'REQUEST_CHANGES') ORDER BY h.id DESC LIMIT 1) AS latest_review_comment
 				   FROM posts p
 				   WHERE p.created_by = ?
 				   ORDER BY p.id DESC""",
