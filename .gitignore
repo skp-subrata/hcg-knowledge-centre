@@ -6,3 +6,7 @@ users.db
 uploads/
 gh.exe
 git/
+
+lms.db
+courses_*.html
+test_*.py
