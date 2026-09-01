@@ -933,8 +933,9 @@ def create_app():
 				   (SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
 				   FROM courses c
 				   LEFT JOIN users creator ON c.created_by = creator.id
-				   WHERE c.status = 'published'"""
-			avail_params = []
+				   WHERE c.status = 'published'
+				     AND c.id NOT IN (SELECT course_id FROM course_assignments WHERE student_id = ?)"""
+			avail_params = [session.get("user_id", 0)]
 			
 			if search_query:
 				avail_sql += " AND (c.name LIKE ? OR c.category LIKE ? OR c.tags LIKE ? OR c.description LIKE ?)"
