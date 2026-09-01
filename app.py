@@ -850,6 +850,7 @@ def create_app():
 	"""Build and configure the Flask application."""
 	app = Flask(__name__)
 	app.secret_key = os.getenv("LMS_SECRET_KEY", "change-this-local-secret")
+	app.config["TEMPLATES_AUTO_RELOAD"] = True
 	app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 	app.jinja_env.globals["embed_url"] = embed_url
 	init_db()
@@ -4263,3 +4264,5 @@ if __name__ == "__main__":
 	app.run(debug=True)
 
 
+
+# Trigger reload
