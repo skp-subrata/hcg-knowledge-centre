@@ -1724,7 +1724,7 @@ def create_app():
 	@app.post("/course/<int:course_id>/complete")
 	def complete_course(course_id):
 		"""Mark course as completed for the current student."""
-		if not session.get("user_id") or session.get("role") != "basic user":
+		if not session.get("user_id"):
 			return redirect(url_for("home"))
 		with get_db() as connection:
 			certification = get_user_course_record(connection, session["user_id"], course_id)
@@ -1744,7 +1744,7 @@ def create_app():
 	@app.route("/course/<int:course_id>/feedback", methods=["GET", "POST"])
 	def feedback_form(course_id):
 		"""Collect mandatory feedback and issue the certificate if valid."""
-		if not session.get("user_id") or session.get("role") != "basic user":
+		if not session.get("user_id"):
 			return redirect(url_for("home"))
 		with get_db() as connection:
 			course = connection.execute("""
