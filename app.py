@@ -882,7 +882,6 @@ def create_app():
 			flash("Invalid username or password.")
 		with get_db() as connection:
 			user_id = session.get("user_id", 0)
-			role = session.get("role", "basic user")
 			courses = connection.execute("""
 				SELECT 
 					c.*,
@@ -897,14 +896,12 @@ def create_app():
 					(SELECT ROUND(AVG(CAST(feedback_rating AS FLOAT)), 1) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS avg_rating,
 					(SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
 				FROM courses c 
-				LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ?
+				JOIN course_assignments ca ON ca.course_id = c.id 
 				LEFT JOIN users creator ON c.created_by = creator.id
 				LEFT JOIN course_certifications cc ON cc.course_id = c.id AND cc.user_id = ca.student_id
-				WHERE (c.status = 'published' AND c.created_by != ?) 
-				   OR (? IN ('admin', 'moderator'))
-				   OR ca.student_id IS NOT NULL
+				WHERE ca.student_id = ? 
 				ORDER BY c.id DESC
-			""", (user_id, user_id, role)).fetchall()
+			""", (user_id,)).fetchall()
 			
 			leaderboard = connection.execute(
 				"""SELECT w.current_balance, u.full_name, u.username
@@ -936,10 +933,8 @@ def create_app():
 				   (SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
 				   FROM courses c
 				   LEFT JOIN users creator ON c.created_by = creator.id
-				   WHERE c.status = 'published'
-				     AND c.id NOT IN (SELECT course_id FROM course_assignments WHERE student_id = ?)
-				     AND c.created_by != ?"""
-			avail_params = [session.get("user_id", 0), session.get("user_id", 0)]
+				   WHERE c.status = 'published'"""
+			avail_params = []
 			
 			if search_query:
 				avail_sql += " AND (c.name LIKE ? OR c.category LIKE ? OR c.tags LIKE ? OR c.description LIKE ?)"
