@@ -714,12 +714,7 @@ def embed_url(value):
 
 def course_is_visible(connection, course_id, user_id):
 	"""Return whether a user is assigned to, created, or if the course is published."""
-	user = connection.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
-	role = user["role"] if user else "basic user"
-	course = connection.execute("SELECT status, created_by FROM courses WHERE id = ?", (course_id,)).fetchone()
-	if not course: return False
-	if course["created_by"] == user_id or role == 'admin': return True
-	return course["status"] == 'published'
+	return connection.execute("SELECT 1 FROM courses c LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE c.id = ? AND (c.created_by = ? OR ca.student_id IS NOT NULL OR c.status = 'published')", (user_id, course_id, user_id)).fetchone() is not None
 
 
 
@@ -893,9 +888,8 @@ def create_app():
 				LEFT JOIN users creator ON c.created_by = creator.id
 				LEFT JOIN course_certifications cc ON cc.course_id = c.id AND cc.user_id = ca.student_id
 				WHERE ca.student_id = ? 
-				  AND (c.status = 'published' OR c.created_by = ? OR ? = 'admin')
 				ORDER BY c.id DESC
-			""", (session.get("user_id", 0), session.get("user_id", 0), session.get("role", "basic user"))).fetchall()
+			""", (session.get("user_id", 0),)).fetchall()
 			
 			leaderboard = connection.execute(
 				"""SELECT w.current_balance, u.full_name, u.username
