@@ -1717,14 +1717,22 @@ def create_app():
 			if certification and certification["latest_assessment_status"] == "FEEDBACK_PENDING":
 				progress = "FEEDBACK_PENDING"
 			assessments = connection.execute("SELECT * FROM assessments WHERE course_id = ? ORDER BY id", (course_id,)).fetchall()
-		if not course or not allowed:
+		if not course:
+			flash("Course not found.")
+			return redirect(url_for("home"))
+		if not allowed:
+			flash("You do not have permission to view this course.")
 			return redirect(url_for("home"))
 		return render_template("course.html", course=course, progress=progress, certification=certification, assessments=assessments, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"), impersonating=session.get("impersonator_id"))
 
 	@app.post("/course/<int:course_id>/complete")
 	def complete_course(course_id):
 		"""Mark course as completed for the current student."""
-		if not session.get("user_id") or session.get("role") != "basic user":
+		if not session.get("user_id"):
+			flash("Please log in to continue.")
+			return redirect(url_for("home"))
+		if session.get("role") != "basic user":
+			flash("Admins and moderators cannot complete courses. Please use 'View As Student' to simulate this action.")
 			return redirect(url_for("home"))
 		with get_db() as connection:
 			certification = get_user_course_record(connection, session["user_id"], course_id)
@@ -1744,7 +1752,11 @@ def create_app():
 	@app.route("/course/<int:course_id>/feedback", methods=["GET", "POST"])
 	def feedback_form(course_id):
 		"""Collect mandatory feedback and issue the certificate if valid."""
-		if not session.get("user_id") or session.get("role") != "basic user":
+		if not session.get("user_id"):
+			flash("Please log in to continue.")
+			return redirect(url_for("home"))
+		if session.get("role") != "basic user":
+			flash("Admins and moderators cannot submit feedback. Please use 'View As Student' to simulate this action.")
 			return redirect(url_for("home"))
 		with get_db() as connection:
 			course = connection.execute("""
@@ -1755,7 +1767,11 @@ def create_app():
 				WHERE c.id = ?
 			""", (session["user_id"], course_id,)).fetchone()
 			certification = get_user_course_record(connection, session["user_id"], course_id)
-			if not course or not course_is_visible(connection, course_id, session["user_id"]):
+			if not course:
+				flash("Course not found.")
+				return redirect(url_for("home"))
+			if not course_is_visible(connection, course_id, session["user_id"]):
+				flash("You do not have permission to access this course.")
 				return redirect(url_for("home"))
 			if certification and certification["certification_status"] == "CERTIFIED":
 				return redirect(url_for("certificate", course_id=course_id))
@@ -1859,7 +1875,11 @@ def create_app():
 				WHERE c.id = ?
 			""", (session["user_id"], course_id,)).fetchone()
 			certification = get_user_course_record(connection, session["user_id"], course_id)
-			if not course or not course_is_visible(connection, course_id, session["user_id"]):
+			if not course:
+				flash("Course not found.")
+				return redirect(url_for("home"))
+			if not course_is_visible(connection, course_id, session["user_id"]):
+				flash("You do not have permission to access this course.")
 				return redirect(url_for("home"))
 			if not certification or certification["certification_status"] != "CERTIFIED":
 				flash("Certificate is not available until feedback is submitted and the course is certified.")
@@ -1880,7 +1900,11 @@ def create_app():
 				WHERE c.id = ?
 			""", (session["user_id"], course_id,)).fetchone()
 			certification = get_user_course_record(connection, session["user_id"], course_id)
-			if not course or not course_is_visible(connection, course_id, session["user_id"]):
+			if not course:
+				flash("Course not found.")
+				return redirect(url_for("home"))
+			if not course_is_visible(connection, course_id, session["user_id"]):
+				flash("You do not have permission to access this course.")
 				return redirect(url_for("home"))
 			if not certification or certification["certification_status"] != "CERTIFIED":
 				flash("Certificate is not available until feedback is submitted and the course is certified.")
@@ -1966,6 +1990,7 @@ def create_app():
 	def download_assessment_questions(assessment_id):
 		"""Download assessment questions for admins or owning moderators only."""
 		if session.get("role") not in ("admin", "moderator"):
+			flash("You must be an admin or moderator to download assessment questions.")
 			return redirect(url_for("home"))
 		stream = question_csv(assessment_id, session["user_id"], session["role"])
 		if stream is None:
@@ -2173,6 +2198,7 @@ def create_app():
 		"""Restore the administrator after a view-as session."""
 		admin_id = session.get("impersonator_id")
 		if not admin_id:
+			flash("You are not currently impersonating another user.")
 			return redirect(url_for("home"))
 		with get_db() as connection:
 			admin = connection.execute("SELECT id, full_name, role FROM users WHERE id = ? AND role = 'admin'", (admin_id,)).fetchone()
@@ -2191,7 +2217,10 @@ def create_app():
 	@app.get("/switch-role")
 	def switch_role():
 		"""Toggle between basic user and admin view for staff."""
-		if "user_id" not in session or session.get("actual_role") not in ("admin", "moderator"):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		if session.get("actual_role") not in ("admin", "moderator"):
+			flash("Only staff members can switch roles.")
 			return redirect(url_for("home"))
 		
 		# Toggle the active role
@@ -2569,7 +2598,10 @@ def create_app():
 
 	@app.get("/community/approval-queue")
 	def approval_queue():
-		if "user_id" not in session or session.get("role") not in ("admin", "moderator"):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		if session.get("role") not in ("admin", "moderator"):
+			flash("You must be an admin or moderator to access the approval queue.")
 			return redirect(url_for("home"))
 			
 		role = session.get("role")
@@ -2596,7 +2628,10 @@ def create_app():
 
 	@app.route("/community/approval-queue/<int:post_id>/action", methods=["GET", "POST"])
 	def approval_action(post_id):
-		if "user_id" not in session or session.get("role") not in ("admin", "moderator"):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		if session.get("role") not in ("admin", "moderator"):
+			flash("You do not have permission to review community content.")
 			return redirect(url_for("home"))
 			
 		if request.method == "GET":
