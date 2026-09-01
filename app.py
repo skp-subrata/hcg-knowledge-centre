@@ -2051,13 +2051,6 @@ def create_app():
 				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)",
 				(session["user_id"], cursor.lastrowid)
 			)
-			if status == "published":
-				try:
-					_users = connection.execute("SELECT id FROM users WHERE COALESCE(is_active, 1) = 1 AND id != ?", (session["user_id"],)).fetchall()
-					for _u in _users:
-						create_notification(connection, _u["id"], f"New course launched: {name}", "course_launch", url_for("course_detail", course_id=cursor.lastrowid))
-				except Exception:
-											pass
 		flash(f"Course '{name}' created successfully.")
 		return redirect(url_for("courses_page"))
 
