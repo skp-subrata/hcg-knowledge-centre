@@ -3604,6 +3604,25 @@ def create_app():
 		return {"message": "User deactivated successfully."}
 	# â”€â”€ COURSES API â”€â”€
 
+
+	@app.get("/api/search_available")
+	def search_available_courses():
+		if not session.get("user_id"):
+			return {"courses": []}
+		q = request.args.get("q", "").strip()
+		if not q:
+			return {"courses": []}
+		with get_db() as connection:
+			sql = """SELECT c.id, c.name, c.category, c.tags 
+					 FROM courses c 
+					 WHERE c.status = 'published' 
+					   AND c.id NOT IN (SELECT course_id FROM course_assignments WHERE student_id = ?) 
+					   AND (c.name LIKE ? OR c.category LIKE ? OR c.tags LIKE ?) 
+					 ORDER BY c.id DESC LIMIT 6"""
+			params = [session["user_id"], f"%{q}%", f"%{q}%", f"%{q}%"]
+			courses = connection.execute(sql, params).fetchall()
+			return {"courses": [dict(c) for c in courses]}
+
 	@app.get("/api/v1/courses")
 	@api_required
 	def api_list_courses():

@@ -240,16 +240,19 @@
   <section class="mt-12" id="available-courses">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div class="eyebrow text-indigo-600 dark:text-indigo-400 m-0">Available Courses</div>
-          <form id="course-search-form" class="relative w-full sm:w-auto flex items-center">
-              <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Search by name, topic..." class="form-input w-full sm:w-72 pl-9 pr-8 text-sm rounded-full bg-white/50 dark:bg-slate-900/50 shadow-sm border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+          <div class="relative w-full sm:w-auto z-10">
+          <form id="course-search-form" class="relative flex items-center w-full">
+              <input type="text" id="course-search-input" autocomplete="off" name="q" value="{{ search_query or '' }}" placeholder="Search by name, topic..." class="form-input w-full sm:w-72 pl-9 pr-8 text-sm rounded-full bg-white/50 dark:bg-slate-900/50 shadow-sm border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
               <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
               <button type="submit" class="hidden">Search</button>
               {% if search_query %}
-              <a href="/#available-courses" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+              <a href="/#available-courses" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 z-10">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
               </a>
               {% endif %}
           </form>
+          <ul id="search-autocomplete-list" class="absolute top-full mt-2 w-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-72 overflow-y-auto hidden flex-col divide-y divide-slate-100 dark:divide-slate-800/50"></ul>
+          </div>
       </div>
       
       {% if available_courses %}
@@ -310,11 +313,69 @@
       {% endif %}
   </section>
   <script>
-    document.getElementById('course-search-form')?.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const q = this.querySelector('input[name="q"]').value;
-        window.location.href = "/?q=" + encodeURIComponent(q) + "#available-courses";
-    });
+    const searchForm = document.getElementById('course-search-form');
+    const searchInput = document.getElementById('course-search-input');
+    const autocompleteList = document.getElementById('search-autocomplete-list');
+    let debounceTimeout;
+
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const q = searchInput.value;
+            window.location.href = "/?q=" + encodeURIComponent(q) + "#available-courses";
+        });
+    }
+
+    if (searchInput && autocompleteList) {
+        searchInput.addEventListener('input', function() {
+            clearTimeout(debounceTimeout);
+            const q = this.value.trim();
+            if (q.length < 2) {
+                autocompleteList.classList.add('hidden');
+                return;
+            }
+            
+            debounceTimeout = setTimeout(() => {
+                fetch('/api/search_available?q=' + encodeURIComponent(q))
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.courses && data.courses.length > 0) {
+                            autocompleteList.innerHTML = data.courses.map(c => `
+                                <li>
+                                    <a href="/course/${c.id}" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                        <div class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center justify-between">
+                                            <span class="truncate pr-4">${c.name}</span>
+                                            <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                        </div>
+                                        <div class="text-[10px] text-slate-500 uppercase tracking-wider mt-1 truncate">${c.category || 'General'} ${c.tags ? '• ' + c.tags : ''}</div>
+                                    </a>
+                                </li>
+                            `).join('');
+                        } else {
+                            autocompleteList.innerHTML = `<li class="px-4 py-4 text-sm text-center font-medium text-slate-500 dark:text-slate-400">No courses found matching "${q}"</li>`;
+                        }
+                        autocompleteList.classList.remove('hidden');
+                        autocompleteList.classList.add('flex');
+                    })
+                    .catch(err => console.error("Search error:", err));
+            }, 300);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !autocompleteList.contains(e.target)) {
+                autocompleteList.classList.add('hidden');
+                autocompleteList.classList.remove('flex');
+            }
+        });
+        
+        searchInput.addEventListener('focus', () => {
+            if (searchInput.value.trim().length >= 2 && autocompleteList.innerHTML !== '') {
+                autocompleteList.classList.remove('hidden');
+                autocompleteList.classList.add('flex');
+            }
+        });
+    }
+
     // Ensure we scroll to the section on load, even if layout shifts
     window.addEventListener('load', () => {
         if (window.location.search.includes('q=')) {
