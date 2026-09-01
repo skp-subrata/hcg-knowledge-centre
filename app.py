@@ -713,8 +713,8 @@ def embed_url(value):
 
 
 def course_is_visible(connection, course_id, user_id):
-	"""Return whether a user is assigned to, created, or if the course is published."""
-	return connection.execute("SELECT 1 FROM courses c LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE c.id = ? AND (c.created_by = ? OR ca.student_id IS NOT NULL OR c.status = 'published')", (user_id, course_id, user_id)).fetchone() is not None
+	"""Return whether a user is assigned to or created a course."""
+	return connection.execute("SELECT 1 FROM courses c LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE c.id = ? AND (c.created_by = ? OR ca.student_id IS NOT NULL)", (user_id, course_id, user_id)).fetchone() is not None
 
 
 
