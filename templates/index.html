@@ -240,7 +240,7 @@
   <section class="mt-12" id="available-courses">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div class="eyebrow text-indigo-600 dark:text-indigo-400 m-0">Available Courses</div>
-          <form method="get" action="/#available-courses" class="relative w-full sm:w-auto flex items-center">
+          <form id="course-search-form" class="relative w-full sm:w-auto flex items-center">
               <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Search by name, topic..." class="form-input w-full sm:w-72 pl-9 pr-8 text-sm rounded-full bg-white/50 dark:bg-slate-900/50 shadow-sm border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
               <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
               {% if search_query %}
@@ -304,10 +304,23 @@
       </div>
       {% else %}
       <div class="col-span-full py-12 text-center text-slate-500 dark:text-slate-400 bg-white/30 dark:bg-slate-900/30 rounded-xl border border-slate-200 dark:border-slate-800 border-dashed backdrop-blur-sm">
-          <p class="text-sm font-medium">No courses found matching your search.</p>
+          <p class="text-sm font-medium">Relevant course not found</p>
       </div>
       {% endif %}
   </section>
+  <script>
+    document.getElementById('course-search-form')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const q = this.querySelector('input[name="q"]').value;
+        window.location.href = "/?q=" + encodeURIComponent(q) + "#available-courses";
+    });
+    // Fallback on load if hash is missing but query exists
+    window.addEventListener('DOMContentLoaded', () => {
+        if (window.location.search.includes('q=') && !window.location.hash) {
+            window.location.hash = '#available-courses';
+        }
+    });
+  </script>
 {% endif %}
 
   {% if user_certifications %}
