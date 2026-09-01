@@ -713,8 +713,19 @@ def embed_url(value):
 
 
 def course_is_visible(connection, course_id, user_id):
-	"""Return whether a user is assigned to or created a course."""
-	return connection.execute("SELECT 1 FROM courses c LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE c.id = ? AND (c.created_by = ? OR ca.student_id IS NOT NULL)", (user_id, course_id, user_id)).fetchone() is not None
+	user = connection.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+	role = user["role"] if user else "basic user"
+	course = connection.execute("SELECT status, created_by FROM courses WHERE id = ?", (course_id,)).fetchone()
+	if not course: return False
+	
+	if role in ("admin", "moderator"):
+		return True
+		
+	if course["created_by"] == user_id:
+		return False
+		
+	assignment = connection.execute("SELECT 1 FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, user_id)).fetchone()
+	return course["status"] == 'published' or assignment is not None
 
 
 
@@ -870,6 +881,8 @@ def create_app():
 				return redirect(url_for("home"))
 			flash("Invalid username or password.")
 		with get_db() as connection:
+			user_id = session.get("user_id", 0)
+			role = session.get("role", "basic user")
 			courses = connection.execute("""
 				SELECT 
 					c.*,
@@ -884,12 +897,14 @@ def create_app():
 					(SELECT ROUND(AVG(CAST(feedback_rating AS FLOAT)), 1) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS avg_rating,
 					(SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
 				FROM courses c 
-				JOIN course_assignments ca ON ca.course_id = c.id 
+				LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ?
 				LEFT JOIN users creator ON c.created_by = creator.id
 				LEFT JOIN course_certifications cc ON cc.course_id = c.id AND cc.user_id = ca.student_id
-				WHERE ca.student_id = ? 
+				WHERE (c.status = 'published' AND c.created_by != ?) 
+				   OR (? IN ('admin', 'moderator'))
+				   OR ca.student_id IS NOT NULL
 				ORDER BY c.id DESC
-			""", (session.get("user_id", 0),)).fetchall()
+			""", (user_id, user_id, role)).fetchall()
 			
 			leaderboard = connection.execute(
 				"""SELECT w.current_balance, u.full_name, u.username
