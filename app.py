@@ -1520,7 +1520,17 @@ def create_app():
 		"""Display and grade a student's assessment while keeping failed attempts retryable."""
 		if not session.get("user_id"):
 			return redirect(url_for("home"))
+		if session.get("role") == "admin":
+			flash("Admins cannot take assessments.")
+			return redirect(url_for("home"))
 		with get_db() as connection:
+			course_id_row = connection.execute("SELECT course_id FROM assessments WHERE id = ?", (assessment_id,)).fetchone()
+			if course_id_row:
+				c_row = connection.execute("SELECT created_by FROM courses WHERE id = ?", (course_id_row["course_id"],)).fetchone()
+				if c_row and c_row["created_by"] == session["user_id"]:
+					flash("You cannot take an assessment for a course you created.")
+					return redirect(url_for("course_detail", course_id=course_id_row["course_id"]))
+
 			assessment_row = connection.execute(
 				"SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id WHERE a.id = ?",
 				(assessment_id,),
@@ -1740,10 +1750,14 @@ def create_app():
 		if not session.get("user_id"):
 			flash("Please log in to continue.")
 			return redirect(url_for("home"))
-		if session.get("role") != "basic user":
-			flash("Admins and moderators cannot complete courses. Please use 'View As Student' to simulate this action.")
+		if session.get("role") == "admin":
+			flash("Admins cannot complete courses. Please use 'View As Student' to simulate this action.")
 			return redirect(url_for("home"))
 		with get_db() as connection:
+			course = connection.execute("SELECT created_by FROM courses WHERE id = ?", (course_id,)).fetchone()
+			if course and course["created_by"] == session["user_id"]:
+				flash("You cannot take or participate in a course you created.")
+				return redirect(url_for("course_detail", course_id=course_id))
 			certification = get_user_course_record(connection, session["user_id"], course_id)
 			if certification and certification["certification_status"] == "CERTIFIED":
 				flash("Course already certified; you can review the material and view the certificate.")
@@ -1764,8 +1778,8 @@ def create_app():
 		if not session.get("user_id"):
 			flash("Please log in to continue.")
 			return redirect(url_for("home"))
-		if session.get("role") != "basic user":
-			flash("Admins and moderators cannot submit feedback. Please use 'View As Student' to simulate this action.")
+		if session.get("role") == "admin":
+			flash("Admins cannot submit feedback. Please use 'View As Student' to simulate this action.")
 			return redirect(url_for("home"))
 		with get_db() as connection:
 			course = connection.execute("""

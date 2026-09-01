@@ -95,14 +95,20 @@
                 <a href="{{ url_for('certificate', course_id=course.id) }}" class="btn-primary px-5 py-3 rounded-full">View Certificate</a>
                 <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn-secondary px-5 py-3 rounded-full">Review Course</a>
                 {% elif progress == 'FEEDBACK_PENDING' %}
+                {% if role != 'admin' and course.created_by != session.get('user_id') %}
                 <a href="{{ url_for('feedback_form', course_id=course.id) }}" class="btn-primary px-5 py-3 rounded-full">Give Feedback &amp; Collect Certificate</a>
+                {% endif %}
                 {% elif progress == 'ASSESSMENT_FAILED' %}
+                {% if role != 'admin' and course.created_by != session.get('user_id') %}
                 <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn-secondary px-5 py-3 rounded-full">Go Through Course Again</a>
                 <a href="{{ url_for('assessment', assessment_id=assessments[0].id) if assessments else url_for('home') }}" class="btn-primary px-5 py-3 rounded-full">Try Assessment Again</a>
+                {% endif %}
                 {% elif progress in ['NOT_STARTED', 'IN_PROGRESS', 'ASSESSMENT_PENDING'] %}
+                {% if role != 'admin' and course.created_by != session.get('user_id') %}
                 <form method="post" action="{{ url_for('complete_course', course_id=course.id) }}">
                     <button class="btn-primary px-5 py-3 rounded-full">Continue Course</button>
                 </form>
+                {% endif %}
                 {% endif %}
             </div>
         </section>
