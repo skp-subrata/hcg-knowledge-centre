@@ -3495,6 +3495,7 @@ def create_app():
 	# â”€â”€ API v1 Authentication & Routing Block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 	@app.get("/api/v1/docs")
+	@admin_required
 	def api_docs_playground():
 		"""Display interactive API v1 documentation and sandbox playground."""
 		return render_template(
