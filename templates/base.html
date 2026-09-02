@@ -657,6 +657,9 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let unreadCount = 0;
+    let isInitialFetch = true;
+    let highestIdSeen = 0;
+    let sessionNewIds = new Set();
     const badge = document.getElementById('notification-badge');
     const countText = document.getElementById('notification-count-text');
     const list = document.getElementById('notification-list');
@@ -682,9 +685,25 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/api/notifications/unread')
             .then(r => r.json())
             .then(data => {
-                if (data.count > unreadCount) {
+                let hasNew = false;
+                
+                data.notifications.forEach(n => {
+                    if (isInitialFetch) {
+                        if (n.id > highestIdSeen) highestIdSeen = n.id;
+                    } else {
+                        if (n.id > highestIdSeen) {
+                            hasNew = true;
+                            highestIdSeen = n.id;
+                            sessionNewIds.add(n.id);
+                        }
+                    }
+                });
+                
+                if (hasNew) {
                     playChime();
                 }
+                
+                isInitialFetch = false;
                 unreadCount = data.count;
                 
                 if (unreadCount > 0) {
@@ -695,8 +714,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     let html = '';
                     data.notifications.forEach(n => {
                         const targetUrl = n.target_url || '#';
+                        const isNew = sessionNewIds.has(n.id);
+                        const highlightClass = isNew ? 'bg-indigo-50/60 dark:bg-indigo-900/40 border-l-2 border-indigo-500 pl-3' : 'px-4';
                         html += `
-                            <a href="javascript:void(0)" onclick="markRead(${n.id}, '${targetUrl}')" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <a href="javascript:void(0)" onclick="markRead(${n.id}, '${targetUrl}')" class="block py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${highlightClass}">
                                 <p class="text-sm text-slate-800 dark:text-slate-200">${n.message}</p>
                                 <p class="text-[10px] text-slate-400 mt-1">${new Date(n.created_at).toLocaleString()}</p>
                             </a>
