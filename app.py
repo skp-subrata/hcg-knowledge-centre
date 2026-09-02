@@ -1732,11 +1732,11 @@ def create_app():
 					(SELECT COUNT(DISTINCT student_id) FROM course_assignments WHERE course_id = ?) AS enrolled_count
 			""", (course_id, course_id, course_id)).fetchone()
 			feedbacks = connection.execute("""
-				SELECT cc.feedback_rating, cc.feedback_comments, cc.feedback_date, u.full_name as reviewer_name
+				SELECT cc.feedback_rating, cc.feedback_comments, cc.feedback_submitted_at, u.full_name as reviewer_name
 				FROM course_certifications cc
 				JOIN users u ON cc.user_id = u.id
 				WHERE cc.course_id = ? AND cc.feedback_comments IS NOT NULL AND cc.feedback_comments != ''
-				ORDER BY cc.feedback_date DESC
+				ORDER BY cc.feedback_submitted_at DESC
 			""", (course_id,)).fetchall()
 		if not course:
 			flash("Course not found.")
