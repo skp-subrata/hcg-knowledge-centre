@@ -718,6 +718,13 @@ def course_is_visible(connection, course_id, user_id):
 	course = connection.execute("SELECT status, created_by FROM courses WHERE id = ?", (course_id,)).fetchone()
 	if not course: return False
 	
+	status = (course["status"] or "published").lower()
+	is_admin = (role == "admin")
+	is_creator = (course["created_by"] == user_id)
+	
+	if status in ("draft", "inactive"):
+		return is_admin or is_creator
+		
 	if role in ("admin", "moderator"):
 		return True
 		
@@ -725,7 +732,7 @@ def course_is_visible(connection, course_id, user_id):
 		return False
 		
 	assignment = connection.execute("SELECT 1 FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, user_id)).fetchone()
-	return course["status"] == 'published' or assignment is not None
+	return status in ('published', 'active') or assignment is not None
 
 
 
@@ -914,6 +921,7 @@ def create_app():
 			new_courses = connection.execute(
 				"""SELECT id, name, category, content_type
 				   FROM courses
+				   WHERE LOWER(IFNULL(status, 'published')) NOT IN ('draft', 'inactive')
 				   ORDER BY id DESC
 				   LIMIT 4"""
 			).fetchall()
@@ -932,7 +940,7 @@ def create_app():
 				   (SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
 				   FROM courses c
 				   LEFT JOIN users creator ON c.created_by = creator.id
-				   WHERE c.status = 'published'
+				   WHERE LOWER(IFNULL(c.status, 'published')) IN ('published', 'active')
 				     AND c.id NOT IN (SELECT course_id FROM course_assignments WHERE student_id = ?)
 				   ORDER BY c.id DESC"""
 			avail_params = [session.get("user_id", 0)]
@@ -2028,12 +2036,20 @@ def create_app():
 	def courses_page():
 		"""Dedicated course management page with wizard."""
 		with get_db() as connection:
-			courses = connection.execute(
-				"""SELECT c.*, u.full_name AS creator_name,
+			query = """SELECT c.*, u.full_name AS creator_name,
 				   (SELECT ROUND(AVG(CAST(feedback_rating AS FLOAT)), 1) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS avg_rating,
 				   (SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
-				   FROM courses c JOIN users u ON u.id = c.created_by ORDER BY c.id DESC"""
-			).fetchall()
+				   FROM courses c JOIN users u ON u.id = c.created_by"""
+			
+			role = session.get("role")
+			user_id = session.get("user_id")
+			
+			if role == "admin":
+				query += " ORDER BY c.id DESC"
+				courses = connection.execute(query).fetchall()
+			else:
+				query += " WHERE LOWER(IFNULL(c.status, 'published')) NOT IN ('draft', 'inactive') OR c.created_by = ? ORDER BY c.id DESC"
+				courses = connection.execute(query, (user_id,)).fetchall()
 		return render_template("courses.html",
 			courses=courses,
 			content_types=CONTENT_TYPES,
