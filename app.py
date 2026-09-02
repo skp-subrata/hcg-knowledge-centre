@@ -927,21 +927,15 @@ def create_app():
 				   LIMIT 4"""
 			).fetchall()
 			
-			search_query = request.args.get("q", "").strip()
 			avail_sql = """SELECT c.*, creator.full_name AS course_owner,
 				   (SELECT ROUND(AVG(CAST(feedback_rating AS FLOAT)), 1) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS avg_rating,
 				   (SELECT COUNT(*) FROM course_certifications WHERE course_id = c.id AND feedback_rating IS NOT NULL) AS rating_count
 				   FROM courses c
 				   LEFT JOIN users creator ON c.created_by = creator.id
 				   WHERE c.status = 'published'
-				     AND c.id NOT IN (SELECT course_id FROM course_assignments WHERE student_id = ?)"""
+				     AND c.id NOT IN (SELECT course_id FROM course_assignments WHERE student_id = ?)
+				   ORDER BY c.id DESC"""
 			avail_params = [session.get("user_id", 0)]
-			
-			if search_query:
-				avail_sql += " AND (c.name LIKE ? OR c.category LIKE ? OR c.tags LIKE ? OR c.description LIKE ?)"
-				avail_params.extend([f"%{search_query}%"] * 4)
-				
-			avail_sql += " ORDER BY c.id DESC"
 			
 			available_courses = connection.execute(avail_sql, avail_params).fetchall()
 
@@ -964,8 +958,7 @@ def create_app():
 			leaderboard=leaderboard,
 			new_courses=new_courses,
 			latest_posts=latest_posts,
-			available_courses=available_courses,
-			search_query=search_query
+			available_courses=available_courses
 		)
 
 
@@ -3604,24 +3597,6 @@ def create_app():
 		return {"message": "User deactivated successfully."}
 	# â”€â”€ COURSES API â”€â”€
 
-
-	@app.get("/api/search_available")
-	def search_available_courses():
-		if not session.get("user_id"):
-			return {"courses": []}
-		q = request.args.get("q", "").strip()
-		if not q:
-			return {"courses": []}
-		with get_db() as connection:
-			sql = """SELECT c.id, c.name, c.category, c.tags 
-					 FROM courses c 
-					 WHERE c.status = 'published' 
-					   AND c.id NOT IN (SELECT course_id FROM course_assignments WHERE student_id = ?) 
-					   AND (c.name LIKE ? OR c.category LIKE ? OR c.tags LIKE ?) 
-					 ORDER BY c.id DESC LIMIT 6"""
-			params = [session["user_id"], f"%{q}%", f"%{q}%", f"%{q}%"]
-			courses = connection.execute(sql, params).fetchall()
-			return {"courses": [dict(c) for c in courses]}
 
 	@app.get("/api/v1/courses")
 	@api_required
