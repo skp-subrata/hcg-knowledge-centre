@@ -240,19 +240,10 @@
   <section class="mt-12" id="available-courses">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div class="eyebrow text-indigo-600 dark:text-indigo-400 m-0">Available Courses</div>
-          <div class="relative w-full sm:w-auto z-10">
-          <form id="course-search-form" class="relative flex items-center w-full">
-              <input type="text" id="course-search-input" autocomplete="off" name="q" value="{{ search_query or '' }}" placeholder="Search by name, topic..." class="form-input w-full sm:w-72 pl-9 pr-8 text-sm rounded-full bg-white/50 dark:bg-slate-900/50 shadow-sm border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-              <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-              <button type="submit" class="hidden">Search</button>
-              {% if search_query %}
-              <a href="/#available-courses" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 z-10">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-              </a>
-              {% endif %}
-          </form>
-          <ul id="search-autocomplete-list" class="absolute top-full mt-2 w-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl max-h-72 overflow-y-auto hidden flex-col divide-y divide-slate-100 dark:divide-slate-800/50"></ul>
-          </div>
+          <div class="relative w-full sm:w-auto">
+            <input type="text" id="available-course-search" placeholder="Search available courses..." class="form-input w-full sm:w-72 pl-9 text-sm rounded-full bg-white/50 dark:bg-slate-900/50 shadow-sm border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" onkeyup="filterAvailableCourses()">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
       </div>
       
       {% if available_courses %}
