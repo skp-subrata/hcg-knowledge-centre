@@ -1709,6 +1709,36 @@ def create_app():
 			report = [(table, connection.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"]) for table in tables]
 		return render_template("reports.html", report=report, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
+	@app.get("/proxy/embed")
+	def proxy_embed():
+		"""Proxy external URLs to strip iframe-blocking headers for the embedded viewer."""
+		url = request.args.get("url")
+		if not url:
+			return "URL is required", 400
+		
+		import urllib.request
+		from flask import Response
+		
+		try:
+			req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+			with urllib.request.urlopen(req, timeout=10) as resp:
+				content = resp.read()
+				
+				headers = {}
+				for k, v in resp.getheaders():
+					k_lower = k.lower()
+					if k_lower not in ('x-frame-options', 'content-security-policy', 'transfer-encoding', 'content-length', 'content-encoding', 'strict-transport-security'):
+						headers[k] = v
+				
+				if b'<head>' in content:
+					content = content.replace(b'<head>', f'<head><base href="{url}">'.encode('utf-8', 'ignore'), 1)
+				elif b'<head ' in content:
+					content = content.replace(b'<head ', f'<head><base href="{url}"></head><head '.encode('utf-8', 'ignore'), 1)
+					
+				return Response(content, status=resp.status, headers=headers)
+		except Exception as e:
+			return f"Failed to proxy embedded page: {str(e)}", 500
+
 	@app.get("/course/<int:course_id>")
 	def course_detail(course_id):
 		"""Show assigned course content and each student's completion state."""
