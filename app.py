@@ -1725,13 +1725,26 @@ def create_app():
 			if certification and certification["latest_assessment_status"] == "FEEDBACK_PENDING":
 				progress = "FEEDBACK_PENDING"
 			assessments = connection.execute("SELECT * FROM assessments WHERE course_id = ? ORDER BY id", (course_id,)).fetchall()
+			stats = connection.execute("""
+				SELECT 
+					(SELECT ROUND(AVG(CAST(feedback_rating AS FLOAT)), 1) FROM course_certifications WHERE course_id = ?) AS avg_rating,
+					(SELECT COUNT(*) FROM course_certifications WHERE course_id = ? AND feedback_rating IS NOT NULL) AS rating_count,
+					(SELECT COUNT(DISTINCT student_id) FROM course_assignments WHERE course_id = ?) AS enrolled_count
+			""", (course_id, course_id, course_id)).fetchone()
+			feedbacks = connection.execute("""
+				SELECT cc.feedback_rating, cc.feedback_comments, cc.feedback_date, u.full_name as reviewer_name
+				FROM course_certifications cc
+				JOIN users u ON cc.user_id = u.id
+				WHERE cc.course_id = ? AND cc.feedback_comments IS NOT NULL AND cc.feedback_comments != ''
+				ORDER BY cc.feedback_date DESC
+			""", (course_id,)).fetchall()
 		if not course:
 			flash("Course not found.")
 			return redirect(url_for("home"))
 		if not allowed:
 			flash("You do not have permission to view this course.")
 			return redirect(url_for("home"))
-		return render_template("course.html", course=course, progress=progress, certification=certification, assessments=assessments, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"), impersonating=session.get("impersonator_id"))
+		return render_template("course.html", course=course, progress=progress, certification=certification, assessments=assessments, stats=stats, feedbacks=feedbacks, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"), impersonating=session.get("impersonator_id"))
 
 	@app.post("/course/<int:course_id>/complete")
 	def complete_course(course_id):
