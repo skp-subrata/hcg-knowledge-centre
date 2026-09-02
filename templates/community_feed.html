@@ -131,8 +131,8 @@
 
             <!-- Embedded Thumbnail Cover Image if exists -->
             {% if post.thumbnail %}
-            <div class="mb-4 rounded-xl overflow-hidden max-h-[300px] border border-slate-100 dark:border-slate-800">
-                <img src="/uploads/{{ post.thumbnail }}" alt="Cover Image" class="w-full object-cover max-h-[300px]">
+            <div class="mb-4 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+                <img src="/uploads/{{ post.thumbnail }}" alt="Cover Image" class="w-full h-auto block">
             </div>
             {% endif %}
 
