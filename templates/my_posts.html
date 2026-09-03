@@ -55,6 +55,8 @@
                                 bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300
                             {% elif post.status == 'UNPUBLISHED' %}
                                 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300
+                            {% elif post.status == 'INACTIVE' %}
+                                bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300
                             {% endif %}">
                             {{ post.status|replace('_', ' ') }}
                         </span>
@@ -70,17 +72,15 @@
                     </td>
                     <td class="py-4 px-4 text-right">
                         <div class="flex gap-2 justify-end items-center">
-                            {% if post.status == 'PUBLISHED' %}
+                            {% if post.status in ('PUBLISHED', 'INACTIVE') %}
                             <a href="{{ url_for('post_detail', post_id=post.id) }}" class="text-xs font-bold text-sky-600 hover:underline px-2 py-1 bg-sky-50 dark:bg-sky-900/20 dark:text-sky-400 rounded-lg">View Post</a>
                             {% endif %}
                             
                             <a href="{{ url_for('edit_post', post_id=post.id) }}" class="text-xs font-bold text-indigo-600 hover:underline px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400 rounded-lg">Edit</a>
                             
-                            {% if post.status in ('DRAFT', 'REJECTED') or role == 'admin' %}
-                            <form method="post" action="{{ url_for('delete_post', post_id=post.id) }}" onsubmit="return confirm('Delete this post permanently?')" class="inline">
+                            <form method="post" action="{{ url_for('delete_post', post_id=post.id) }}" onsubmit="return confirm('Are you sure you want to remove this post from the public forum?')" class="inline">
                                 <button type="submit" class="text-xs font-bold text-rose-600 hover:underline px-2 py-1 bg-rose-50 dark:bg-rose-900/20 dark:text-rose-400 rounded-lg">Delete</button>
                             </form>
-                            {% endif %}
                         </div>
                     </td>
                 </tr>

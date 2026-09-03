@@ -133,6 +133,7 @@
                 </div>
 
                 <!-- Rate This Content Input (Star selector forms) -->
+                {% if post.created_by != session.user_id %}
                 <div>
                     <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 text-left sm:text-right">Rate this content:</p>
                     <div class="flex gap-1.5">
@@ -149,6 +150,7 @@
                     <p class="text-[10px] text-slate-400 mt-1 text-left sm:text-right">Your rating: {{ user_rating.rating }} stars</p>
                     {% endif %}
                 </div>
+                {% endif %}
             </div>
         </div>
     </article>

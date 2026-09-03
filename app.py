@@ -2645,34 +2645,17 @@ def create_app():
 			
 		is_owner = post["created_by"] == user_id
 		if role == "basic user":
-			if not is_owner or post["status"] not in ("DRAFT", "REJECTED"):
-				flash("You can only delete your own draft or rejected posts.")
+			if not is_owner:
+				flash("You can only inactivate your own posts.")
 				return redirect(safe_referrer(url_for("my_posts")))
 		elif role != "admin" and not is_owner:
-			flash("Unauthorized to delete this post.")
+			flash("Unauthorized to inactivate this post.")
 			return redirect(safe_referrer(url_for("my_posts")))
 			
 		with get_db() as connection:
-			atts = connection.execute("SELECT file_path FROM post_attachments WHERE post_id = ?", (post_id,)).fetchall()
-			for att in atts:
-				try:
-					(UPLOAD_FOLDER / att["file_path"]).unlink(missing_ok=True)
-				except Exception:
-											pass
-					
-			if post["thumbnail"]:
-				try:
-					(UPLOAD_FOLDER / post["thumbnail"]).unlink(missing_ok=True)
-				except Exception:
-											pass
-					
-			connection.execute("DELETE FROM post_attachments WHERE post_id = ?", (post_id,))
-			connection.execute("DELETE FROM post_ratings WHERE post_id = ?", (post_id,))
-			connection.execute("DELETE FROM post_comments WHERE post_id = ?", (post_id,))
-			connection.execute("DELETE FROM post_approval_history WHERE post_id = ?", (post_id,))
-			connection.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+			connection.execute("UPDATE posts SET status = 'INACTIVE' WHERE id = ?", (post_id,))
 			
-		flash("Post deleted successfully.")
+		flash("Post inactivated and removed from public forum.")
 		return redirect(safe_referrer(url_for("my_posts")))
 
 	@app.get("/community/approval-queue")
@@ -2899,6 +2882,10 @@ def create_app():
 			if not post:
 				flash("Post not found.")
 				return redirect(safe_referrer(url_for("community_feed")))
+				
+			if post["created_by"] == user_id:
+				flash("You cannot rate your own post.")
+				return redirect(safe_referrer(url_for("post_detail", post_id=post_id)))
 				
 			role = session.get("role")
 			if post["status"] != "PUBLISHED" and not (post["created_by"] == user_id or role in ("admin", "moderator")):
