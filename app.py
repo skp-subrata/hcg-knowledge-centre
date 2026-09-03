@@ -2892,6 +2892,11 @@ def create_app():
 				flash("Unauthorized to rate this post.")
 				return redirect(safe_referrer(url_for("community_feed")))
 				
+			existing = connection.execute("SELECT id FROM post_ratings WHERE post_id = ? AND user_id = ?", (post_id, user_id)).fetchone()
+			if existing:
+				flash("You have already rated this post. Your rating cannot be changed.")
+				return redirect(safe_referrer(url_for("post_detail", post_id=post_id)))
+				
 			connection.execute(
 				"""INSERT INTO post_ratings (post_id, user_id, rating, updated_at)
 				   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
