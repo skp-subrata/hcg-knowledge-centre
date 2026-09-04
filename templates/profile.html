@@ -21,19 +21,55 @@
                 </div>
             </div>
 
-            <div>
-                <label class="form-label">Display Name (Full Name)</label>
-                <input type="text" name="full_name" class="form-input" value="{{ user_data.full_name }}" required>
-            </div>
-            
-            <div>
-                <label class="form-label">Email</label>
-                <input type="email" name="email" class="form-input" value="{{ user_data.email or '' }}">
-            </div>
-            
-            <div>
-                <label class="form-label">Phone Number</label>
-                <input type="text" name="phone_number" class="form-input" value="{{ user_data.phone_number or '' }}">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="form-label">Display Name (Full Name) *</label>
+                    <input type="text" name="full_name" class="form-input" value="{{ user_data.full_name }}" required>
+                </div>
+                <div>
+                    <label class="form-label">Employee ID *</label>
+                    <input type="text" name="employee_id" class="form-input" value="{{ user_data.employee_id or '' }}" required>
+                </div>
+                <div>
+                    <label class="form-label">Email *</label>
+                    <input type="email" name="email" class="form-input" value="{{ user_data.email or '' }}" required>
+                </div>
+                <div>
+                    <label class="form-label">Phone Number *</label>
+                    <input type="tel" name="phone_number" class="form-input" value="{{ user_data.phone_number or '' }}" required>
+                </div>
+                <div>
+                    <label class="form-label">Department</label>
+                    <select name="department_id" class="form-input dept-select">
+                        <option value="">[ Select Department ▼ ]</option>
+                        {% for d in master_depts %}
+                        <option value="{{ d.id }}" {% if user_data.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Position</label>
+                    <select name="position_id" class="form-input pos-select">
+                        <option value="">[ Select Position ▼ ]</option>
+                        {% for p in master_positions %}
+                        <option value="{{ p.id }}" {% if user_data.position_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="form-label">Interests</label>
+                    <select name="interests" multiple class="form-input h-24 int-select">
+                        {% set user_ints = (user_data.interest_ids or '').split(',') %}
+                        {% for i in master_interests %}
+                        <option value="{{ i.id }}" {% if i.id|string in user_ints %}selected{% endif %}>{{ i.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-[10px] text-slate-400 mt-1">Hold Ctrl (or Cmd) to select multiple interests.</p>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="form-label">About Me</label>
+                    <textarea name="about_me" class="form-input h-24" placeholder="Short professional or personal introduction">{{ user_data.about_me or '' }}</textarea>
+                </div>
             </div>
             
             <div class="pt-4 flex gap-4">
