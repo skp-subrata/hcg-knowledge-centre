@@ -1328,12 +1328,13 @@ def create_app():
 				department_id = int(department_id) if department_id else None
 				position_id = request.form.get("position_id")
 				position_id = int(position_id) if position_id else None
+				location_id = request.form.get("location_id")
+				location_id = int(location_id) if location_id else None
 				about_me = request.form.get("about_me", "").strip()
 				interests = request.form.getlist("interests")
-				location = request.form.get("location", "").strip()
 				
-				if not full_name or not username or len(password) < 6 or role not in ROLES or not employee_id or not email or not phone_number:
-					flash("Enter all mandatory fields (employee ID, email, phone) and use a password of at least 6 chars.")
+				if not full_name or not username or len(password) < 6 or role not in ROLES or not employee_id or not email or not phone_number or not location_id:
+					flash("Enter all mandatory fields (employee ID, email, phone, location) and use a password of at least 6 chars.")
 				else:
 					try:
 						with get_db() as connection:
@@ -1344,8 +1345,8 @@ def create_app():
 								else: flash("Username already exists.")
 							else:
 								cursor = connection.execute(
-									"INSERT INTO users (full_name, username, password_hash, role, employee_id, email, phone_number, department_id, position_id, about_me, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-									(full_name, username, generate_password_hash(password), role, employee_id, email, phone_number, department_id, position_id, about_me, location),
+									"INSERT INTO users (full_name, username, password_hash, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+									(full_name, username, generate_password_hash(password), role, employee_id, email, phone_number, department_id, position_id, location_id, about_me),
 								)
 								new_user_id = cursor.lastrowid
 								for int_id in interests:
@@ -1368,12 +1369,13 @@ def create_app():
 					department_id = int(department_id) if department_id else None
 					position_id = request.form.get("position_id")
 					position_id = int(position_id) if position_id else None
+					location_id = request.form.get("location_id")
+					location_id = int(location_id) if location_id else None
 					about_me = request.form.get("about_me", "").strip()
 					interests = request.form.getlist("interests")
-					location = request.form.get("location", "").strip()
 					
-					if not full_name or not username or not employee_id or not email or not phone_number:
-						flash("Employee ID, Email, Phone Number, Name, and Username are mandatory.")
+					if not full_name or not username or not employee_id or not email or not phone_number or not location_id:
+						flash("Employee ID, Email, Phone Number, Location, Name, and Username are mandatory.")
 					else:
 						with get_db() as connection:
 							dup = connection.execute("SELECT id, employee_id, email, username FROM users WHERE (username = ? OR employee_id = ? OR email = ?) AND id != ?", (username, employee_id, email, user_id)).fetchone()
@@ -1383,8 +1385,8 @@ def create_app():
 								else: flash("Username already in use.")
 							else:
 								connection.execute(
-									"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, about_me = ?, location = ? WHERE id = ?",
-									(full_name, username, role, employee_id, email, phone_number, department_id, position_id, about_me, location, user_id),
+									"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ? WHERE id = ?",
+									(full_name, username, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, user_id),
 								)
 								connection.execute("DELETE FROM user_interests WHERE user_id = ?", (user_id,))
 								for int_id in interests:
@@ -1553,10 +1555,11 @@ def create_app():
 					flash("That course assignment could not be completed.")
 
 		with get_db() as connection:
-			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.about_me, u.location, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interests ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
+			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interests ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
 			master_depts = connection.execute("SELECT id, name FROM departments WHERE status = 'active' ORDER BY name").fetchall()
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, name FROM interests WHERE status = 'active' ORDER BY name").fetchall()
+			master_locations = connection.execute("SELECT id, name FROM locations WHERE status = 'active' ORDER BY name").fetchall()
 			courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (session["user_id"], session["user_id"])).fetchall()
 			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
 			banks = connection.execute("SELECT * FROM question_banks ORDER BY id DESC").fetchall()
@@ -1568,7 +1571,7 @@ def create_app():
 			api_creds = connection.execute("SELECT ac.*, u.username, u.full_name, u.role FROM api_credentials ac JOIN users u ON u.id = ac.user_id ORDER BY ac.id DESC").fetchall()
 			
 			assignable_courses = connection.execute("SELECT id, name FROM courses WHERE status = 'published' ORDER BY name").fetchall()
-		return render_template("admin.html", users=users, courses=courses, assignable_courses=assignable_courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+		return render_template("admin.html", users=users, courses=courses, assignable_courses=assignable_courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.route("/assessments/<int:assessment_id>", methods=["GET", "POST"])
 	def assessment(assessment_id):
@@ -2379,6 +2382,8 @@ def create_app():
 			department_id = int(department_id) if department_id else None
 			position_id = request.form.get("position_id")
 			position_id = int(position_id) if position_id else None
+			location_id = request.form.get("location_id")
+			location_id = int(location_id) if location_id else None
 			about_me = request.form.get("about_me", "").strip()
 			interests = request.form.getlist("interests")
 
@@ -2393,8 +2398,8 @@ def create_app():
 				except Exception as e:
 					flash("Failed to save profile picture.")
 					
-			if not full_name or not email or not phone_number or not employee_id:
-				flash("Name, Employee ID, Email, and Phone are mandatory.")
+			if not full_name or not email or not phone_number or not employee_id or not location_id:
+				flash("Name, Employee ID, Email, Phone, and Location are mandatory.")
 				return redirect(safe_referrer(url_for("profile")))
 				
 			with get_db() as connection:
@@ -2405,8 +2410,8 @@ def create_app():
 					return redirect(safe_referrer(url_for("profile")))
 					
 				connection.execute(
-					"UPDATE users SET full_name = ?, email = ?, phone_number = ?, employee_id = ?, department_id = ?, position_id = ?, about_me = ?, profile_picture = ? WHERE id = ?",
-					(full_name, email, phone_number, employee_id, department_id, position_id, about_me, pic_filename, session["user_id"])
+					"UPDATE users SET full_name = ?, email = ?, phone_number = ?, employee_id = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ?, profile_picture = ? WHERE id = ?",
+					(full_name, email, phone_number, employee_id, department_id, position_id, location_id, about_me, pic_filename, session["user_id"])
 				)
 				connection.execute("DELETE FROM user_interests WHERE user_id = ?", (session["user_id"],))
 				for int_id in interests:
@@ -2422,7 +2427,8 @@ def create_app():
 			master_depts = connection.execute("SELECT id, name FROM departments WHERE status = 'active' ORDER BY name").fetchall()
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, name FROM interests WHERE status = 'active' ORDER BY name").fetchall()
-		return render_template("profile.html", user_data=user_data, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+			master_locations = connection.execute("SELECT id, name FROM locations WHERE status = 'active' ORDER BY name").fetchall()
+		return render_template("profile.html", user_data=user_data, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.context_processor
 	def inject_notifications():
@@ -4497,6 +4503,23 @@ def api_add_interest():
             return {"message": "Interest added.", "id": interest_id, "name": name}, 201
         except sqlite3.IntegrityError:
             return {"error": "Interest already exists."}, 409
+
+@app.post("/api/v1/locations")
+@api_required
+def api_add_location():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return {"error": "Location name is required."}, 400
+    with get_db() as connection:
+        try:
+            loc_id = connection.execute(
+                "INSERT INTO locations (name, created_by) VALUES (?, ?)",
+                (name, session.get("user_id", getattr(g, "api_user", {}).get("id")))
+            ).lastrowid
+            return {"message": "Location added.", "id": loc_id, "name": name}, 201
+        except sqlite3.IntegrityError:
+            return {"error": "Location already exists."}, 409
 
 if __name__ == "__main__":
 	app.run(debug=True)

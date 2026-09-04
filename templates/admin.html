@@ -260,8 +260,13 @@
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Location</label>
-                    <input name="location" class="form-input">
+                    <label class="form-label flex justify-between">Location * <a href="#" onclick="addMaster('locations', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Location]</a></label>
+                    <select name="location_id" class="form-input loc-select" required>
+                        <option value="">[ Select Location ▼ ]</option>
+                        {% for l in master_locations %}
+                        <option value="{{ l.id }}">{{ l.name }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="md:col-span-2">
                     <label class="form-label flex justify-between">Interests <a href="#" onclick="addMaster('interests', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Interest]</a></label>
