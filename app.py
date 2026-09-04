@@ -3566,14 +3566,20 @@ def create_app():
 	@api_admin_required
 	def api_create_user():
 		"""Create a new user profile."""
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		username = (data.get("username") or "").strip()
 		full_name = (data.get("full_name") or "").strip()
 		password = data.get("password")
 		role = data.get("role", "basic user").strip()
 		
-		if not username or not full_name or not password:
-			return {"error": "Missing required fields: username, full_name, password."}, 400
+		missing = []
+		if not username: missing.append("username")
+		if not full_name: missing.append("full_name")
+		if not password: missing.append("password")
+		
+		if missing:
+			return {"error": f"Missing required fields: {', '.join(missing)}."}, 400
+			
 		if len(password) < 6:
 			return {"error": "Password must be at least 6 characters."}, 400
 		if role not in ROLES:
@@ -3585,7 +3591,7 @@ def create_app():
 				return {"error": "Username already exists."}, 409
 			try:
 				user_id = connection.execute(
-					"INSERT INTO users (username, password, role, full_name) VALUES (?, ?, ?, ?)",
+					"INSERT INTO users (username, password_hash, role, full_name) VALUES (?, ?, ?, ?)",
 					(username, generate_password_hash(password), role, full_name)
 				).lastrowid
 			except Exception as e:
@@ -3641,7 +3647,7 @@ def create_app():
 	@app.put("/api/v1/users/<int:user_id>")
 	@api_admin_required
 	def api_update_user(user_id):
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		full_name = data.get("full_name")
 		if not full_name:
 			return {"error": "Missing full_name."}, 400
@@ -3675,7 +3681,7 @@ def create_app():
 	def api_create_course():
 		"""Create a new course."""
 		from flask import g
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		name = (data.get("name") or "").strip()
 		description = (data.get("description") or "").strip()
 		category = (data.get("category") or "General").strip()
@@ -3729,7 +3735,7 @@ def create_app():
 	def api_assign_course(course_id):
 		"""Assign a course to a basic student user."""
 		from flask import g
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		student_id = data.get("student_id")
 		if not student_id:
 			return {"error": "Missing student_id in request body."}, 400
@@ -3788,7 +3794,7 @@ def create_app():
 	def api_create_post():
 		"""Create a new community feed post."""
 		from flask import g
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		title = (data.get("title") or "").strip()
 		description = (data.get("description") or "").strip()
 		content_type = (data.get("content_type") or "Text/Article").strip()
@@ -3874,7 +3880,7 @@ def create_app():
 	def api_rate_post(post_id):
 		"""Submit a rating (1-5 stars) for a community post."""
 		from flask import g
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		rating = data.get("rating")
 		if rating is None or not (1 <= int(rating) <= 5):
 			return {"error": "Rating must be an integer between 1 and 5."}, 400
@@ -3936,7 +3942,7 @@ def create_app():
 	def api_comment_post(post_id):
 		"""Add a text comment to a community post."""
 		from flask import g
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		comment_text = (data.get("comment") or "").strip()
 		if not comment_text:
 			return {"error": "Missing comment text in request body."}, 400
@@ -4015,7 +4021,7 @@ def create_app():
 	def api_submit_assessment(assessment_id):
 		"""Submit answers to an assessment for scoring, status tracking, and certification."""
 		from flask import g
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		answers = data.get("answers")
 		if not isinstance(answers, dict):
 			return {"error": "Missing or invalid 'answers' dictionary in request body."}, 400
@@ -4250,7 +4256,7 @@ def create_app():
 	@api_admin_required
 	def api_settle_rewards():
 		"""Perform admin settlement on user reward points balance."""
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		target_user_id = data.get("target_user_id")
 		points = data.get("points")
 		if not target_user_id or points is None or int(points) <= 0:
@@ -4287,7 +4293,7 @@ def create_app():
 	@api_admin_required
 	def api_adjust_rewards():
 		"""Manually adjust user wallet points balance (CREDIT or DEBIT)."""
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		target_user_id = data.get("target_user_id")
 		points = data.get("points")
 		description = (data.get("description") or "Balance manual adjustment by Administrator").strip()
@@ -4330,7 +4336,7 @@ def create_app():
 	@api_admin_required
 	def api_reset_rewards():
 		"""Reset user reward balance to zero."""
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		target_user_id = data.get("target_user_id")
 		if not target_user_id:
 			return {"error": "Missing target_user_id parameter in request body."}, 400
