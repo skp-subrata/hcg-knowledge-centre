@@ -99,10 +99,7 @@ MAY_DENY = {
 }
 
 # (endpoint, method, persona) -> QA id. Each xfails; the test fails once the defect is fixed.
-KNOWN_ISSUES = {}
-KNOWN_ISSUES[("proxy_embed", "GET", "anon")] = "QA-012 /proxy/embed is unauthenticated (SSRF / open proxy)"
-KNOWN_ISSUES[("uploaded_file", "GET", "anon")] = "QA-013 /uploads/<file> is served to anonymous users"
-KNOWN_ISSUES[("get_user_interests", "GET", "anon")] = "QA-014 /api/users/<id>/interests readable anonymously"
+KNOWN_ISSUES = {}  # (endpoint, method, persona) -> QA id; empty means every known defect is fixed
 
 
 def _surface(endpoint):
@@ -157,6 +154,9 @@ def fake_network(monkeypatch):
 	import urllib.request
 
 	monkeypatch.setattr(urllib.request, "urlopen", lambda req, *a, **k: FakeHTTPResponse(getattr(req, "full_url", str(req))))
+	import socket
+
+	monkeypatch.setattr(socket, "getaddrinfo", lambda host, port, proto=None, **kw: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))])
 
 
 @pytest.fixture
@@ -235,7 +235,7 @@ def _url(endpoint, rule, method, world):
 	adapter = app_module.app.url_map.bind("localhost")
 	url = adapter.build(endpoint, values, method=method)
 	if endpoint == "proxy_embed":
-		url += "?url=https://example.com/embedded"
+		url += "?url=https://example.com/course"  # the world's published course content_url
 	return url
 
 

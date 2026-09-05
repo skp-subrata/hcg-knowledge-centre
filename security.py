@@ -64,7 +64,7 @@ def _is_public_address(address):
 	)
 
 
-def is_safe_proxy_target(url, resolver=socket.getaddrinfo):
+def is_safe_proxy_target(url, resolver=None):
 	"""True when *url* is an http(s) URL whose host resolves only to public addresses.
 
 	Rejects file://, other schemes, empty hosts, and anything pointing at loopback,
@@ -77,6 +77,7 @@ def is_safe_proxy_target(url, resolver=socket.getaddrinfo):
 	if parsed.scheme not in ("http", "https") or not parsed.hostname:
 		return False
 	hostname = parsed.hostname
+	resolver = resolver or socket.getaddrinfo  # looked up at call time so tests can fake DNS
 	try:
 		infos = resolver(hostname, parsed.port or (443 if parsed.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
 	except (socket.gaierror, UnicodeError, OSError):

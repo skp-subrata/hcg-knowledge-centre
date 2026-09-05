@@ -14,6 +14,7 @@ from flask import Flask, flash, g, redirect, render_template, request, send_file
 from openpyxl import Workbook, load_workbook
 from storage import save_file
 from db_init import apply_init_scripts, applied_scripts
+from security import attachment_allowed, is_safe_proxy_target, load_or_create_secret_key, serve_inline
 
 
 DATABASE = Path(os.getenv("LMS_DATABASE", Path(__file__).with_name("users.db")))
@@ -945,9 +946,11 @@ def safe_referrer(default_url):
 def create_app():
 	"""Build and configure the Flask application."""
 	app = Flask(__name__)
-	app.secret_key = os.getenv("LMS_SECRET_KEY", "change-this-local-secret")
+	# LMS_SECRET_KEY wins; otherwise a key is generated once and kept in .secret_key (git-ignored).
+	app.secret_key = os.getenv("LMS_SECRET_KEY") or load_or_create_secret_key(os.getenv("LMS_SECRET_KEY_FILE", Path(__file__).with_name(".secret_key")))
 	app.config["TEMPLATES_AUTO_RELOAD"] = True
 	app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
+	app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 	app.jinja_env.globals["embed_url"] = embed_url
 
 	@app.template_filter("fromjson")
@@ -1920,6 +1923,14 @@ def create_app():
 		url = request.args.get("url")
 		if not url:
 			return "URL is required", 400
+		if not session.get("user_id"):
+			return redirect(url_for("home"))
+		with get_db() as connection:
+			course = connection.execute("SELECT id FROM courses WHERE content_url = ?", (url,)).fetchone()
+			if not course or not course_is_visible(connection, course["id"], session["user_id"]):
+				return "Only the content of a course you can access can be embedded.", 403
+		if not is_safe_proxy_target(url):
+			return "This address cannot be embedded.", 403
 		
 		import urllib.request
 		from flask import Response
@@ -2484,8 +2495,12 @@ def create_app():
 
 	@app.get("/uploads/<path:filename>")
 	def uploaded_file(filename):
-		"""Serve locally stored course content."""
-		return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=False)
+		"""Serve stored files to logged-in users; only media renders inline, everything else downloads."""
+		if not session.get("user_id"):
+			return redirect(url_for("home"))
+		response = send_from_directory(UPLOAD_FOLDER, filename, as_attachment=not serve_inline(filename))
+		response.headers["X-Content-Type-Options"] = "nosniff"
+		return response
 
 	@app.get("/switch-role")
 	def switch_role():
@@ -2669,6 +2684,9 @@ def create_app():
 				attachments = request.files.getlist("attachments")
 				for file in attachments:
 					if file and file.filename:
+						if not attachment_allowed(file.filename):
+							flash(f"Skipped attachment '{file.filename}': file type not allowed.")
+							continue
 						ext = os.path.splitext(file.filename)[1].lower()
 						file_name = secure_filename(file.filename)
 						file_path = f"post_{post_id}_{uuid4().hex[:8]}_{file_name}"
@@ -2793,6 +2811,9 @@ def create_app():
 				new_attachments = request.files.getlist("attachments")
 				for file in new_attachments:
 					if file and file.filename:
+						if not attachment_allowed(file.filename):
+							flash(f"Skipped attachment '{file.filename}': file type not allowed.")
+							continue
 						ext = os.path.splitext(file.filename)[1].lower()
 						file_name = secure_filename(file.filename)
 						file_path = f"post_{post_id}_{uuid4().hex[:8]}_{file_name}"
@@ -3825,6 +3846,8 @@ def create_app():
 
 	@app.get("/api/users/<int:target_user_id>/interests")
 	def get_user_interests(target_user_id):
+		if not session.get("user_id"):
+			return {"error": "Login required."}, 401
 		with get_db() as conn:
 			rows = conn.execute("""
 				SELECT i.id, i.interest_name as name 
@@ -5115,8 +5138,10 @@ app = create_app()
 
 
 if __name__ == "__main__":
+	_host = os.getenv("LMS_HOST", "127.0.0.1")
+	_debug_default = "1" if _host in ("127.0.0.1", "localhost", "::1") else "0"
 	app.run(
-		host=os.getenv("LMS_HOST", "127.0.0.1"),
+		host=_host,
 		port=int(os.getenv("LMS_PORT", "5000")),
-		debug=os.getenv("LMS_DEBUG", "1") == "1",
+		debug=os.getenv("LMS_DEBUG", _debug_default) == "1",
 	)

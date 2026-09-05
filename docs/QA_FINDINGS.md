@@ -10,9 +10,9 @@ Severity: **S1** blocker or security, **S2** major (wrong result, data integrity
 | QA-002 | API v1 rewards | logic | S1 | any API key | `GET /api/v1/leaderboard` | 200 list | 500 `no such table: wallets` (table is `user_wallets`) | `api_get_leaderboard`; `test_route_matrix` xfail | fixed |
 | QA-003 | API v1 courses | logic | S1 | any API key, no browser session | `GET /api/v1/courses/<id>`, `POST /api/v1/courses/<id>/assign` | 200 / 201 | 500 `KeyError: 'user_id'` (reads `session` under API-key auth; works only from the browser playground) | `api_get_course`, `api_assign_course`; `test_route_matrix` xfail incl. unknown-id pass | fixed |
 | QA-004 | interests API | security | S2 | anonymous | `POST /api/interests {"interest_name": "x"}` | 401 | 500 `NameError: g`; with any session the row is created (no role check) | `create_interest`; `test_route_matrix` xfail | fixed |
-| QA-012 | embed proxy | security | S1 | anonymous | `GET /proxy/embed?url=<any>` | login required, http(s) only, course URLs only | 200: fetches any URL (incl. `file://`, private hosts) and strips X-Frame-Options / CSP | `proxy_embed`; `test_route_matrix` xfail | xfail |
-| QA-013 | uploads | security | S1 | anonymous | `GET /uploads/<file>` | login required; non-media as attachment | 200 inline for anyone who knows the name | `uploaded_file`; `test_route_matrix` xfail | xfail |
-| QA-014 | interests API | privacy | S3 | anonymous | `GET /api/users/<id>/interests` | 401 | 200 (enumerable per user id) | `get_user_interests`; `test_route_matrix` xfail | xfail |
+| QA-012 | embed proxy | security | S1 | anonymous | `GET /proxy/embed?url=<any>` | login required, http(s) only, course URLs only | 200: fetches any URL (incl. `file://`, private hosts) and strips X-Frame-Options / CSP | `proxy_embed`; `test_route_matrix` xfail | fixed (login + course URL + public-address check; iframe sandbox no longer same-origin; tests/test_security.py) |
+| QA-013 | uploads | security | S1 | anonymous | `GET /uploads/<file>` | login required; non-media as attachment | 200 inline for anyone who knows the name | `uploaded_file`; `test_route_matrix` xfail | fixed (login required; non-media served as attachment with nosniff) |
+| QA-014 | interests API | privacy | S3 | anonymous | `GET /api/users/<id>/interests` | 401 | 200 (enumerable per user id) | `get_user_interests`; `test_route_matrix` xfail | fixed (login required) |
 | QA-015 | routing | logic | S3 | staff | `GET /admin/reports` | one handler | registered twice (`admin_reports` staff, `reports` admin); second is dead code | `test_smoke::test_no_duplicate_url_rules` xfail | fixed (dead reports() route removed; tests/test_smoke.py) |
 | QA-017 | API v1 community | logic | S1 | any API key | `POST /api/v1/posts/<id>/comment {"comment": "x"}` | 201 | 500: inserts column `comment`, real column is `comment_text` | `api_comment_post`; `test_route_matrix` xfail | fixed |
 
@@ -24,7 +24,7 @@ Severity: **S1** blocker or security, **S2** major (wrong result, data integrity
 | `GET /api/interests` | anonymous 200 | keep public (master data) |
 | `GET /api/v1/releases/active` | anonymous 200 | keep public (release notes) |
 | `GET /api/notifications/unread` | anonymous 200 `{count: 0}` | keep (returns nothing for anonymous) |
-| `GET /proxy/embed`, `GET /uploads/<file>`, `GET /api/users/<id>/interests` | anonymous 200 | require login (QA-012, QA-013, QA-014) |
+| `GET /proxy/embed`, `GET /uploads/<file>`, `GET /api/users/<id>/interests` | login required (fixed) | done |
 
 ## Predicted, to be confirmed by flow tests
 
@@ -44,6 +44,6 @@ Route-level smoke cannot see these; each gets a flow test in Phase 2.
 | QA-019 | certification | passing only the 1-question `pre` assessment certifies (feedback uses MAX over all assessments); API submit never writes `course_certifications` | `feedback_form`, `api_submit_assessment` → **fixed** (only post-assessment passes certify; API submit writes course_certifications; one certificate per learner/course (006)) |
 | QA-020 | rewards | web and API ledgers use opposite signs for settlements/resets; API adjust stores `abs()`; two reward reference key spaces → double pay | reward admin routes, API reward routes → **fixed** (tests/test_rewards.py; both surfaces now share one ledger convention) |
 | QA-021 | auth | inactive users can log in and keep API access; API-created mixed-case usernames can never log in | `home()`, `api_required`, `api_create_user` → **fixed** (login and api_required check is_active; API usernames lower-cased) |
-| QA-022 | community | post body rendered with `\|safe` and notification text via `innerHTML` → stored XSS; attachments accept any file type | templates, `create_post`/`edit_post`, `base.html` |
+| QA-022 | community | post body rendered with `\|safe` and notification text via `innerHTML` → stored XSS; attachments accept any file type | templates, `create_post`/`edit_post`, `base.html` → **partly fixed** (attachment allowlist done; HTML sanitising of post bodies and notification text still open) |
 | QA-023 | community | reviewer can approve own post; approvals allowed from any state; staff can rate DRAFT posts and earn rewards | `approval_action`, `rate_post` → **fixed** (self-review blocked; DRAFT rating and state guards remain for the flow tests) |
 | QA-024 | groups/reports | dead status `'completed'` makes dashboard assessments, group completed counts and top-learner reports wrong | `home()`, `group_detail`, `admin_reports` |

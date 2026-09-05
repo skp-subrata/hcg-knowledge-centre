@@ -41,10 +41,11 @@ All settings are environment variables; every one is optional.
 |---|---|---|
 | `LMS_HOST` | `127.0.0.1` | Bind address |
 | `LMS_PORT` | `5000` | Port (`run.sh` falls back to 5050-5059 when 5000 is busy) |
-| `LMS_DEBUG` | `1` | `1` enables the Flask debugger and auto-reload. Set `0` for anything shared |
+| `LMS_DEBUG` | `1` on loopback hosts, else `0` | `1` enables the Flask debugger and auto-reload |
 | `LMS_DATABASE` | `./users.db` | SQLite database file |
 | `LMS_UPLOAD_FOLDER` | `./uploads` | Where uploaded course files, attachments and profile pictures are stored |
-| `LMS_SECRET_KEY` | `change-this-local-secret` | Flask session secret. Set your own for anything shared |
+| `LMS_SECRET_KEY` | generated | Flask session secret. When unset, a random key is generated once and stored in `.secret_key` (git-ignored) |
+| `LMS_SECRET_KEY_FILE` | `./.secret_key` | Where the generated key is kept |
 | `LMS_SEED_DEMO` | `1` | `1` seeds demo accounts, 100 sample users and two demo courses on start-up. Set `0` for a deployment |
 
 ## Database initialisation

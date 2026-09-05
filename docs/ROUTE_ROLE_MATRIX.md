@@ -42,7 +42,7 @@ API personas send X-API-Key / X-API-Secret headers only.
 | POST | `/api/interests` | 401 | 201 | 201 | 201 | 201 | - | - | - |
 | POST | `/api/notifications/<int:notif_id>/read` | 401 | 200 | 200 | 200 | 200 | - | - | - |
 | GET | `/api/notifications/unread` | 200 | 200 | 200 | 200 | 200 | - | - | - |
-| GET | `/api/users/<int:target_user_id>/interests` | 200 | 200 | 200 | 200 | 200 | - | - | - |
+| GET | `/api/users/<int:target_user_id>/interests` | 401 | 200 | 200 | 200 | 200 | - | - | - |
 | POST | `/api/users/<int:target_user_id>/interests` | 403 | 403 | 403 | 200 | 200 | - | - | - |
 | DELETE | `/api/users/<int:target_user_id>/interests/<int:interest_id>` | 403 | 403 | 403 | 200 | 200 | - | - | - |
 | GET | `/api/v1/assessments/<int:assessment_id>` | 401 | - | - | - | - | 200 | 200 | 200 |
@@ -121,7 +121,7 @@ API personas send X-API-Key / X-API-Secret headers only.
 | POST | `/notifications/read/<int:notif_id>` | 302 | 302 | 302 | 302 | 302 | - | - | - |
 | GET | `/profile` | 302 | 200 | 200 | 200 | 200 | - | - | - |
 | POST | `/profile` | 302 | 302 | 302 | 302 | 302 | - | - | - |
-| GET | `/proxy/embed` | 200 | 200 | 200 | 200 | 200 | - | - | - |
+| GET | `/proxy/embed` | 302 | 200 | 200 | 200 | 200 | - | - | - |
 | GET | `/rewards` | 302 | 200 | 200 | 200 | 200 | - | - | - |
-| GET | `/uploads/<path:filename>` | 200 | 200 | 200 | 200 | 200 | - | - | - |
+| GET | `/uploads/<path:filename>` | 302 | 200 | 200 | 200 | 200 | - | - | - |
 | GET | `/view-as` | 302 | 302 | 302 | 200 | 302 | - | - | - |
