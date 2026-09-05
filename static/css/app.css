@@ -190,7 +190,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: rgb(var(--c-accent))
 .badge-info { background: rgb(var(--c-info) / .14); color: rgb(var(--c-info-text)); }
 .badge-neutral { background: rgb(var(--c-fg) / .06); color: rgb(var(--c-fg-2)); }
 .count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.25rem; height: 1.25rem; padding: 0 .375rem; border-radius: 999px; background: rgb(var(--c-accent)); color: rgb(var(--c-on-accent)); font-size: .6875rem; font-weight: 700; }
-.chip { display: inline-flex; align-items: center; gap: .375rem; height: 2rem; padding: 0 .875rem; border-radius: var(--r-sm); border: 1px solid var(--hairline); background: rgb(var(--c-surface)); font-size: .8125rem; font-weight: 500; color: rgb(var(--c-fg-2)); cursor: pointer; transition: background-color var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast), transform 80ms; }
+.chip { display: inline-flex; align-items: center; gap: .375rem; height: 2rem; white-space: nowrap; padding: 0 .875rem; border-radius: var(--r-sm); border: 1px solid var(--hairline); background: rgb(var(--c-surface)); font-size: .8125rem; font-weight: 500; color: rgb(var(--c-fg-2)); cursor: pointer; transition: background-color var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast), transform 80ms; }
 .chip:hover { background: rgb(var(--c-surface-2)); }
 .chip[aria-pressed="true"], .chip.is-active { background: rgb(var(--c-accent)); border-color: rgb(var(--c-accent)); color: rgb(var(--c-on-accent)); }
 .segmented { display: inline-flex; padding: .25rem; gap: .125rem; border-radius: var(--r-sm); background: rgb(var(--c-surface-2)); }

@@ -1,170 +1,95 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, icon, badge, status_badge, table, empty_state, select_field, textarea_field %}
 
-{% block title %}Approval Queue | HCG Knowledge Centre{% endblock %}
+{% block title %}Approval queue · HCG Knowledge Centre{% endblock %}
 
 {% block content %}
-<div class="mb-8">
-    <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-2">Content Approval Queue</h1>
-    <p class="text-slate-500 dark:text-slate-400 text-lg">Review and manage user-submitted posts before they go public.</p>
-</div>
+<header class="page-header">
+  <div>
+    <p class="eyebrow mb-1">Community</p>
+    <h1>Approval queue</h1>
+    <p class="text-fg-2 mt-1">Review submitted posts before they go public. {{ pending_posts|length }} waiting.</p>
+  </div>
+</header>
 
-<div class="glass-panel p-6 bg-white/40 dark:bg-slate-900/40">
-    <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse" id="queue-table">
-            <thead>
-                <tr class="border-b border-slate-200/60 dark:border-slate-800 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                    <th class="py-4 px-4">Content</th>
-                    <th class="py-4 px-4">Created By</th>
-                    <th class="py-4 px-4">Type</th>
-                    <th class="py-4 px-4">Submitted Date</th>
-                    <th class="py-4 px-4">Status</th>
-                    <th class="py-4 px-4 text-right">Action</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-sm">
-                {% for post in pending_posts %}
-                <!-- Main row -->
-                <tr class="hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-colors">
-                    <td class="py-4 px-4">
-                        <p class="font-bold text-slate-900 dark:text-slate-50">{{ post.title }}</p>
-                        <p class="text-[10px] text-indigo-500 font-medium mt-0.5">{{ post.category }} • Version {{ post.version_number }}</p>
-                    </td>
-                    <td class="py-4 px-4">
-                        <p class="font-semibold text-slate-800 dark:text-slate-200">{{ post.creator_name }}</p>
-                        <p class="text-[10px] text-slate-400">@{{ post.username }}</p>
-                    </td>
-                    <td class="py-4 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        {{ post.content_type }}
-                    </td>
-                    <td class="py-4 px-4 text-xs text-slate-500 dark:text-slate-400">
-                        {{ post.updated_at.split(' ')[0] }}
-                    </td>
-                    <td class="py-4 px-4">
-                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                            {{ post.status|replace('_', ' ') }}
-                        </span>
-                    </td>
-                    <td class="py-4 px-4 text-right">
-                        <button onclick="toggleReviewRow({{ post.id }})" class="btn-secondary py-1.5 px-3 rounded-lg text-xs font-bold transition-all shadow-sm">
-                            Review
-                        </button>
-                    </td>
-                </tr>
+{% if pending_posts %}
+{% call table("approval-queue", ["Post", "Author", "Type", "Submitted", "Status", {"label": "Review", "align": "right"}], caption="Posts waiting for review") %}
+  {% for post in pending_posts %}
+  <tr>
+    <td><span class="block font-medium">{{ post.title }}</span><span class="caption">{{ post.category }} · v{{ post.version_number }}</span></td>
+    <td><span class="block">{{ post.creator_name }}</span><span class="caption">@{{ post.username }}</span></td>
+    <td class="text-fg-2">{{ post.content_type }}</td>
+    <td class="text-fg-2 tabular">{{ (post.updated_at or '').split(' ')[0] }}</td>
+    <td>{{ status_badge(post.status) }}</td>
+    <td class="num"><button type="button" class="btn btn-secondary btn-sm" aria-expanded="false" aria-controls="review-{{ post.id }}" data-review-toggle="review-{{ post.id }}">{{ icon("eye") }}<span>Review</span></button></td>
+  </tr>
+  <tr id="review-{{ post.id }}" hidden>
+    <td colspan="6" class="bg-surface-2">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 py-2">
+        <section aria-label="Preview of {{ post.title }}">
+          <p class="eyebrow mb-2">Preview</p>
+          <div class="card max-h-96 overflow-y-auto">
+            <h3 class="mb-2">{{ post.title }}</h3>
+            <div class="prose text-sm">{{ post.description|sanitize|safe }}</div>
+            {% if post.thumbnail %}<img src="{{ url_for('uploaded_file', filename=post.thumbnail) }}" alt="" class="mt-4 rounded-md border hairline max-h-40 object-cover w-full">{% endif %}
+          </div>
+          {% if post.attachments %}
+          <p class="eyebrow mt-4 mb-2">Attachments</p>
+          <ul class="flex flex-col gap-1.5 m-0 p-0 list-none">
+            {% for att in post.attachments %}
+            <li class="card flex items-center justify-between gap-3 py-2 text-sm">
+              <span class="flex items-center gap-2 min-w-0">{{ icon("document", "w-4 h-4 text-fg-2") }}<span class="truncate">{{ att.file_name }}</span></span>
+              <a href="{{ url_for('uploaded_file', filename=att.file_path) }}" download="{{ att.file_name }}" class="text-sm font-medium text-accent no-underline hover:underline shrink-0">Download</a>
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </section>
+        <form method="post" action="{{ url_for('approval_action', post_id=post.id) }}" class="card" aria-label="Decision for {{ post.title }}" data-decision-form>
+          <p class="eyebrow mb-3">Decision</p>
+          {{ select_field("action", "Outcome", [("APPROVE", "Approve and publish"), ("REJECT", "Reject"), ("REQUEST_CHANGES", "Request changes")], required=True, id="decision-" ~ post.id, attrs="data-decision-select") }}
+          <div class="field">
+            <label class="field-label" for="comments-{{ post.id }}" data-decision-label>Reviewer comments <span class="caption font-normal">(optional)</span></label>
+            <textarea class="textarea" id="comments-{{ post.id }}" name="comments" rows="3" placeholder="Comments for the author" data-decision-comments></textarea>
+          </div>
+          {{ btn("Submit decision", "primary", type="submit", class="w-full") }}
+        </form>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+{% endcall %}
+{% else %}
+<div class="card p-0">{{ empty_state("All clear", "No posts are waiting for review.", "check-circle") }}</div>
+{% endif %}
+{% endblock %}
 
-                <!-- Collapsible review row -->
-                <tr id="review-row-{{ post.id }}" class="hidden bg-slate-50/50 dark:bg-slate-900/20">
-                    <td colspan="6" class="p-6 border-t border-b border-slate-100 dark:border-slate-800">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <!-- Post Content Details -->
-                            <div>
-                                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Content Preview</h4>
-                                <div class="p-4 bg-white dark:bg-slate-950 border border-slate-200/50 dark:border-slate-800 rounded-xl max-h-[350px] overflow-y-auto">
-                                    <h5 class="font-black text-slate-900 dark:text-slate-100 text-lg mb-2">{{ post.title }}</h5>
-                                    <div class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed post-preview-body">
-                                        {{ post.description|sanitize|safe }}
-                                    </div>
-                                    
-                                    {% if post.thumbnail %}
-                                    <div class="mt-4 rounded-lg overflow-hidden border border-slate-100 dark:border-slate-800">
-                                        <img src="/uploads/{{ post.thumbnail }}" alt="Cover" class="max-h-[150px] object-cover w-full">
-                                    </div>
-                                    {% endif %}
-                                </div>
-
-                                <!-- Attachments -->
-                                {% if post.attachments %}
-                                <div class="mt-4 space-y-2">
-                                    <h5 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Submitted Attachments</h5>
-                                    {% for att in post.attachments %}
-                                    <div class="flex items-center justify-between p-2.5 bg-white dark:bg-slate-950 border border-slate-200/50 dark:border-slate-800 rounded-lg text-xs">
-                                        <div class="flex items-center gap-2 truncate">
-                                            <svg class="w-4 h-4 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                            <span class="font-medium text-slate-700 dark:text-slate-300 truncate">{{ att.file_name }}</span>
-                                        </div>
-                                        <a href="/uploads/{{ att.file_path }}" download="{{ att.file_name }}" class="text-[10px] font-bold text-indigo-600 hover:underline">
-                                            Download
-                                        </a>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                            </div>
-
-                            <!-- Decision Form -->
-                            <div class="border-l border-slate-200/60 dark:border-slate-800/80 pl-0 md:pl-8">
-                                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Review Action</h4>
-                                
-                                <form method="post" action="{{ url_for('approval_action', post_id=post.id) }}" class="space-y-4">
-                                    <div>
-                                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Decision</label>
-                                        <select name="action" required class="form-input w-full text-sm" onchange="toggleRejectionReason(this, {{ post.id }})">
-                                            <option value="APPROVE">Approve & Publish</option>
-                                            <option value="REJECT">Reject Submission</option>
-                                            <option value="REQUEST_CHANGES">Request Changes</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label id="comment-label-{{ post.id }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Reviewer Comments</label>
-                                        <textarea name="comments" rows="3" placeholder="Optional comments or change instructions..." class="form-input w-full text-sm resize-none rounded-xl"></textarea>
-                                    </div>
-
-                                    <div class="pt-2">
-                                        <button type="submit" class="w-full btn-primary py-2.5 rounded-xl font-bold text-sm shadow">
-                                            Submit Decision
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6" class="py-12 text-center text-slate-500 dark:text-slate-400">
-                        <svg class="w-16 h-16 mx-auto mb-4 opacity-30 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        <p class="text-lg font-medium">All clear!</p>
-                        <p class="text-sm mt-1">There are no pending posts waiting in the queue.</p>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
+{% block scripts %}
 <script>
-function toggleReviewRow(id) {
-    const row = document.getElementById(`review-row-${id}`);
-    row.classList.toggle('hidden');
-}
-
-function toggleRejectionReason(selectEl, id) {
-    const label = document.getElementById(`comment-label-${id}`);
-    const textarea = label.nextElementSibling;
-    
-    if (selectEl.value === 'REJECT') {
-        label.innerText = 'Rejection Reason (Required)';
-        textarea.setAttribute('required', 'required');
-        textarea.setAttribute('placeholder', 'Please provide a detailed reason for rejection...');
-    } else if (selectEl.value === 'REQUEST_CHANGES') {
-        label.innerText = 'Feedback & Required Changes';
-        textarea.setAttribute('required', 'required');
-        textarea.setAttribute('placeholder', 'List the changes the creator needs to make...');
-    } else {
-        label.innerText = 'Reviewer Comments (Optional)';
-        textarea.removeAttribute('required');
-        textarea.setAttribute('placeholder', 'Optional comments or change instructions...');
-    }
-}
+  (function () {
+    document.querySelectorAll('[data-review-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const row = document.getElementById(button.dataset.reviewToggle);
+        const open = row.hidden;
+        row.hidden = !open;
+        button.setAttribute('aria-expanded', String(open));
+        button.querySelector('span').textContent = open ? 'Close' : 'Review';
+      });
+    });
+    document.querySelectorAll('[data-decision-form]').forEach((form) => {
+      const select = form.querySelector('[data-decision-select]');
+      const label = form.querySelector('[data-decision-label]');
+      const comments = form.querySelector('[data-decision-comments]');
+      const apply = () => {
+        const copy = {
+          REJECT: ['Reason for rejection', 'Explain why the post cannot be published', true],
+          REQUEST_CHANGES: ['Required changes', 'List the changes the author needs to make', true],
+          APPROVE: ['Reviewer comments <span class="caption font-normal">(optional)</span>', 'Comments for the author', false],
+        }[select.value];
+        label.innerHTML = copy[0]; comments.placeholder = copy[1]; comments.required = copy[2];
+      };
+      select.addEventListener('change', apply); apply();
+    });
+  })();
 </script>
-
-<style>
-.post-preview-body p {
-    margin-bottom: 0.5rem;
-}
-.post-preview-body strong {
-    font-weight: 700;
-}
-</style>
 {% endblock %}

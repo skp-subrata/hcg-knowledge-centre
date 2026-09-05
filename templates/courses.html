@@ -150,7 +150,7 @@
     // Hide a group when the shared filter leaves it empty.
     const library = byId('course-library');
     if (library) library.addEventListener('hkc:filter', () => {
-      library.querySelectorAll('[data-course-group]').forEach((group) => { group.hidden = !group.querySelector('[data-filter-item]:not([hidden])'); });
+      library.querySelectorAll('[data-course-group]').forEach((group) => { group.hidden = Boolean(group.querySelector('[data-filter-item]')) && !group.querySelector('[data-filter-item]:not([hidden])'); });
     });
 
     // ---- wizard ----

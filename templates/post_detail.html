@@ -1,264 +1,111 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, icon, badge, avatar, textarea_field, empty_state %}
+{% from "community_feed.html" import stars, role_badge %}
 
-{% block title %}{{ post.title }} | HCG Knowledge Centre{% endblock %}
+{% block title %}{{ post.title }} · Community · HCG Knowledge Centre{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto py-8">
-    <!-- Back Link -->
-    <a href="{{ url_for('community_feed') }}" class="inline-flex items-center gap-2 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline mb-6">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
-        Back to Feed
-    </a>
+<div class="max-w-4xl mx-auto">
+  <nav aria-label="Breadcrumb" class="mb-4"><ol class="breadcrumb"><li><a href="{{ url_for('community_feed') }}">Community</a></li><li><span aria-current="page">Post</span></li></ol></nav>
 
-    <!-- Post Article Card -->
-    <article class="glass-panel p-8 bg-white/50 dark:bg-slate-900/40 shadow-md">
-        <!-- Author Header -->
-        <div class="flex items-center justify-between mb-6 pb-6 border-b border-slate-100 dark:border-slate-800/50">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white text-lg shadow" style="background-color: {% if post.role == 'admin' %}#ef4444{% elif post.role == 'moderator' %}#6366f1{% else %}#10b981{% endif %}">
-                    {{ post.creator_name[:2]|upper }}
-                </div>
-                <div>
-                    <div class="flex items-center gap-1.5">
-                        <span class="font-bold text-slate-900 dark:text-slate-50 text-base">{{ post.creator_name }}</span>
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                            {{ post.role }}
-                        </span>
-                    </div>
-                    <p class="text-xs text-slate-400 font-medium">Published on {{ post.created_at }}</p>
-                </div>
-            </div>
-
-            <!-- Badges -->
-            <div class="flex gap-2">
-                <span class="px-3 py-1 rounded-full text-[11px] font-bold uppercase bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                    {{ post.category }}
-                </span>
-                <span class="px-3 py-1 rounded-full text-[11px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-500">
-                    {{ post.content_type }}
-                </span>
-            </div>
+  <article class="card flex flex-col gap-6" aria-labelledby="post-title">
+    <header class="flex flex-wrap items-start justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        {{ avatar(post.creator_name, size="lg") }}
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap"><span class="font-medium">{{ post.creator_name }}</span>{{ role_badge(post.role) }}</div>
+          <p class="caption">Published {{ (post.created_at or '')[:16] }}</p>
         </div>
+      </div>
+      <div class="flex flex-wrap gap-1.5">{{ badge(post.category, "info") }}{{ badge(post.content_type, "neutral") }}</div>
+    </header>
 
-        <!-- Post Title -->
-        <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50 mb-4">{{ post.title }}</h1>
-        
-        <!-- Post Stats -->
-        <div class="flex items-center gap-4 text-xs text-slate-400 mb-6">
-            <span class="flex items-center gap-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                {{ post.views }} views
-            </span>
-            <span>•</span>
-            <span>Version {{ post.version_number }}</span>
-            {% if post.topic_tag %}
-            <span>•</span>
-            <div class="flex flex-wrap gap-1">
-                {% for tag in post.topic_tag.split(',') %}
-                <span class="text-indigo-500">#{{ tag.strip() }}</span>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
+    <div>
+      <h1 id="post-title">{{ post.title }}</h1>
+      <p class="caption mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span class="inline-flex items-center gap-1">{{ icon("eye", "w-3.5 h-3.5") }}{{ post.views }} views</span>
+        <span>Version {{ post.version_number }}</span>
+        {% if post.topic_tag %}{% for tag in post.topic_tag.split(',') if tag.strip() %}<span class="text-accent">#{{ tag.strip() }}</span>{% endfor %}{% endif %}
+      </p>
+    </div>
 
-        <!-- Cover Image -->
-        {% if post.thumbnail %}
-        <div class="mb-6 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-            <img src="/uploads/{{ post.thumbnail }}" alt="Post Cover" class="w-full h-auto block">
+    {% if post.thumbnail %}<img src="{{ url_for('uploaded_file', filename=post.thumbnail) }}" alt="" class="rounded-md border hairline w-full h-auto">{% endif %}
+
+    <div class="prose">{{ post.description|sanitize|safe }}</div>
+
+    {% if attachments %}
+    <section aria-labelledby="attachments-title" class="border-t hairline pt-6 flex flex-col gap-4">
+      <h2 id="attachments-title" class="text-base">Attachments</h2>
+      {% for att in attachments %}
+      <div class="flex flex-col gap-3">
+        <div class="card-inset flex items-center justify-between gap-3 text-sm">
+          <span class="flex items-center gap-3 min-w-0">{{ icon("document", "w-5 h-5 text-fg-2") }}<span class="min-w-0"><span class="block font-medium truncate" title="{{ att.file_name }}">{{ att.file_name }}</span><span class="caption">{{ (att.file_size / 1024)|round(1) }} KB</span></span></span>
+          {{ btn("Download", "secondary", href=url_for('uploaded_file', filename=att.file_path), size="sm", icon_name="download", attrs='download="' ~ att.file_name ~ '"') }}
         </div>
+        {% if att.file_type in ('application/pdf', 'pdf') or att.file_name.lower().endswith('.pdf') %}
+        <div class="media-frame media-frame-tall"><iframe src="{{ url_for('uploaded_file', filename=att.file_path) }}#toolbar=0&navpanes=0" title="Preview of {{ att.file_name }}" loading="lazy"></iframe></div>
+        {% elif (att.file_type or '').startswith('video/') or att.file_name.lower().endswith(('.mp4', '.webm', '.ogg')) %}
+        <div class="media-frame"><video controls controlsList="nodownload" src="{{ url_for('uploaded_file', filename=att.file_path) }}"></video></div>
+        {% elif (att.file_type or '').startswith('image/') or att.file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) %}
+        <img src="{{ url_for('uploaded_file', filename=att.file_path) }}" alt="{{ att.file_name }}" class="rounded-md border hairline max-h-[450px] object-contain mx-auto">
         {% endif %}
-
-        <!-- Long Description / Body Content -->
-        <div class="text-base text-slate-700 dark:text-slate-200 leading-relaxed mb-8 post-html-body font-normal">
-            {{ post.description|sanitize|safe }}
-        </div>
-
-        <!-- Inline File Previews / Attachments Section -->
-        {% if attachments %}
-        <div class="mt-8 border-t border-slate-100 dark:border-slate-800/80 pt-6">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-slate-50 mb-4">Post Attachments</h3>
-            
-            <div class="space-y-6">
-                {% for att in attachments %}
-                <div class="space-y-3">
-                    <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/80 text-sm">
-                        <div class="flex items-center gap-3 truncate">
-                            <svg class="w-6 h-6 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                            <div>
-                                <p class="font-bold text-slate-800 dark:text-slate-200 truncate" title="{{ att.file_name }}">{{ att.file_name }}</p>
-                                <p class="text-xs text-slate-400">({{ (att.file_size / 1024)|round(1) }} KB)</p>
-                            </div>
-                        </div>
-                        <a href="/uploads/{{ att.file_path }}" download="{{ att.file_name }}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                            Download
-                        </a>
-                    </div>
-
-                    <!-- Inline Previews depending on File Type -->
-                    {% if att.file_type in ('application/pdf', 'pdf') or att.file_name.lower().endswith('.pdf') %}
-                    <div class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-inner bg-white">
-                        <iframe class="w-full h-[550px]" src="/uploads/{{ att.file_path }}#toolbar=0&navpanes=0" title="PDF Preview" oncontextmenu="return false;"></iframe>
-                    </div>
-                    {% elif att.file_type.startswith('video/') or att.file_name.lower().endswith(('.mp4', '.webm', '.ogg')) %}
-                    <div class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-black shadow">
-                        <video controls controlsList="nodownload" oncontextmenu="return false;" class="w-full max-h-[450px]" src="/uploads/{{ att.file_path }}"></video>
-                    </div>
-                    {% elif att.file_type.startswith('image/') or att.file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) %}
-                    <div class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900/20 p-2 flex justify-center">
-                        <img src="/uploads/{{ att.file_path }}" alt="Attachment Image" class="rounded-lg max-h-[450px] object-contain">
-                    </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Rating & Interactive Stars Rating System -->
-        <div class="mt-8 border-t border-slate-100 dark:border-slate-800/80 pt-6">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-100 dark:border-slate-800/80">
-                <div>
-                    <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Post Rating Summary</h3>
-                    <div class="flex items-center gap-2 mt-2 select-none">
-                        <div class="flex text-amber-400">
-                            {% set rating_floor = (post.avg_rating or 0)|round(0, 'floor')|int %}
-                            {% for i in range(1, 6) %}
-                                <svg class="w-5 h-5 {% if i <= rating_floor %}fill-current{% else %}stroke-current text-slate-300 dark:text-slate-600{% endif %}" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                            {% endfor %}
-                        </div>
-                        <span class="text-lg font-black text-slate-900 dark:text-slate-50">{{ post.avg_rating or '0.0' }}</span>
-                        <span class="text-xs text-slate-400">({{ post.rating_count or 0 }} ratings total)</span>
-                    </div>
-                </div>
-
-                <!-- Rate This Content Input (Star selector forms) -->
-                {% if post.created_by != session.user_id %}
-                <div>
-                    {% if user_rating %}
-                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 text-left sm:text-right">Your Rating</p>
-                        <div class="flex flex-col items-start sm:items-end gap-1">
-                            <div class="flex text-amber-400">
-                                {% for i in range(1, 6) %}
-                                    <svg class="w-6 h-6 {% if i <= user_rating.rating %}fill-current{% else %}stroke-current text-slate-300 dark:text-slate-700{% endif %}" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                                {% endfor %}
-                            </div>
-                            <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                                {{ user_rating.rating }} / 5
-                            </p>
-                            <p class="text-[10px] text-slate-400 flex items-center gap-1 font-medium bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded-full mt-1">
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                                Rating submitted
-                            </p>
-                        </div>
-                    {% else %}
-                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 text-left sm:text-right">Rate this content:</p>
-                        <div class="flex gap-1.5">
-                            {% for star in range(1, 6) %}
-                            <form method="post" action="{{ url_for('rate_post', post_id=post.id) }}">
-                                <input type="hidden" name="rating" value="{{ star }}">
-                                <button type="submit" class="p-1 rounded bg-white hover:bg-amber-50 border border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:border-amber-400 text-slate-300 hover:text-amber-400 transition-colors" title="Rate {{ star }} Stars">
-                                    <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                                </button>
-                            </form>
-                            {% endfor %}
-                        </div>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </article>
-
-    <!-- Comments Section -->
-    <section class="mt-8 glass-panel p-8 bg-white/40 dark:bg-slate-900/40 shadow-sm" id="comments">
-        <h3 class="text-xl font-bold text-slate-900 dark:text-slate-50 mb-6">Comments ({{ comments|length }})</h3>
-
-        <!-- Add Comment Form -->
-        <form method="post" action="{{ url_for('comment_post', post_id=post.id) }}" class="space-y-4 mb-8">
-            <div>
-                <label for="comment_text" class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Leave a Comment</label>
-                <textarea id="comment_text" name="comment_text" required placeholder="Share your feedback, ask questions..." rows="3" class="form-input w-full rounded-2xl resize-none text-sm p-4"></textarea>
-            </div>
-            <div class="flex justify-end">
-                <button type="submit" class="btn-primary px-5 py-2.5 rounded-xl font-bold text-sm shadow">
-                    Submit Comment
-                </button>
-            </div>
-        </form>
-
-        <!-- Comments List -->
-        <div class="space-y-4">
-            {% for comment in comments %}
-            <div class="p-4 bg-white/60 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800/80 rounded-2xl flex items-start gap-3">
-                <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0" style="background-color: {% if comment.role == 'admin' %}#ef4444{% elif comment.role == 'moderator' %}#6366f1{% else %}#10b981{% endif %}">
-                    {{ comment.full_name[:2]|upper }}
-                </div>
-                <div class="flex-grow">
-                    <div class="flex items-center justify-between gap-2">
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <span class="font-bold text-slate-950 dark:text-slate-50 text-sm">{{ comment.full_name }}</span>
-                            <span class="px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-500">
-                                {{ comment.role }}
-                            </span>
-                            
-                            <!-- Display user rating left next to comment if they rated -->
-                            {% if comment.rating %}
-                            <div class="flex items-center text-amber-400 ml-1">
-                                {% for _ in range(comment.rating) %}
-                                <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                        </div>
-                        <span class="text-[10px] text-slate-400 font-medium">{{ comment.created_at }}</span>
-                    </div>
-                    <p class="text-sm text-slate-700 dark:text-slate-300 mt-1.5 leading-relaxed">{{ comment.comment_text }}</p>
-                </div>
-            </div>
-            {% else %}
-            <p class="text-slate-500 italic text-center py-8">No comments yet. Start the conversation!</p>
-            {% endfor %}
-        </div>
+      </div>
+      {% endfor %}
     </section>
+    {% endif %}
+
+    <section class="card-inset flex flex-col sm:flex-row sm:items-center justify-between gap-4" aria-labelledby="rating-title">
+      <div>
+        <h2 id="rating-title" class="text-base">Rating</h2>
+        <p class="flex items-center gap-2 mt-1">{{ stars(post.avg_rating, "w-5 h-5") }}<span class="text-lg font-semibold tabular">{{ post.avg_rating or '0.0' }}</span><span class="caption">{{ post.rating_count or 0 }} rating{{ '' if post.rating_count == 1 else 's' }}</span></p>
+      </div>
+      {% if post.created_by != session.user_id %}
+        {% if user_rating %}
+        <div class="text-left sm:text-right">
+          <p class="caption mb-1">Your rating</p>
+          <p class="flex items-center gap-2 sm:justify-end">{{ stars(user_rating.rating, "w-5 h-5") }}<span class="font-semibold tabular">{{ user_rating.rating }} / 5</span></p>
+          <p class="caption mt-1 inline-flex items-center gap-1">{{ icon("check", "w-3.5 h-3.5") }}Ratings cannot be changed</p>
+        </div>
+        {% else %}
+        <form method="post" action="{{ url_for('rate_post', post_id=post.id) }}" class="text-left sm:text-right">
+          <p class="caption mb-1.5" id="rate-label">Rate this post</p>
+          <div class="flex gap-1" role="group" aria-labelledby="rate-label">
+            {% for star in range(1, 6) %}
+            <button type="submit" name="rating" value="{{ star }}" class="btn btn-icon btn-secondary btn-sm text-fg-3 hover:text-warning" aria-label="Rate {{ star }} out of 5">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+            </button>
+            {% endfor %}
+          </div>
+        </form>
+        {% endif %}
+      {% endif %}
+    </section>
+  </article>
+
+  <section class="card mt-6 flex flex-col gap-6" id="comments" aria-labelledby="comments-title">
+    <h2 id="comments-title" class="text-base">Comments <span class="caption font-normal">({{ comments|length }})</span></h2>
+    <form method="post" action="{{ url_for('comment_post', post_id=post.id) }}">
+      {{ textarea_field("comment_text", "Add a comment", rows=3, required=True, placeholder="Share your feedback or ask a question") }}
+      <div class="flex justify-end">{{ btn("Post comment", "primary", type="submit", size="sm") }}</div>
+    </form>
+    {% if comments %}
+    <ul class="flex flex-col gap-3 m-0 p-0 list-none">
+      {% for comment in comments %}
+      <li class="card-inset flex items-start gap-3">
+        {{ avatar(comment.full_name, size="sm") }}
+        <div class="flex-1 min-w-0">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="flex items-center gap-2 flex-wrap"><span class="font-medium text-sm">{{ comment.full_name }}</span>{{ role_badge(comment.role) }}{% if comment.rating %}{{ stars(comment.rating, "w-3.5 h-3.5") }}{% endif %}</span>
+            <span class="caption">{{ (comment.created_at or '')[:16] }}</span>
+          </div>
+          <p class="text-sm mt-1.5">{{ comment.comment_text }}</p>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="caption text-center py-4">No comments yet. Start the conversation.</p>
+    {% endif %}
+  </section>
 </div>
-
-<style>
-.post-html-body p {
-    margin-bottom: 1rem;
-}
-.post-html-body strong {
-    font-weight: 700;
-}
-.post-html-body h2 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-top: 1.5rem;
-    margin-bottom: 0.75rem;
-}
-.post-html-body h3 {
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin-top: 1.25rem;
-    margin-bottom: 0.5rem;
-}
-.post-html-body ul {
-    list-style-type: disc;
-    padding-left: 1.5rem;
-    margin-bottom: 1rem;
-}
-.post-html-body ol {
-    list-style-type: decimal;
-    padding-left: 1.5rem;
-    margin-bottom: 1rem;
-}
-.post-html-body blockquote {
-    border-left: 4px solid #6366f1;
-    padding-left: 1rem;
-    font-style: italic;
-    color: #4b5563;
-    margin: 1rem 0;
-}
-</style>
 {% endblock %}
-

@@ -1,217 +1,112 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, icon, field, select_field, badge, avatar, empty_state %}
 
-{% block title %}Community Feed | HCG Knowledge Centre{% endblock %}
+{% block title %}Community · HCG Knowledge Centre{% endblock %}
+
+{% macro stars(value, size="w-4 h-4") -%}
+{%- set full = (value or 0)|round(0, 'floor')|int -%}
+<span class="inline-flex items-center" aria-hidden="true">
+  {%- for i in range(1, 6) -%}
+  <svg class="{{ size }} {% if i <= full %}text-warning{% else %}text-fg-3{% endif %}" viewBox="0 0 24 24" fill="{% if i <= full %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+  {%- endfor -%}
+</span>
+{%- endmacro %}
+
+{% macro role_badge(role_name) -%}
+{{ badge((role_name or 'member')|title, {"admin": "info", "moderator": "warning"}.get(role_name, "neutral")) }}
+{%- endmacro %}
 
 {% block content %}
-<div class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-    <div>
-        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-2">Community Feed</h1>
-        <p class="text-slate-500 dark:text-slate-400 text-lg">Share insights, files, and learn from colleagues.</p>
-    </div>
-    <a href="{{ url_for('create_post') }}" class="btn-primary px-6 py-3 rounded-full flex items-center gap-2 font-bold shadow-lg hover:shadow-xl transition-all">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-        Share a Post
+<header class="page-header">
+  <div>
+    <p class="eyebrow mb-1">Community</p>
+    <h1>Community</h1>
+    <p class="text-fg-2 mt-1">Share insights, files and presentations, and learn from colleagues.</p>
+  </div>
+  <div>{{ btn("Share a post", "primary", href=url_for('create_post'), icon_name="plus") }}</div>
+</header>
+
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+  <aside class="lg:col-span-1">
+    <form method="get" action="{{ url_for('community_feed') }}" id="feed-filter-form" class="card lg:sticky lg:top-20" aria-labelledby="filter-title">
+      <h2 id="filter-title" class="text-base mb-4">Filter posts</h2>
+      {{ field("q", "Search", value=request.args.get('q', ''), placeholder="Title, tags…", type="search") }}
+      <div class="field">
+        <label class="field-label" for="f-category">Category</label>
+        <select id="f-category" name="category" class="select">
+          <option value="">All categories</option>
+          {% for cat in categories %}<option value="{{ cat }}"{% if request.args.get('category') == cat %} selected{% endif %}>{{ cat }}</option>{% endfor %}
+        </select>
+      </div>
+      {{ select_field("type", "Content type", [("", "All types"), ("Text/Article", "Text / article"), ("PDF", "PDF document"), ("Video", "Video"), ("Image", "Image"), ("PPT/PowerPoint", "PowerPoint")], selected=request.args.get('type', '')) }}
+      {{ select_field("sort", "Sort by", [("newest", "Newest first"), ("highest_rated", "Highest rated")], selected=request.args.get('sort', 'newest')) }}
+      <div class="flex gap-2 pt-1">
+        {{ btn("Apply", "primary", type="submit", size="sm", class="flex-1") }}
+        {% if request.args %}{{ btn("Reset", "secondary", href=url_for('community_feed'), size="sm", class="flex-1") }}{% endif %}
+      </div>
+    </form>
+  </aside>
+
+  <div class="lg:col-span-3 flex flex-col gap-5">
+    <a href="{{ url_for('create_post') }}" class="card is-interactive flex items-center gap-3 no-underline py-4">
+      {{ avatar(session.get('user')) }}
+      <span class="flex-1 input flex items-center text-fg-3 pointer-events-none">What is on your mind? Share an article, PDF or presentation…</span>
     </a>
+
+    {% for post in posts %}
+    <article class="card flex flex-col gap-4" aria-labelledby="post-{{ post.id }}-title">
+      <header class="flex items-start justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          {{ avatar(post.creator_name) }}
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap"><span class="font-medium text-sm truncate">{{ post.creator_name }}</span>{{ role_badge(post.role) }}</div>
+            <p class="caption">{{ (post.created_at or '')[:16] }}</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap justify-end gap-1.5">{{ badge(post.category, "info") }}{{ badge(post.content_type, "neutral") }}</div>
+      </header>
+      <div>
+        <h2 id="post-{{ post.id }}-title" class="text-lg"><a href="{{ url_for('post_detail', post_id=post.id) }}" class="no-underline hover:underline">{{ post.title }}</a></h2>
+        <div class="prose text-sm text-fg-2 line-clamp-3 mt-2">{{ post.description|sanitize|safe }}</div>
+        {% if post.description|length > 250 %}<a href="{{ url_for('post_detail', post_id=post.id) }}" class="inline-flex items-center gap-1 text-sm font-medium text-accent no-underline hover:underline mt-1">Read more {{ icon("arrow-right", "w-3.5 h-3.5") }}</a>{% endif %}
+      </div>
+      {% if post.thumbnail %}<img src="{{ url_for('uploaded_file', filename=post.thumbnail) }}" alt="" class="rounded-md border hairline w-full h-auto">{% endif %}
+      {% if post.attachments %}
+      <div>
+        <p class="eyebrow mb-2">Attachments · {{ post.attachments|length }}</p>
+        <ul class="flex flex-col gap-1.5 m-0 p-0 list-none">
+          {% for att in post.attachments %}
+          <li class="card-inset flex items-center justify-between gap-3 py-2 text-sm">
+            <span class="flex items-center gap-2 min-w-0">{{ icon("document", "w-4 h-4 text-fg-2") }}<span class="truncate" title="{{ att.file_name }}">{{ att.file_name }}</span><span class="caption shrink-0">{{ (att.file_size / 1024)|round(1) }} KB</span></span>
+            <span class="flex gap-3 shrink-0">
+              {% if att.file_type in ('application/pdf', 'pdf') or att.file_name.lower().endswith('.pdf') %}<a href="{{ url_for('post_detail', post_id=post.id) }}" class="text-sm font-medium text-accent no-underline hover:underline">Preview</a>{% endif %}
+              <a href="{{ url_for('uploaded_file', filename=att.file_path) }}" download="{{ att.file_name }}" class="text-sm font-medium text-accent no-underline hover:underline">Download</a>
+            </span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      <footer class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t hairline caption">
+        <span class="inline-flex items-center gap-2">{{ stars(post.avg_rating) }}<span class="font-semibold text-fg">{{ post.avg_rating or '0.0' }} / 5</span><span>({{ post.rating_count or 0 }} rating{{ '' if post.rating_count == 1 else 's' }})</span></span>
+        <span class="inline-flex items-center gap-4">
+          <span class="inline-flex items-center gap-1">{{ icon("eye", "w-3.5 h-3.5") }}{{ post.views or 0 }} views</span>
+          <a href="{{ url_for('post_detail', post_id=post.id) }}#comments" class="inline-flex items-center gap-1 no-underline hover:underline text-fg">{{ icon("chat", "w-3.5 h-3.5") }}{{ post.comment_count or 0 }} comment{{ '' if post.comment_count == 1 else 's' }}</a>
+        </span>
+      </footer>
+    </article>
+    {% else %}
+    <div class="card p-0">{% call empty_state("No published posts yet", "Be the first to share something with your colleagues.", "chat") %}{{ btn("Share a post", "secondary", href=url_for('create_post'), size="sm") }}{% endcall %}</div>
+    {% endfor %}
+  </div>
 </div>
-
-<div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-    <!-- Sidebar Filters -->
-    <div class="lg:col-span-1 space-y-6">
-        <div class="glass-panel p-6 sticky top-6">
-            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">Filter Posts</h3>
-            
-            <form method="get" action="{{ url_for('community_feed') }}" id="feed-filter-form" class="space-y-4">
-                <!-- Search -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Search Keywords</label>
-                    <div class="relative">
-                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <input type="text" name="q" value="{{ request.args.get('q', '') }}" placeholder="Search title, tags..." class="form-input pl-9 w-full text-sm">
-                    </div>
-                </div>
-
-                <!-- Category -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Category</label>
-                    <select name="category" class="form-input w-full text-sm" onchange="this.form.submit()">
-                        <option value="">All Categories</option>
-                        {% for cat in categories %}
-                        <option value="{{ cat }}" {% if request.args.get('category') == cat %}selected{% endif %}>{{ cat }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <!-- Content Type -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Content Type</label>
-                    <select name="type" class="form-input w-full text-sm" onchange="this.form.submit()">
-                        <option value="">All Types</option>
-                        <option value="Text/Article" {% if request.args.get('type') == 'Text/Article' %}selected{% endif %}>Text / Article</option>
-                        <option value="PDF" {% if request.args.get('type') == 'PDF' %}selected{% endif %}>PDF Document</option>
-                        <option value="Video" {% if request.args.get('type') == 'Video' %}selected{% endif %}>Video</option>
-                        <option value="Image" {% if request.args.get('type') == 'Image' %}selected{% endif %}>Image</option>
-                        <option value="PPT/PowerPoint" {% if request.args.get('type') == 'PPT/PowerPoint' %}selected{% endif %}>PowerPoint Presentation</option>
-                    </select>
-                </div>
-
-                <!-- Sort By -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Sort By</label>
-                    <select name="sort" class="form-input w-full text-sm" onchange="this.form.submit()">
-                        <option value="newest" {% if request.args.get('sort') == 'newest' %}selected{% endif %}>Newest First</option>
-                        <option value="highest_rated" {% if request.args.get('sort') == 'highest_rated' %}selected{% endif %}>Highest Rated</option>
-                    </select>
-                </div>
-
-                <div class="pt-2 flex gap-2">
-                    <button type="submit" class="flex-1 btn-primary py-2 text-xs font-bold rounded-lg text-center">Apply</button>
-                    {% if request.args %}
-                    <a href="{{ url_for('community_feed') }}" class="flex-1 btn-secondary py-2 text-xs font-semibold rounded-lg text-center">Reset</a>
-                    {% endif %}
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Feed Posts -->
-    <div class="lg:col-span-3 space-y-6">
-        <!-- Start Post Prompt Card -->
-        <div class="glass-panel p-5 flex items-center gap-4 bg-white/40 dark:bg-slate-900/40">
-            <div class="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center shadow-md">
-                {{ session.get('user')[:2]|upper }}
-            </div>
-            <a href="{{ url_for('create_post') }}" class="flex-grow bg-slate-50 dark:bg-slate-950/40 hover:bg-slate-100 dark:hover:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/80 rounded-full px-5 py-3 text-sm text-slate-400 transition-colors select-none">
-                What is on your mind? Share an article, PDF, or presentation...
-            </a>
-        </div>
-
-        {% for post in posts %}
-        <article class="glass-panel p-6 flex flex-col transition-all hover:shadow-lg bg-white/50 dark:bg-slate-900/40">
-            <!-- Author Header -->
-            <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-100 dark:border-slate-800/50">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-sm" style="background-color: {% if post.role == 'admin' %}#ef4444{% elif post.role == 'moderator' %}#6366f1{% else %}#10b981{% endif %}">
-                        {{ post.creator_name[:2]|upper }}
-                    </div>
-                    <div>
-                        <div class="flex items-center gap-1.5">
-                            <span class="font-bold text-slate-900 dark:text-slate-50 text-sm hover:underline cursor-pointer">{{ post.creator_name }}</span>
-                            <span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                {{ post.role }}
-                            </span>
-                        </div>
-                        <p class="text-[10px] text-slate-400 font-medium">{{ post.created_at }}</p>
-                    </div>
-                </div>
-
-                <!-- Category Badge -->
-                <div class="flex gap-2">
-                    <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                        {{ post.category }}
-                    </span>
-                    <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-500">
-                        {{ post.content_type }}
-                    </span>
-                </div>
-            </div>
-
-            <!-- Post Details -->
-            <h2 class="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-2 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
-            </h2>
-            
-            <!-- Description / Content Area -->
-            <div class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-4 line-clamp-3 post-html-content">
-                {{ post.description|sanitize|safe }}
-            </div>
-            
-            {% if post.description|length > 250 %}
-            <a href="{{ url_for('post_detail', post_id=post.id) }}" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline mb-4 inline-block -mt-2">Read more</a>
-            {% endif %}
-
-            <!-- Embedded Thumbnail Cover Image if exists -->
-            {% if post.thumbnail %}
-            <div class="mb-4 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                <img src="/uploads/{{ post.thumbnail }}" alt="Cover Image" class="w-full h-auto block">
-            </div>
-            {% endif %}
-
-            <!-- Inline Media Attachment Preview (Only first PDF or Image inline if available) -->
-            {% if post.attachments %}
-            <div class="mt-2 space-y-2 mb-4">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Attachments ({{ post.attachments|length }})</p>
-                {% for att in post.attachments %}
-                <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-100 dark:border-slate-800/80 text-xs">
-                    <div class="flex items-center gap-2 truncate">
-                        <svg class="w-5 h-5 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        <span class="font-medium text-slate-700 dark:text-slate-300 truncate" title="{{ att.file_name }}">{{ att.file_name }}</span>
-                        <span class="text-slate-400">({{ (att.file_size / 1024)|round(1) }} KB)</span>
-                    </div>
-                    <div class="flex gap-2">
-                        {% if att.file_type in ('application/pdf', 'pdf') or att.file_name.lower().endswith('.pdf') %}
-                        <a href="{{ url_for('post_detail', post_id=post.id) }}" class="text-xs font-bold text-indigo-600 hover:underline">Preview</a>
-                        {% endif %}
-                        <a href="/uploads/{{ att.file_path }}" download="{{ att.file_name }}" class="text-xs font-bold text-emerald-600 hover:underline flex items-center gap-0.5">
-                            Download
-                        </a>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-
-            <!-- Social Interactions Bar (Rating summary, comment counts) -->
-            <div class="flex items-center justify-between pt-4 mt-auto border-t border-slate-100 dark:border-slate-800/50 text-xs text-slate-500 select-none">
-                <!-- Stars and count -->
-                <div class="flex items-center gap-2">
-                    <div class="flex text-amber-400">
-                        {% set rating_floor = (post.avg_rating or 0)|round(0, 'floor')|int %}
-                        {% for i in range(1, 6) %}
-                            <svg class="w-4 h-4 {% if i <= rating_floor %}fill-current{% else %}stroke-current text-slate-300 dark:text-slate-600{% endif %}" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                        {% endfor %}
-                    </div>
-                    <span class="font-bold text-slate-700 dark:text-slate-300">{{ post.avg_rating or '0.0' }} / 5</span>
-                    <span class="text-slate-400">({{ post.rating_count or 0 }} ratings)</span>
-                </div>
-
-                <!-- View Detail & Comments -->
-                <div class="flex gap-4">
-                    <span class="flex items-center gap-1">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                        {{ post.views or 0 }} views
-                    </span>
-                    <a href="{{ url_for('post_detail', post_id=post.id) }}#comments" class="flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                        {{ post.comment_count or 0 }} Comments
-                    </a>
-                </div>
-            </div>
-        </article>
-        {% else %}
-        <div class="glass-panel p-12 text-center text-slate-500 dark:text-slate-400 bg-white/40 dark:bg-slate-900/40">
-            <svg class="w-16 h-16 mx-auto mb-4 opacity-30 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
-            <p class="text-lg font-medium">No published posts found</p>
-            <p class="text-sm mt-1">Be the first to share something in the feed!</p>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-<style>
-.post-html-content p {
-    margin-bottom: 0.5rem;
-}
-.post-html-content strong {
-    font-weight: 700;
-}
-.post-html-content ul {
-    list-style-type: disc;
-    padding-left: 1.25rem;
-}
-.post-html-content ol {
-    list-style-type: decimal;
-    padding-left: 1.25rem;
-}
-</style>
 {% endblock %}
 
+{% block scripts %}
+<script>
+  (function () {
+    const form = document.getElementById('feed-filter-form');
+    if (form) form.addEventListener('change', (event) => { if (event.target.tagName === 'SELECT') form.requestSubmit ? form.requestSubmit() : form.submit(); });
+  })();
+</script>
+{% endblock %}
