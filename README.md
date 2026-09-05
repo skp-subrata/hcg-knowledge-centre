@@ -1,90 +1,121 @@
-﻿# HCG Knowledge Centre
+# HCG Knowledge Centre
 
-An advanced, role-secured Learning Management System (LMS) built with Python, Flask, and SQLite. It features course management, interactive assessments, a gamified rewards wallet, community social feeds, and a comprehensive REST API.
+A role-secured Learning Management System (LMS) built with Python, Flask and SQLite. It offers course management, interactive assessments with certificates and badges, a gamified rewards wallet, a community feed with an approval workflow, groups, notifications, and a REST API with an interactive playground.
 
-## 📂 Documentation
+## Quick start (macOS / Linux)
 
-Technical documentation and architecture details are located in the docs/ folder:
-- docs/database_er_diagram.md - Complete SQLite database schema and ER diagram.
-- docs/cloud_hosting_architecture.md - Production cloud deployment & security guide.
-
-## ✨ Key Features
-
-- **Role-Based Access Control:** Distinct experiences for dmin, moderator, and asic user (students).
-- **Course & Assessment Engine:** Interactive course assignments, tests, and auto-generated certificates.
-- **Rewards System & Gamification:** A transactional wallet that awards points for completing courses and engaging in the community.
-- **Community Feed:** A social timeline for knowledge sharing, commenting, and upvoting content.
-- **Developer API (v1):** A fully-featured REST API with API Key authentication, interactive playground, and full CRUD support.
-
----
-
-## 🚀 Setup & Installation
-
-### Prerequisites
-- Python 3.8+ 
-- SQLite3 (Included with standard Python)
-
-### 1. Clone the Repository
-`ash
-git clone <repository_url>
+```bash
+git clone https://github.com/skp-subrata/hcg-knowledge-centre.git
 cd hcg-knowledge-centre
-`
+./run.sh
+```
 
-### 2. Create a Virtual Environment
-It's recommended to run the app in an isolated virtual environment.
-`ash
-# On Windows
-python -m venv venv
-venv\Scripts\activate
+`run.sh` creates a `.venv`, installs `requirements.txt` (only when it changes), initialises the SQLite database (tables, master data and demo data) and starts the app. It prints the URL, normally `http://127.0.0.1:5000`. If port 5000 is busy (macOS AirPlay Receiver uses it) it picks the first free port in 5050-5059 and says so.
 
-# On macOS/Linux
-python3 -m venv venv
-source venv/bin/activate
-`
+| Option | Effect |
+|---|---|
+| `./run.sh --setup-only` | Create the venv, install dependencies and initialise the database, then exit |
+| `./run.sh --port 8000` | Bind to a specific port (same as `LMS_PORT=8000 ./run.sh`) |
+| `./run.sh --host 0.0.0.0` | Listen on all interfaces |
+| `./run.sh --no-debug` | Disable the Flask debugger and auto-reload |
+| `./run.sh --help` | Show all options and environment variables |
 
-### 3. Install Dependencies
-Install the required packages from equirements.txt:
-`ash
+## Manual setup (any OS, including Windows)
+
+```bash
+python -m venv .venv
+# macOS/Linux:            source .venv/bin/activate
+# Windows (PowerShell):   .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-`
-
-### 4. Initialize the Database
-The application uses SQLite (users.db). The database is auto-initialized with seeded demo data when the app runs for the first time.
-
-### 5. Run the Application
-Start the Flask development server:
-`ash
+flask --app app init-db        # optional: the app also does this on start-up
 python app.py
-`
+```
 
-The application will be accessible at: **http://127.0.0.1:5000**
+On Windows, set variables with `set LMS_PORT=5050` (cmd) or `$env:LMS_PORT=5050` (PowerShell) before `python app.py`. Python 3.8 or newer is required.
 
----
+## Configuration
 
-## 📖 Usage Guide
+All settings are environment variables; every one is optional.
 
-### Initial Login
-If you used the auto-seeder, you can log in with:
-- **Admin:** dmin / dmin
-- **Moderator:** mod / mod
-- **Student:** student / student
-*(Ensure you change these in a production environment!)*
+| Variable | Default | Purpose |
+|---|---|---|
+| `LMS_HOST` | `127.0.0.1` | Bind address |
+| `LMS_PORT` | `5000` | Port (`run.sh` falls back to 5050-5059 when 5000 is busy) |
+| `LMS_DEBUG` | `1` | `1` enables the Flask debugger and auto-reload. Set `0` for anything shared |
+| `LMS_DATABASE` | `./users.db` | SQLite database file |
+| `LMS_UPLOAD_FOLDER` | `./uploads` | Where uploaded course files, attachments and profile pictures are stored |
+| `LMS_SECRET_KEY` | `change-this-local-secret` | Flask session secret. Set your own for anything shared |
+| `LMS_SEED_DEMO` | `1` | `1` seeds demo accounts, 100 sample users and two demo courses on start-up. Set `0` for a deployment |
 
-### Admin Dashboard (/admin)
-- **Manage Content:** Create courses, assign them to individual students or groups, and build question banks.
-- **Manage Users:** Provision new user accounts, update roles, or off-board members.
-- **Reward Settings:** Manually adjust student wallet balances or settle point redemptions.
-- **API Access:** Generate, view, copy, or revoke API Keys for third-party integrations.
+## Database initialisation
 
-### REST API Playground (/api/v1/docs)
-- Go to the API Documentation link in the navigation menu.
-- Input your X-API-Key and X-API-Secret obtained from the Admin Dashboard.
-- Use the interactive interface to send live test queries (cURL, Python) directly into the database.
+Tables are created automatically the first time the app starts, and every start is safe to repeat:
 
----
+1. `init_db()` in `app.py` creates the core tables and the bootstrap administrator.
+2. The SQL scripts in `init_scripts/` are applied in filename order, **once per database**. Applied scripts are recorded in the `schema_migrations` table. This is how the master tables (departments, locations, positions, interests), the extra user columns, starter master data and release notes get there.
+3. If `LMS_SEED_DEMO=1`, demo data is seeded with `INSERT OR IGNORE`, so existing rows are never overwritten.
 
-## 🛠 Tech Stack
-- **Backend:** Python 3, Flask, Werkzeug
-- **Database:** SQLite3
-- **Frontend:** HTML5, Tailwind CSS (via CDN), custom JavaScript, Jinja2 Templates
-- **Data parsing:** openpyxl (for Excel question imports)
+To run the initialisation on its own:
+
+```bash
+flask --app app init-db      # or: python db_init.py
+```
+
+To start over locally, stop the app and delete `users.db`.
+
+### Adding a schema change
+
+Create `init_scripts/NNN_short_description.sql` with the next number. Use `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS` and `INSERT OR IGNORE`. `ALTER TABLE ... ADD COLUMN` is also safe: `db_init.py` skips a column that already exists. The script runs the next time the app starts or `flask --app app init-db` is run.
+
+## Demo accounts
+
+Seeded only when `LMS_SEED_DEMO=1`. For local use only.
+
+| Role | Username | Password |
+|---|---|---|
+| Administrator | `admin` | `admin` |
+| Moderator | `mod` | `mod` |
+| Student | `student` | `student` |
+| Administrator (bootstrap) | `subratakumar.pradhan` | `admin123` |
+| Student with assigned courses | `maya.student` | `learn123` |
+| Sample users | `sampleuser001` … `sampleuser100` | `learn123` |
+
+## Roles and switching
+
+Every login starts in the **student view**, whatever the account's role. Administrators and moderators open the avatar menu and choose **Switch role** (or visit `/switch-role`) to enter the staff workspace. Administrators can also **View as** another user to see the app the way that user does, and **Exit view** to return.
+
+- **Admin dashboard** (`/admin`): manage courses, question banks and assessments, assign courses to users or groups, manage users, rewards and API keys.
+- **Masters** (`/admin/masters`): departments and locations.
+- **Reports** (`/admin/reports`): KPIs plus CSV downloads.
+- **API playground** (`/api/v1/docs`, administrators): generate an API key in the admin dashboard, enter it as `X-API-Key` / `X-API-Secret`, and run live requests.
+
+## Running the tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+The tests use a temporary copy of a freshly seeded database and never touch `users.db`, `uploads/` or the network.
+
+## Project layout
+
+| Path | Purpose |
+|---|---|
+| `app.py` | The Flask application: routes, schema (`init_db`), demo seeding, reward engine, API v1 |
+| `db_init.py` | Applies `init_scripts/*.sql` once each and records them in `schema_migrations` |
+| `init_scripts/` | Numbered SQL scripts: master tables, interests, user columns, seed data, release notes |
+| `storage.py` | Upload helper with the allowed file types for course content |
+| `run.sh` | One-command setup and start (macOS/Linux) |
+| `templates/` | Jinja2 templates (Tailwind CSS via CDN) |
+| `tests/` | pytest suite |
+| `docs/` | Database ER diagram and cloud hosting notes |
+
+## Documentation
+
+- `docs/database_er_diagram.md` — SQLite schema and ER diagram.
+- `docs/cloud_hosting_architecture.md` — production deployment and security notes.
+
+## Tech stack
+
+Python 3, Flask, Werkzeug, SQLite; HTML5, Tailwind CSS (CDN), Jinja2, vanilla JavaScript; openpyxl for Excel question imports.

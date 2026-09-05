@@ -1,6 +1,6 @@
 # HCG Knowledge Centre Database - Entity Relationship Diagram
 
-This document contains the Entity Relationship (ER) diagrams for all tables in the `users.db` database.
+This document contains the Entity Relationship (ER) diagram for all tables in the `users.db` database. See [How the schema is built](#how-the-schema-is-built) below for where each table comes from.
 
 ```mermaid
 erDiagram
@@ -19,6 +19,10 @@ erDiagram
         INTEGER is_active
         TEXT created_at
         TEXT updated_at
+        INTEGER department_id FK
+        INTEGER position_id FK
+        INTEGER location_id FK
+        TEXT about_me
     }
 
     courses {
@@ -47,36 +51,8 @@ erDiagram
         TEXT updated_at
     }
 
-    modules {
-        INTEGER id PK
-        INTEGER course_id FK
-        TEXT title
-        INTEGER sequence_order
-        TEXT created_at
-        TEXT updated_at
-    }
 
-    course_content {
-        INTEGER id PK
-        INTEGER module_id FK
-        TEXT content_type
-        TEXT title
-        TEXT file_url
-        INTEGER sequence_order
-        INTEGER duration_minutes
-        TEXT created_at
-        TEXT updated_at
-    }
 
-    content_progress {
-        INTEGER id PK
-        INTEGER student_id FK
-        INTEGER content_id FK
-        TEXT status
-        TEXT completed_at
-        TEXT created_at
-        TEXT updated_at
-    }
 
     question_banks {
         INTEGER id PK
@@ -168,6 +144,7 @@ erDiagram
         INTEGER is_read
         TEXT created_at
         TEXT updated_at
+        TEXT target_url
     }
 
     audit_logs {
@@ -372,13 +349,87 @@ erDiagram
         TEXT updated_at
     }
 
+    departments {
+        INTEGER department_id PK
+        TEXT department_name
+        TEXT department_code
+        TEXT description
+        TEXT status
+        INTEGER created_by FK
+        INTEGER updated_by FK
+        TEXT created_at
+        TEXT updated_at
+    }
+
+    locations {
+        INTEGER location_id PK
+        TEXT location_name
+        TEXT location_code
+        TEXT city
+        TEXT country
+        TEXT address
+        TEXT state
+        TEXT postal_code
+        TEXT status
+        INTEGER created_by FK
+        INTEGER updated_by FK
+        TEXT created_at
+        TEXT updated_at
+    }
+
+    positions {
+        INTEGER id PK
+        TEXT name
+        TEXT status
+        INTEGER created_by FK
+        TEXT created_at
+        TEXT updated_at
+    }
+
+    interest_master {
+        INTEGER id PK
+        TEXT interest_name
+        TEXT normalized_name
+        TEXT status
+        INTEGER created_by FK
+        TEXT created_at
+        TEXT updated_at
+    }
+
+    user_interest {
+        INTEGER id PK
+        INTEGER user_id FK
+        INTEGER interest_id FK
+        TEXT created_at
+    }
+
+    group_moderators {
+        INTEGER id PK
+        INTEGER group_id FK
+        INTEGER user_id FK
+        TEXT status
+        DATETIME assigned_at
+    }
+
+    app_releases {
+        INTEGER id PK
+        TEXT version_number
+        TEXT release_title
+        TEXT release_date
+        TEXT features
+        TEXT improvements
+        TEXT bug_fixes
+        INTEGER is_active
+    }
+
+    schema_migrations {
+        TEXT name PK
+        TEXT applied_at
+    }
+
     users ||--o{ courses : "created_by"
     courses ||--o{ course_assignments : "course_id"
     users ||--o{ course_assignments : "student_id"
-    courses ||--o{ modules : "course_id"
-    modules ||--o{ course_content : "module_id"
-    users ||--o{ content_progress : "student_id"
-    course_content ||--o{ content_progress : "content_id"
     users ||--o{ question_banks : "created_by"
     question_banks ||--o{ questions : "question_bank_id"
     users ||--o{ questions : "created_by"
@@ -422,4 +473,31 @@ erDiagram
     users ||--o{ reward_transactions : "created_by"
     users ||--o{ user_wallets : "user_id"
     users ||--o{ api_credentials : "user_id"
+    departments ||--o{ users : "department_id"
+    positions ||--o{ users : "position_id"
+    locations ||--o{ users : "location_id"
+    users ||--o{ user_interest : "user_id"
+    interest_master ||--o{ user_interest : "interest_id"
+    groups ||--o{ group_moderators : "group_id"
+    users ||--o{ group_moderators : "user_id"
+    users ||--o{ departments : "created_by"
+    users ||--o{ locations : "created_by"
+    users ||--o{ positions : "created_by"
+    users ||--o{ interest_master : "created_by"
 ```
+
+## How the schema is built
+
+The database is created and upgraded automatically when the app starts (or with `flask --app app init-db`):
+
+1. `init_db()` in `app.py` creates the core tables above with `CREATE TABLE IF NOT EXISTS` and inserts the bootstrap administrator.
+2. The SQL scripts in `init_scripts/` are applied in filename order, once per database, and recorded in `schema_migrations`:
+   - `000_profile_and_course_columns.sql` - `users.email/phone_number/profile_picture`, `courses.tags/duration_minutes/difficulty/thumbnail_color`
+   - `001_master_tables.sql` - `departments`, `locations`, `positions`
+   - `002_interest_tables.sql` - `interest_master`, `user_interest`
+   - `003_user_profile_columns.sql` - `users.department_id/position_id/location_id/about_me`
+   - `004_seed_master_data.sql` - starter departments, locations, positions and interests
+   - `005_seed_releases.sql` - release notes in `app_releases`
+3. When `LMS_SEED_DEMO=1` (the default), demo accounts, sample users and two demo courses are seeded with `INSERT OR IGNORE`.
+
+Status columns (`departments.status`, `locations.status`, `positions.status`, `interest_master.status`) are compared case-insensitively; the default value is `Active`.
