@@ -623,7 +623,7 @@ def api_required(view):
 		
 		with get_db() as connection:
 			creds = connection.execute(
-				"SELECT ac.*, u.username, u.role, u.full_name FROM api_credentials ac JOIN users u ON u.id = ac.user_id WHERE ac.api_key = ? AND ac.api_secret = ? AND ac.status = 'active'",
+				"SELECT ac.*, u.username, u.role, u.full_name FROM api_credentials ac JOIN users u ON u.id = ac.user_id WHERE ac.api_key = ? AND ac.api_secret = ? AND ac.status = 'active' AND COALESCE(u.is_active, 1) = 1",
 				(api_key, api_secret)
 			).fetchone()
 			
@@ -1320,7 +1320,7 @@ def create_app():
 			
 			# Course Stats
 			total_courses = connection.execute("SELECT COUNT(*) FROM courses").fetchone()[0]
-			active_courses = connection.execute("SELECT COUNT(*) FROM courses WHERE status = 'published'").fetchone()[0]
+			active_courses = connection.execute("SELECT COUNT(*) FROM courses WHERE LOWER(status) = 'published'").fetchone()[0]
 			
 			# Assessment Stats
 			total_attempts = connection.execute("SELECT COUNT(*) FROM assessment_attempts").fetchone()[0]
@@ -1658,7 +1658,7 @@ def create_app():
 				groups = connection.execute("SELECT g.* FROM groups g JOIN group_moderators gm ON g.id = gm.group_id WHERE gm.user_id = ? AND gm.status = 'Active' ORDER BY g.id DESC", (session["user_id"],)).fetchall()
 			api_creds = connection.execute("SELECT ac.*, u.username, u.full_name, u.role FROM api_credentials ac JOIN users u ON u.id = ac.user_id ORDER BY ac.id DESC").fetchall()
 			
-			assignable_courses = connection.execute("SELECT id, name FROM courses WHERE status = 'published' ORDER BY name").fetchall()
+			assignable_courses = connection.execute("SELECT id, name FROM courses WHERE LOWER(status) = 'published' ORDER BY name").fetchall()
 		return render_template("admin.html", users=[dict(u) for u in users], courses=courses, assignable_courses=assignable_courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, releases=releases, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.route("/assessments/<int:assessment_id>", methods=["GET", "POST"])
@@ -2180,7 +2180,7 @@ def create_app():
 				if session.get("role") != "admin" and course["created_by"] != session.get("user_id"):
 					flash("You can only delete courses you created.")
 					return redirect(request.referrer or url_for("courses_page"))
-				if course["status"] != "draft":
+				if (course["status"] or "").lower() != "draft":
 					flash(f"Cannot delete a {course['status']} course. You can only delete draft courses.")
 					return redirect(request.referrer or url_for("courses_page"))
 			elif resource == "user" and session.get("role") != "admin":
@@ -4069,7 +4069,7 @@ def create_app():
 	def api_create_user():
 		"""Create a new user profile."""
 		data = request.get_json(silent=True) or {}
-		username = (data.get("username") or "").strip()
+		username = (data.get("username") or "").strip().lower()
 		full_name = (data.get("full_name") or "").strip()
 		password = data.get("password")
 		role = data.get("role", "basic user").strip()
@@ -4175,7 +4175,7 @@ def create_app():
 			if g.api_user["role"] in ("admin", "moderator"):
 				courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by ORDER BY c.id DESC").fetchall()
 			else:
-				courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.status = 'published' OR c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (g.api_user["id"], g.api_user["id"])).fetchall()
+				courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE LOWER(c.status) = 'published' OR c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (g.api_user["id"], g.api_user["id"])).fetchall()
 		return {"courses": [dict(c) for c in courses]}
 
 	@app.post("/api/v1/courses")
@@ -4189,14 +4189,14 @@ def create_app():
 		category = (data.get("category") or "General").strip()
 		content_type = (data.get("content_type") or "Text/Article").strip()
 		content_url = (data.get("content_url") or "").strip()
-		status = (data.get("status") or "draft").strip().upper()
+		status = (data.get("status") or "draft").strip().lower()
 		
 		if not name:
 			return {"error": "Missing required field: name."}, 400
 		if content_type not in ("URL", "PDF", "Video", "PPT"):
 			return {"error": "Invalid content type. Must be one of: URL, PDF, Video, PPT."}, 400
-		if status not in ("DRAFT", "PUBLISHED"):
-			return {"error": "Invalid status. Must be DRAFT or PUBLISHED."}, 400
+		if status not in ("draft", "published"):
+			return {"error": "Invalid status. Must be draft or published."}, 400
 			
 		with get_db() as connection:
 			try:
@@ -4364,6 +4364,8 @@ def create_app():
 			post = connection.execute("SELECT p.*, u.full_name AS creator FROM posts p JOIN users u ON u.id = p.created_by WHERE p.id = ?", (post_id,)).fetchone()
 			if not post:
 				return {"error": "Post not found."}, 404
+			if post["status"] != "PUBLISHED" and post["created_by"] != g.api_user["id"] and g.api_user["role"] not in ("admin", "moderator"):
+				return {"error": "Access forbidden: this post is not published."}, 403
 				
 			comments = connection.execute("SELECT pc.*, u.full_name AS author FROM post_comments pc JOIN users u ON u.id = pc.user_id WHERE pc.post_id = ? ORDER BY pc.id ASC", (post_id,)).fetchall()
 			rating_row = connection.execute("SELECT AVG(rating) as avg_rating, COUNT(rating) as rating_count FROM post_ratings WHERE post_id = ?", (post_id,)).fetchone()
@@ -4453,6 +4455,8 @@ def create_app():
 			post = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
 			if not post:
 				return {"error": "Post not found."}, 404
+			if post["status"] != "PUBLISHED" and post["created_by"] != g.api_user["id"] and g.api_user["role"] not in ("admin", "moderator"):
+				return {"error": "Access forbidden: this post is not published."}, 403
 			try:
 				comment_id = connection.execute(
 					"INSERT INTO post_comments (post_id, user_id, comment_text) VALUES (?, ?, ?)",
