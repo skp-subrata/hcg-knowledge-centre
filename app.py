@@ -1349,8 +1349,7 @@ def create_app():
 									(full_name, username, generate_password_hash(password), role, employee_id, email, phone_number, department_id, position_id, location_id, about_me),
 								)
 								new_user_id = cursor.lastrowid
-								for int_id in interests:
-									connection.execute("INSERT OR IGNORE INTO user_interests (user_id, interest_id) VALUES (?, ?)", (new_user_id, int_id))
+
 								flash("User added successfully.")
 					except sqlite3.IntegrityError:
 						flash("Database integrity error occurred.")
@@ -1388,9 +1387,7 @@ def create_app():
 									"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ? WHERE id = ?",
 									(full_name, username, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, user_id),
 								)
-								connection.execute("DELETE FROM user_interests WHERE user_id = ?", (user_id,))
-								for int_id in interests:
-									connection.execute("INSERT OR IGNORE INTO user_interests (user_id, interest_id) VALUES (?, ?)", (user_id, int_id))
+
 								flash("User updated successfully.")
 			elif action == "add_course":
 				name = request.form.get("course_name", "").strip()
@@ -1555,10 +1552,10 @@ def create_app():
 					flash("That course assignment could not be completed.")
 
 		with get_db() as connection:
-			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interests ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
+			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interest ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
 			master_depts = connection.execute("SELECT department_id as id, department_name as name FROM departments WHERE status = 'Active' ORDER BY department_name").fetchall()
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
-			master_interests = connection.execute("SELECT id, name FROM interests WHERE status = 'active' ORDER BY name").fetchall()
+			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE status = 'active' ORDER BY name").fetchall()
 			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE status = 'Active' ORDER BY location_name").fetchall()
 			courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (session["user_id"], session["user_id"])).fetchall()
 			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
@@ -2413,9 +2410,7 @@ def create_app():
 					"UPDATE users SET full_name = ?, email = ?, phone_number = ?, employee_id = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ?, profile_picture = ? WHERE id = ?",
 					(full_name, email, phone_number, employee_id, department_id, position_id, location_id, about_me, pic_filename, session["user_id"])
 				)
-				connection.execute("DELETE FROM user_interests WHERE user_id = ?", (session["user_id"],))
-				for int_id in interests:
-					connection.execute("INSERT OR IGNORE INTO user_interests (user_id, interest_id) VALUES (?, ?)", (session["user_id"], int_id))
+
 					
 			session["user"] = full_name
 			session["profile_picture"] = pic_filename
@@ -2423,10 +2418,10 @@ def create_app():
 			return redirect(safe_referrer(url_for("profile")))
 			
 		with get_db() as connection:
-			user_data = connection.execute("SELECT u.*, COALESCE(GROUP_CONCAT(ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN user_interests ui ON ui.user_id = u.id WHERE u.id = ? GROUP BY u.id", (session["user_id"],)).fetchone()
+			user_data = connection.execute("SELECT u.*, COALESCE(GROUP_CONCAT(ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN user_interest ui ON ui.user_id = u.id WHERE u.id = ? GROUP BY u.id", (session["user_id"],)).fetchone()
 			master_depts = connection.execute("SELECT department_id as id, department_name as name FROM departments WHERE status = 'Active' ORDER BY department_name").fetchall()
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
-			master_interests = connection.execute("SELECT id, name FROM interests WHERE status = 'active' ORDER BY name").fetchall()
+			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE status = 'active' ORDER BY name").fetchall()
 			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE status = 'Active' ORDER BY location_name").fetchall()
 		return render_template("profile.html", user_data=user_data, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
@@ -3618,6 +3613,81 @@ def create_app():
 
 	# â”€â”€ API v1 Authentication & Routing Block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
+	@app.get("/api/interests")
+	def get_interests():
+		search = request.args.get("search", "").strip()
+		with get_db() as conn:
+			if search:
+				query = "SELECT id, interest_name as name FROM interest_master WHERE status = 'Active' AND interest_name LIKE ? ORDER BY interest_name"
+				rows = conn.execute(query, (f"%{search}%",)).fetchall()
+			else:
+				rows = conn.execute("SELECT id, interest_name as name FROM interest_master WHERE status = 'Active' ORDER BY interest_name").fetchall()
+		return jsonify([dict(r) for r in rows])
+
+	@app.post("/api/interests")
+	def create_interest():
+		data = request.get_json(silent=True) or {}
+		name = (data.get("interest_name") or "").strip()
+		if not name:
+			return {"error": "Interest name is required."}, 400
+		
+		normalized = " ".join(name.lower().split())
+		user_id = session.get("user_id") or getattr(g, "api_user", {}).get("id")
+		
+		with get_db() as conn:
+			existing = conn.execute("SELECT id, interest_name as name FROM interest_master WHERE normalized_name = ?", (normalized,)).fetchone()
+			if existing:
+				return jsonify(dict(existing)), 200
+			
+			try:
+				interest_id = conn.execute(
+					"INSERT INTO interest_master (interest_name, normalized_name, created_by) VALUES (?, ?, ?)",
+					(name, normalized, user_id)
+				).lastrowid
+				return jsonify({"id": interest_id, "name": name}), 201
+			except sqlite3.IntegrityError:
+				# Rare race condition
+				existing = conn.execute("SELECT id, interest_name as name FROM interest_master WHERE normalized_name = ?", (normalized,)).fetchone()
+				return jsonify(dict(existing)), 200
+
+	@app.get("/api/users/<int:target_user_id>/interests")
+	def get_user_interests(target_user_id):
+		with get_db() as conn:
+			rows = conn.execute("""
+				SELECT i.id, i.interest_name as name 
+				FROM user_interest ui
+				JOIN interest_master i ON ui.interest_id = i.id
+				WHERE ui.user_id = ?
+			""", (target_user_id,)).fetchall()
+		return jsonify([dict(r) for r in rows])
+
+	@app.post("/api/users/<int:target_user_id>/interests")
+	def add_user_interest(target_user_id):
+		if session.get("user_id") != target_user_id and session.get("role") != "admin":
+			return {"error": "Unauthorized"}, 403
+			
+		data = request.get_json(silent=True) or {}
+		interest_id = data.get("interest_id")
+		if not interest_id:
+			return {"error": "interest_id is required."}, 400
+			
+		with get_db() as conn:
+			try:
+				conn.execute("INSERT INTO user_interest (user_id, interest_id) VALUES (?, ?)", (target_user_id, interest_id))
+			except sqlite3.IntegrityError:
+				pass # already exists
+		return {"message": "Interest added to user."}, 200
+
+	@app.delete("/api/users/<int:target_user_id>/interests/<int:interest_id>")
+	def delete_user_interest(target_user_id, interest_id):
+		if session.get("user_id") != target_user_id and session.get("role") != "admin":
+			return {"error": "Unauthorized"}, 403
+			
+		with get_db() as conn:
+			conn.execute("DELETE FROM user_interest WHERE user_id = ? AND interest_id = ?", (target_user_id, interest_id))
+		return {"message": "Interest removed."}, 200
+
 	@app.get("/api/v1/docs")
 	@admin_required
 	def api_docs_playground():
@@ -4518,6 +4588,34 @@ def create_app():
 	                    new_status = request.form.get("status")
 	                    conn.execute("UPDATE locations SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (new_status, user_id, loc_id))
 	                    flash(f"Location marked as {new_status}.")
+	                elif action == "add_interest":
+	                    name = request.form.get("interest_name", "").strip()
+	                    if name:
+	                        normalized = " ".join(name.lower().split())
+	                        try:
+	                            conn.execute("INSERT INTO interest_master (interest_name, normalized_name, created_by) VALUES (?, ?, ?)", (name, normalized, user_id))
+	                            flash("Interest added successfully.")
+	                        except sqlite3.IntegrityError:
+	                            flash("Interest already exists.")
+	                    else:
+	                        flash("Interest name is required.")
+	                elif action == "edit_interest":
+	                    i_id = request.form.get("interest_id")
+	                    name = request.form.get("interest_name", "").strip()
+	                    if name and i_id:
+	                        normalized = " ".join(name.lower().split())
+	                        try:
+	                            conn.execute("UPDATE interest_master SET interest_name = ?, normalized_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (name, normalized, i_id))
+	                            flash("Interest updated successfully.")
+	                        except sqlite3.IntegrityError:
+	                            flash("An interest with that name already exists.")
+	                    else:
+	                        flash("Interest name is required.")
+	                elif action == "toggle_interest_status":
+	                    i_id = request.form.get("interest_id")
+	                    new_status = request.form.get("status", "Active")
+	                    conn.execute("UPDATE interest_master SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_status, i_id))
+	                    flash(f"Interest marked as {new_status}.")
 	                    
 	            except sqlite3.IntegrityError:
 	                flash("Error: Name or Code must be unique.")
@@ -4574,22 +4672,6 @@ def api_add_position():
         except sqlite3.IntegrityError:
             return {"error": "Position already exists."}, 409
 
-@app.post("/api/v1/interests")
-@api_required
-def api_add_interest():
-    data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
-    if not name:
-        return {"error": "Interest name is required."}, 400
-    with get_db() as connection:
-        try:
-            interest_id = connection.execute(
-                "INSERT INTO interests (name, created_by) VALUES (?, ?)",
-                (name, session.get("user_id", getattr(g, "api_user", {}).get("id")))
-            ).lastrowid
-            return {"message": "Interest added.", "id": interest_id, "name": name}, 201
-        except sqlite3.IntegrityError:
-            return {"error": "Interest already exists."}, 409
 
 @app.post("/api/v1/locations")
 @api_required

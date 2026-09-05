@@ -1,122 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Staff Workspace | HCG Knowledge Centre
-<!-- Edit User Modal -->
-<div id="editUserModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
-    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full shadow-2xl relative my-auto">
-        <button onclick="document.getElementById('editUserModal').classList.add('hidden')" type="button" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-full">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-        </button>
-        <div class="p-6">
-            <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-6">Edit User Data</h2>
-            <form method="post" id="editUserForm">
-                <input type="hidden" name="action" value="update_user">
-                <input type="hidden" name="record_id" id="edit_record_id">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="form-label">Full name *</label>
-                        <input name="full_name" id="edit_full_name" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Username *</label>
-                        <input name="username" id="edit_username" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Employee ID *</label>
-                        <input name="employee_id" id="edit_employee_id" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Email ID *</label>
-                        <input name="email" id="edit_email" type="email" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Phone Number *</label>
-                        <input name="phone_number" id="edit_phone_number" type="tel" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Role / Permission *</label>
-                        <select name="role" id="edit_role" class="form-input">
-                            {% for option in roles %}<option value="{{ option }}">{{ option|title }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label flex justify-between">Department <a href="#" onclick="addMaster('departments', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Department]</a></label>
-                        <select name="department_id" id="edit_department_id" class="form-input dept-select">
-                            <option value="">[ Select Department - ]</option>
-                            {% for d in master_depts %}
-                            <option value="{{ d.id }}">{{ d.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label flex justify-between">Position <a href="#" onclick="addMaster('positions', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Position]</a></label>
-                        <select name="position_id" id="edit_position_id" class="form-input pos-select">
-                            <option value="">[ Select Position - ]</option>
-                            {% for p in master_positions %}
-                            <option value="{{ p.id }}">{{ p.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label">Location</label>
-                        <input name="location" id="edit_location" class="form-input">
-                    </div>
-                </div>
-                <button type="submit" class="btn-primary w-full mt-6">Save Changes</button>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-function openEditUserModal(user) {
-    document.getElementById('edit_record_id').value = user.id || '';
-    document.getElementById('edit_full_name').value = user.full_name || '';
-    document.getElementById('edit_username').value = user.username || '';
-    document.getElementById('edit_employee_id').value = user.employee_id || '';
-    document.getElementById('edit_email').value = user.email || '';
-    document.getElementById('edit_phone_number').value = user.phone_number || '';
-    document.getElementById('edit_role').value = user.role || 'basic user';
-    document.getElementById('edit_department_id').value = user.department_id || '';
-    document.getElementById('edit_position_id').value = user.position_id || '';
-    document.getElementById('edit_location').value = user.location || '';
-    
-    document.getElementById('editUserModal').classList.remove('hidden');
-}
-
-async function addMaster(type, el) {
-    let name = prompt("Enter new " + type.slice(0, -1) + " name:");
-    if (!name) return;
-    
-    let res = await fetch('/api/v1/' + type, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({name: name})
-    });
-    let data = await res.json();
-    if (res.ok) {
-        // Find all selects matching this type and add the option
-        let classTarget = type === 'departments' ? '.dept-select' : (type === 'positions' ? '.pos-select' : '.int-select');
-        let selects = document.querySelectorAll(classTarget);
-        selects.forEach(select => {
-            let opt = document.createElement('option');
-            opt.value = data.id;
-            opt.textContent = data.name;
-            select.appendChild(opt);
-            // If it was the specific element clicked near, select it
-            if (el && el.parentElement && el.parentElement.nextElementSibling === select) {
-                if (select.multiple) { opt.selected = true; }
-                else { select.value = data.id; }
-            }
-        });
-        alert(data.message);
-    } else {
-        alert(data.error);
-    }
-}
-</script>
-
-{% endblock %}
+{% block title %}Staff Workspace | HCG Knowledge Centre{% endblock %}
 
 {% block content %}
 <div class="mb-8">
@@ -324,70 +208,32 @@ async function addMaster(type, el) {
         <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Add User</h2>
         <input type="hidden" name="action" value="add_user">
         <div class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="form-label">Full name *</label>
+                    <label class="form-label">Full name</label>
                     <input name="full_name" class="form-input" required>
                 </div>
                 <div>
-                    <label class="form-label">Username *</label>
+                    <label class="form-label">Username</label>
                     <input name="username" class="form-input" required>
                 </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="form-label">Employee ID *</label>
-                    <input name="employee_id" class="form-input" required>
-                </div>
-                <div>
-                    <label class="form-label">Email ID *</label>
-                    <input name="email" type="email" class="form-input" required>
-                </div>
-                <div>
-                    <label class="form-label">Phone Number *</label>
-                    <input name="phone_number" type="tel" class="form-input" required>
-                </div>
-                <div>
-                    <label class="form-label">Password *</label>
+                    <label class="form-label">Password</label>
                     <input name="password" type="password" minlength="6" class="form-input" required>
                 </div>
                 <div>
-                    <label class="form-label">Role / Permission *</label>
+                    <label class="form-label">Role</label>
                     <select name="role" class="form-input">
                         {% for item in roles %}
                         <option value="{{ item }}">{{ item|title }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div>
-                    <label class="form-label flex justify-between">Department <a href="#" onclick="addMaster('departments', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Department]</a></label>
-                    <select name="department_id" class="form-input dept-select">
-                        <option value="">[ Select Department ▼ ]</option>
-                        {% for d in master_depts %}
-                        <option value="{{ d.id }}">{{ d.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label flex justify-between">Position <a href="#" onclick="addMaster('positions', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Position]</a></label>
-                    <select name="position_id" class="form-input pos-select">
-                        <option value="">[ Select Position ▼ ]</option>
-                        {% for p in master_positions %}
-                        <option value="{{ p.id }}">{{ p.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label flex justify-between">Location * <a href="#" onclick="addMaster('locations', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Location]</a></label>
-                    <select name="location_id" class="form-input loc-select" required>
-                        <option value="">[ Select Location ▼ ]</option>
-                        {% for l in master_locations %}
-                        <option value="{{ l.id }}">{{ l.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
             </div>
         </div>
-        <button class="btn-primary w-full mt-6 flex justify-center py-3.5" title="Add User"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg> Add User</button>
+        <button class="btn-primary w-full mt-6 flex justify-center py-3.5" title="Add User"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg></button>
     </form>
 
     {% endif %}
@@ -504,11 +350,9 @@ async function addMaster(type, el) {
                 <tbody id="users-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
                     {% for item in users %}
                     <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition user-row"
-                        data-search="{{ item.full_name|lower }} {{ item.username|lower }} {{ item.employee_id|default('')|lower }} {{ item.email|default('')|lower }} {{ item.role|lower }} {{ item.course_ids or '' }}">
+                        data-search="{{ item.full_name|lower }} {{ item.username|lower }} {{ item.role|lower }} {{ item.course_ids or '' }}">
                         <td class="p-3 font-semibold">{{ item.full_name }}</td>
                         <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">{{ item.username }}</td>
-                        <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">{{ item.employee_id or '-' }}</td>
-                        <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">{{ item.email or '-' }}</td>
                         <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">{{ item.course_ids or '—' }}</td>
                         <td class="p-3">
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
@@ -528,7 +372,16 @@ async function addMaster(type, el) {
                                     <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Delete</button>
                                 </form>
                             </div>
-                            <button type="button" onclick='openEditUserModal({{ item|tojson }})' class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-block mt-1">Edit User Data</button>
+                            <form method="post" class="flex gap-1 justify-end flex-wrap mt-1">
+                                <input type="hidden" name="action" value="update_user">
+                                <input type="hidden" name="record_id" value="{{ item.id }}">
+                                <input name="full_name" value="{{ item.full_name }}" class="form-input h-8 w-32 text-xs" required>
+                                <input name="username" value="{{ item.username }}" class="form-input h-8 w-32 text-xs" required>
+                                <select name="role" class="form-input h-8 w-28 text-xs">
+                                    {% for option in roles %}<option value="{{ option }}" {% if option == item.role %}selected{% endif %}>{{ option }}</option>{% endfor %}
+                                </select>
+                                <button type="submit" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2">Update</button>
+                            </form>
                             {% endif %}
                         </td>
                     </tr>
@@ -791,120 +644,4 @@ document.querySelectorAll('.adm-chip').forEach(chip => {
     });
 });
 </script>
-
-<!-- Edit User Modal -->
-<div id="editUserModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
-    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full shadow-2xl relative my-auto">
-        <button onclick="document.getElementById('editUserModal').classList.add('hidden')" type="button" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-full">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-        </button>
-        <div class="p-6">
-            <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-6">Edit User Data</h2>
-            <form method="post" id="editUserForm">
-                <input type="hidden" name="action" value="update_user">
-                <input type="hidden" name="record_id" id="edit_record_id">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="form-label">Full name *</label>
-                        <input name="full_name" id="edit_full_name" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Username *</label>
-                        <input name="username" id="edit_username" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Employee ID *</label>
-                        <input name="employee_id" id="edit_employee_id" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Email ID *</label>
-                        <input name="email" id="edit_email" type="email" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Phone Number *</label>
-                        <input name="phone_number" id="edit_phone_number" type="tel" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Role / Permission *</label>
-                        <select name="role" id="edit_role" class="form-input">
-                            {% for option in roles %}<option value="{{ option }}">{{ option|title }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label flex justify-between">Department <a href="#" onclick="addMaster('departments', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Department]</a></label>
-                        <select name="department_id" id="edit_department_id" class="form-input dept-select">
-                            <option value="">[ Select Department - ]</option>
-                            {% for d in master_depts %}
-                            <option value="{{ d.id }}">{{ d.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label flex justify-between">Position <a href="#" onclick="addMaster('positions', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Position]</a></label>
-                        <select name="position_id" id="edit_position_id" class="form-input pos-select">
-                            <option value="">[ Select Position - ]</option>
-                            {% for p in master_positions %}
-                            <option value="{{ p.id }}">{{ p.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label">Location</label>
-                        <input name="location" id="edit_location" class="form-input">
-                    </div>
-                </div>
-                <button type="submit" class="btn-primary w-full mt-6">Save Changes</button>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-function openEditUserModal(user) {
-    document.getElementById('edit_record_id').value = user.id || '';
-    document.getElementById('edit_full_name').value = user.full_name || '';
-    document.getElementById('edit_username').value = user.username || '';
-    document.getElementById('edit_employee_id').value = user.employee_id || '';
-    document.getElementById('edit_email').value = user.email || '';
-    document.getElementById('edit_phone_number').value = user.phone_number || '';
-    document.getElementById('edit_role').value = user.role || 'basic user';
-    document.getElementById('edit_department_id').value = user.department_id || '';
-    document.getElementById('edit_position_id').value = user.position_id || '';
-    document.getElementById('edit_location').value = user.location || '';
-    
-    document.getElementById('editUserModal').classList.remove('hidden');
-}
-
-async function addMaster(type, el) {
-    let name = prompt("Enter new " + type.slice(0, -1) + " name:");
-    if (!name) return;
-    
-    let res = await fetch('/api/v1/' + type, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({name: name})
-    });
-    let data = await res.json();
-    if (res.ok) {
-        // Find all selects matching this type and add the option
-        let classTarget = type === 'departments' ? '.dept-select' : (type === 'positions' ? '.pos-select' : '.int-select');
-        let selects = document.querySelectorAll(classTarget);
-        selects.forEach(select => {
-            let opt = document.createElement('option');
-            opt.value = data.id;
-            opt.textContent = data.name;
-            select.appendChild(opt);
-            // If it was the specific element clicked near, select it
-            if (el && el.parentElement && el.parentElement.nextElementSibling === select) {
-                if (select.multiple) { opt.selected = true; }
-                else { select.value = data.id; }
-            }
-        });
-        alert(data.message);
-    } else {
-        alert(data.error);
-    }
-}
-</script>
-
 {% endblock %}
