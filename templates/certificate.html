@@ -49,36 +49,22 @@
 
         <div data-html2canvas-ignore="true" class="mt-12 flex flex-col sm:flex-row justify-center gap-4">
             <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn-secondary px-6 py-3 rounded-full">Review Course</a>
-            <button id="download-pdf-btn" class="btn-primary px-6 py-3 rounded-full font-bold shadow-md hover:shadow-lg transition">Download Certificate</button>
+            <button id="download-png-btn" class="btn-primary px-6 py-3 rounded-full font-bold shadow-md hover:shadow-lg transition">Download Certificate</button>
         </div>
     </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    const downloadBtn = document.getElementById("download-pdf-btn");
+    const downloadBtn = document.getElementById("download-png-btn");
     if (downloadBtn) {
         downloadBtn.addEventListener("click", function() {
             const element = document.getElementById("certificate-card");
             
             // Clean filename by replacing problematic characters
             const cleanName = "{{ course.name }}".replace(/[^a-zA-Z0-9]/g, "_").replace(/__+/g, "_");
-            const filename = `Certificate_${cleanName}.pdf`;
-            
-            const opt = {
-                margin:       [0.4, 0.4, 0.4, 0.4],
-                filename:     filename,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { 
-                    scale: 2.0, 
-                    useCORS: true, 
-                    logging: false,
-                    windowWidth: 1200 // Force desktop width for html2canvas evaluation
-                },
-                jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' },
-                pagebreak:    { mode: 'avoid-all' }
-            };
+            const filename = `Certificate_${cleanName}.png`;
             
             // Temporarily disable dark mode on html element to print clean white bg
             const htmlElement = document.documentElement;
@@ -89,16 +75,22 @@ document.addEventListener("DOMContentLoaded", function() {
             
             // Force fixed desktop dimensions and clean styling during capture to avoid portrait/mobile stacking
             const originalStyle = element.getAttribute("style") || "";
-            element.style.width = "1000px";
-            element.style.maxWidth = "1000px";
+            element.style.width = "1024px";
+            element.style.maxWidth = "1024px";
             element.style.color = "#0f172a"; // force slate-900 color for text visibility
             
             // Show loading state
             const originalText = downloadBtn.innerHTML;
-            downloadBtn.innerText = "Generating PDF...";
+            downloadBtn.innerText = "Generating PNG...";
             downloadBtn.disabled = true;
             
-            html2pdf().set(opt).from(element).save().then(() => {
+            html2canvas(element, {
+                scale: 2.0, // High quality output resolution
+                useCORS: true,
+                logging: false,
+                windowWidth: 1200, // Force desktop layout evaluation
+                windowHeight: 800
+            }).then(canvas => {
                 // Restore original styling
                 if (isDark) {
                     htmlElement.classList.add("dark");
@@ -106,15 +98,24 @@ document.addEventListener("DOMContentLoaded", function() {
                 element.setAttribute("style", originalStyle);
                 downloadBtn.innerHTML = originalText;
                 downloadBtn.disabled = false;
+                
+                // Convert canvas to PNG download
+                const dataUrl = canvas.toDataURL("image/png");
+                const link = document.createElement("a");
+                link.download = filename;
+                link.href = dataUrl;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             }).catch(err => {
-                console.error("PDF generation failed:", err);
+                console.error("PNG generation failed:", err);
                 if (isDark) {
                     htmlElement.classList.add("dark");
                 }
                 element.setAttribute("style", originalStyle);
                 downloadBtn.innerHTML = originalText;
                 downloadBtn.disabled = false;
-                alert("Failed to download certificate as PDF. Try again.");
+                alert("Failed to download certificate as PNG. Try again.");
             });
         });
         
