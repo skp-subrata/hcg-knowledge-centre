@@ -89,3 +89,113 @@ def is_safe_proxy_target(url, resolver=None):
 		return all(_is_public_address(address) for address in addresses)
 	except ValueError:
 		return False
+
+
+# ---------------------------------------------------------------------------
+# HTML sanitiser for rich-text post bodies (Quill output). Allow-list based, stdlib only.
+# ---------------------------------------------------------------------------
+import re
+from html import escape
+from html.parser import HTMLParser
+
+ALLOWED_TAGS = {
+	"p", "br", "hr", "strong", "b", "em", "i", "u", "s", "strike", "sub", "sup",
+	"ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "code",
+	"a", "img", "span", "div", "table", "thead", "tbody", "tr", "th", "td",
+}
+VOID_TAGS = {"br", "hr", "img"}
+DROP_WITH_CONTENT = {"script", "style", "iframe", "object", "embed", "svg", "math", "template", "noscript"}
+ALLOWED_ATTRIBUTES = {
+	"a": {"href", "title", "target"},
+	"img": {"src", "alt", "title", "width", "height"},
+	"span": {"class"}, "div": {"class"}, "p": {"class"}, "pre": {"class"}, "code": {"class"},
+	"ul": {"class"}, "ol": {"class"}, "li": {"class"}, "h1": {"class"}, "h2": {"class"}, "h3": {"class"},
+	"td": {"colspan", "rowspan"}, "th": {"colspan", "rowspan"},
+}
+_SAFE_URL = re.compile(r"^(https?://|mailto:|/(?!/)|#)", re.I)
+_SAFE_IMG = re.compile(r"^(https?://|/(?!/)|data:image/(png|jpe?g|gif|webp);base64,)", re.I)
+_SAFE_CLASS = re.compile(r"^[\w\s-]*$")
+
+
+class _Sanitizer(HTMLParser):
+	def __init__(self):
+		super().__init__(convert_charrefs=True)
+		self.out = []
+		self.open_tags = []
+		self.dropping = 0
+
+	def handle_starttag(self, tag, attrs):
+		tag = tag.lower()
+		if tag in DROP_WITH_CONTENT:
+			self.dropping += 1
+			return
+		if self.dropping or tag not in ALLOWED_TAGS:
+			return
+		rendered = []
+		wants_noopener = False
+		for name, value in attrs:
+			name = name.lower()
+			value = value if value is not None else ""
+			if name not in ALLOWED_ATTRIBUTES.get(tag, set()):
+				continue
+			cleaned = "".join(ch for ch in value if ch not in "\x00\t\r\n").strip()
+			if name == "href" and not _SAFE_URL.match(cleaned):
+				continue
+			if name == "src" and not _SAFE_IMG.match(cleaned):
+				continue
+			if name == "class" and not _SAFE_CLASS.match(cleaned):
+				continue
+			if name == "target":
+				if cleaned != "_blank":
+					continue
+				wants_noopener = True
+			rendered.append(f' {name}="{escape(cleaned, quote=True)}"')
+		if wants_noopener:
+			rendered.append(' rel="noopener noreferrer"')
+		self.out.append(f"<{tag}{''.join(rendered)}>")
+		if tag not in VOID_TAGS:
+			self.open_tags.append(tag)
+
+	def handle_startendtag(self, tag, attrs):
+		self.handle_starttag(tag, attrs)
+
+	def handle_endtag(self, tag):
+		tag = tag.lower()
+		if tag in DROP_WITH_CONTENT:
+			self.dropping = max(0, self.dropping - 1)
+			return
+		if self.dropping or tag not in ALLOWED_TAGS or tag in VOID_TAGS or tag not in self.open_tags:
+			return
+		while self.open_tags:
+			closing = self.open_tags.pop()
+			self.out.append(f"</{closing}>")
+			if closing == tag:
+				break
+
+	def handle_data(self, data):
+		if not self.dropping:
+			self.out.append(escape(data, quote=False))
+
+	def handle_comment(self, data):
+		pass
+
+	def handle_decl(self, decl):
+		pass
+
+	def handle_pi(self, data):
+		pass
+
+	def result(self):
+		self.close()
+		while self.open_tags:
+			self.out.append(f"</{self.open_tags.pop()}>")
+		return "".join(self.out)
+
+
+def sanitize_html(value):
+	"""Keep only harmless formatting from user-supplied HTML; drop scripts, event handlers and unsafe URLs."""
+	if not value:
+		return ""
+	sanitizer = _Sanitizer()
+	sanitizer.feed(str(value))
+	return sanitizer.result()

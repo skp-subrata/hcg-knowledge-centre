@@ -122,7 +122,7 @@
             
             <!-- Description / Content Area -->
             <div class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-4 line-clamp-3 post-html-content">
-                {{ post.description|safe }}
+                {{ post.description|sanitize|safe }}
             </div>
             
             {% if post.description|length > 250 %}

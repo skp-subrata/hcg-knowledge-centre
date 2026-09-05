@@ -14,7 +14,7 @@ from flask import Flask, flash, g, redirect, render_template, request, send_file
 from openpyxl import Workbook, load_workbook
 from storage import save_file
 from db_init import apply_init_scripts, applied_scripts
-from security import attachment_allowed, is_safe_proxy_target, load_or_create_secret_key, serve_inline
+from security import attachment_allowed, is_safe_proxy_target, load_or_create_secret_key, sanitize_html, serve_inline
 
 
 DATABASE = Path(os.getenv("LMS_DATABASE", Path(__file__).with_name("users.db")))
@@ -926,13 +926,18 @@ def import_questions(file_obj, user_id, role="admin"):
 			if not bank:
 				bank = (connection.execute("INSERT INTO question_banks (name, category, created_by) VALUES (?, 'Imported', ?)", (bank_name, user_id)).lastrowid,)
 			explanation = str(data.get("explanation", "")).strip() if data.get("explanation") else None
-			question = connection.execute("INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, difficulty, topic_tag, created_by, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (bank[0], data["question_text"], data["option_a"], data["option_b"], data["option_c"], data["option_d"], correct, int(data.get("marks") or 1), data.get("difficulty") or "medium", data.get("topic_tag") or "", user_id, explanation)).lastrowid
+			existing_question = connection.execute("SELECT id FROM questions WHERE question_bank_id = ? AND question_text = ?", (bank[0], str(data.get("question_text")).strip())).fetchone()
+			if existing_question:
+				question = existing_question["id"]
+			else:
+				question = connection.execute("INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, difficulty, topic_tag, created_by, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (bank[0], data["question_text"], data["option_a"], data["option_b"], data["option_c"], data["option_d"], correct, int(data.get("marks") or 1), data.get("difficulty") or "medium", data.get("topic_tag") or "", user_id, explanation)).lastrowid
 			title = data.get("assessment_title") or f"{course['name']} assessment"
 			assessment = connection.execute("SELECT id FROM assessments WHERE course_id = ? AND title = ?", (course_id, title)).fetchone()
 			if not assessment:
 				assessment = (connection.execute("INSERT INTO assessments (course_id, type, title) VALUES (?, ?, ?)", (course_id, str(data.get("assessment_type") or "post").lower(), title)).lastrowid,)
 			connection.execute("INSERT OR IGNORE INTO assessment_questions (assessment_id, question_id) VALUES (?, ?)", (assessment[0], question))
-			created += 1
+			if not existing_question:
+				created += 1
 	return created, rejected
 
 
@@ -952,6 +957,8 @@ def create_app():
 	app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 	app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 	app.jinja_env.globals["embed_url"] = embed_url
+
+	app.jinja_env.filters["sanitize"] = sanitize_html
 
 	@app.template_filter("fromjson")
 	def fromjson_filter(value):
@@ -1048,7 +1055,7 @@ def create_app():
 			if session.get("role") in ("admin", "moderator"):
 				assessments = connection.execute("SELECT DISTINCT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id LEFT JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE c.created_by = ? OR ca.student_id IS NOT NULL ORDER BY a.id DESC", (session.get("user_id", 0), session.get("user_id", 0))).fetchall()
 			else:
-				assessments = connection.execute("SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE ca.status = 'completed' ORDER BY a.id DESC", (session.get("user_id", 0),)).fetchall()
+				assessments = connection.execute("SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id JOIN course_assignments ca ON ca.course_id = c.id AND ca.student_id = ? WHERE ca.status IN ('in_progress', 'assessment_pending', 'assessment_failed', 'feedback_pending', 'completed') ORDER BY a.id DESC", (session.get("user_id", 0),)).fetchall()
 			user_certifications = connection.execute("SELECT * FROM course_certifications WHERE user_id = ? AND certification_status = 'CERTIFIED' ORDER BY course_name", (session.get("user_id", 0),)).fetchall() if session.get("user_id") else []
 		return render_template(
 			"index.html", 
@@ -1160,7 +1167,7 @@ def create_app():
 			assigned_courses = connection.execute("""
 				SELECT gca.*, c.name AS course_name, c.created_by, u.full_name AS assigned_by_name,
 				(SELECT COUNT(*) FROM course_assignments ca JOIN group_members gm ON gm.user_id = ca.student_id WHERE ca.course_id = c.id AND gm.group_id = gca.group_id) AS member_access,
-				(SELECT COUNT(*) FROM course_assignments ca JOIN group_members gm ON gm.user_id = ca.student_id WHERE ca.course_id = c.id AND gm.group_id = gca.group_id AND ca.status = 'completed') AS completed_count,
+				(SELECT COUNT(*) FROM course_assignments ca JOIN group_members gm ON gm.user_id = ca.student_id WHERE ca.course_id = c.id AND gm.group_id = gca.group_id AND ca.status IN ('completed', 'certified')) AS completed_count,
 				(SELECT COUNT(*) FROM course_assignments ca JOIN group_members gm ON gm.user_id = ca.student_id WHERE ca.course_id = c.id AND gm.group_id = gca.group_id AND ca.status = 'assessment_failed') AS failed_count,
 				(SELECT COUNT(DISTINCT cc.user_id) FROM course_certifications cc JOIN group_members gm ON gm.user_id = cc.user_id WHERE cc.course_id = c.id AND gm.group_id = gca.group_id AND cc.certification_status = 'CERTIFIED') AS certified_count
 				FROM group_course_assignments gca
@@ -1313,7 +1320,9 @@ def create_app():
 					duplicates += 1
 					continue
 				seen.add(employee_id)
-				user = connection.execute("SELECT * FROM users WHERE employee_id = ? OR username = ?", (employee_id, username)).fetchone()
+				user = connection.execute("SELECT * FROM users WHERE employee_id = ?", (employee_id,)).fetchone()
+				if not user:
+					user = connection.execute("SELECT * FROM users WHERE username = ? AND COALESCE(employee_id, '') = ''", (username.lower(),)).fetchone()
 				if not user:
 					invalid += 1
 					continue
@@ -1392,6 +1401,7 @@ def create_app():
 			top_learners = connection.execute("""
 				SELECT user_name, COUNT(*) as certs 
 				FROM course_certifications 
+				WHERE certification_status = 'CERTIFIED'
 				GROUP BY user_id, user_name 
 				ORDER BY certs DESC 
 				LIMIT 5
@@ -1609,7 +1619,10 @@ def create_app():
 						connection.execute("UPDATE assessments SET title = ?, type = ?, pass_percentage = ?, max_attempts = ? WHERE id = ?", (request.form["title"].strip(), request.form["type"], int_or(request.form.get("pass_percentage"), 60), int_or(request.form.get("max_attempts"), 1), request.form["record_id"]))
 						flash("Assessment updated successfully.")
 			elif action == "generate_api_creds" and session.get("role") == "admin":
-				target_user_id = int(request.form["target_user_id"])
+				target_user_id = request.form.get("target_user_id", type=int)
+				if target_user_id is None:
+					flash("Select a user.")
+					return redirect(safe_referrer(url_for("admin_panel")))
 				import os
 				api_key = "ak_" + os.urandom(16).hex()
 				api_secret = "as_" + os.urandom(24).hex()
@@ -1621,7 +1634,10 @@ def create_app():
 					)
 				flash("API credentials generated successfully.")
 			elif action == "revoke_api_creds" and session.get("role") == "admin":
-				target_user_id = int(request.form["target_user_id"])
+				target_user_id = request.form.get("target_user_id", type=int)
+				if target_user_id is None:
+					flash("Select a user.")
+					return redirect(safe_referrer(url_for("admin_panel")))
 				with get_db() as connection:
 					connection.execute("UPDATE api_credentials SET status = 'inactive' WHERE user_id = ?", (target_user_id,))
 				flash("API credentials revoked successfully.")
@@ -1769,6 +1785,9 @@ def create_app():
 				cert_row = get_user_course_record(connection, session["user_id"], assessment_row["course_id"])
 				if cert_row and cert_row["certification_status"] == "CERTIFIED":
 					flash("This course is already certified.")
+					return redirect(safe_referrer(url_for("course_detail", course_id=assessment_row["course_id"])))
+				if not questions:
+					flash("This assessment has no questions yet.")
 					return redirect(safe_referrer(url_for("course_detail", course_id=assessment_row["course_id"])))
 				attempt_count = connection.execute("SELECT COUNT(*) AS n FROM assessment_attempts WHERE assessment_id = ? AND student_id = ?", (assessment_id, session["user_id"])).fetchone()["n"]
 				max_attempts = int_or(assessment_row["max_attempts"], 1)
@@ -2311,7 +2330,7 @@ def create_app():
 		description = request.form.get("description", "").strip()
 		category = request.form.get("category", "General").strip() or "General"
 		difficulty = request.form.get("difficulty", "beginner")
-		duration_minutes = int(request.form.get("duration_minutes", 0) or 0)
+		duration_minutes = int_or(request.form.get("duration_minutes"), 0)
 		tags = request.form.get("tags", "").strip()
 		thumbnail_color = request.form.get("thumbnail_color", "#6366f1")
 		status = request.form.get("status", "draft")
@@ -2420,7 +2439,7 @@ def create_app():
 					request.form.get("category", "General").strip() or "General",
 					status,
 					request.form.get("tags", "").strip(),
-					int(request.form.get("duration_minutes", 0) or 0),
+					int_or(request.form.get("duration_minutes"), 0),
 					request.form.get("difficulty", "beginner"),
 					request.form.get("thumbnail_color", "#6366f1"),
 					content_type,
@@ -2546,17 +2565,6 @@ def create_app():
 			about_me = request.form.get("about_me", "").strip()
 			interests = request.form.getlist("interests")
 
-			if pic and pic.filename:
-				try:
-					import os
-					from uuid import uuid4
-					ext = os.path.splitext(pic.filename)[1].lower()
-					if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
-						pic_filename = uuid4().hex + ext
-						pic.save(os.path.join(UPLOAD_FOLDER, pic_filename))
-				except Exception as e:
-					flash("Failed to save profile picture.")
-					
 			if not full_name or not email or not phone_number or not employee_id or not location_id:
 				flash("Name, Employee ID, Email, Phone, and Location are mandatory.")
 				return redirect(safe_referrer(url_for("profile")))
@@ -2568,6 +2576,13 @@ def create_app():
 					else: flash("Email already in use.")
 					return redirect(safe_referrer(url_for("profile")))
 					
+				if pic and pic.filename:
+					ext = os.path.splitext(pic.filename)[1].lower()
+					if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+						flash("Profile picture must be a PNG, JPG, GIF or WebP image.")
+						return redirect(safe_referrer(url_for("profile")))
+					pic_filename = uuid4().hex + ext
+					pic.save(os.path.join(UPLOAD_FOLDER, pic_filename))
 				connection.execute(
 					"UPDATE users SET full_name = ?, email = ?, phone_number = ?, employee_id = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ?, profile_picture = ? WHERE id = ?",
 					(full_name, email, phone_number, employee_id, department_id, position_id, location_id, about_me, pic_filename, session["user_id"])
@@ -2654,7 +2669,7 @@ def create_app():
 		
 		if request.method == "POST":
 			title = request.form.get("title", "").strip()
-			description = request.form.get("description", "").strip()
+			description = sanitize_html(request.form.get("description", "").strip())
 			content_type = request.form.get("content_type", "Text/Article")
 			category = request.form.get("category", "General").strip() or "General"
 			topic_tag = request.form.get("topic_tag", "").strip()
@@ -2746,7 +2761,7 @@ def create_app():
 			
 		if request.method == "POST":
 			title = request.form.get("title", "").strip()
-			description = request.form.get("description", "").strip()
+			description = sanitize_html(request.form.get("description", "").strip())
 			content_type = request.form.get("content_type", "Text/Article")
 			category = request.form.get("category", "General").strip() or "General"
 			topic_tag = request.form.get("topic_tag", "").strip()
@@ -2961,6 +2976,9 @@ def create_app():
 		if post["created_by"] == reviewer_id:
 			flash("You cannot review your own post.")
 			return redirect(safe_referrer(url_for("approval_queue")))
+		if post["status"] not in ("PENDING_APPROVAL", "UNPUBLISHED"):
+			flash("This post is not awaiting review.")
+			return redirect(safe_referrer(url_for("approval_queue")))
 
 		old_status = post["status"]
 		
@@ -3139,9 +3157,8 @@ def create_app():
 				flash("You cannot rate your own post.")
 				return redirect(safe_referrer(url_for("post_detail", post_id=post_id)))
 				
-			role = session.get("role")
-			if post["status"] != "PUBLISHED" and not (post["created_by"] == user_id or role in ("admin", "moderator")):
-				flash("Unauthorized to rate this post.")
+			if post["status"] != "PUBLISHED":
+				flash("Only published posts can be rated.")
 				return redirect(safe_referrer(url_for("community_feed")))
 				
 			existing = connection.execute("SELECT id FROM post_ratings WHERE post_id = ? AND user_id = ?", (post_id, user_id)).fetchone()
@@ -3471,6 +3488,9 @@ def create_app():
 			fixed_points = int(fixed_points)
 		except ValueError:
 			flash("Invalid multiplier or fixed points value.")
+			return redirect(safe_referrer(url_for("admin_rewards")))
+		if status not in ("active", "inactive") or calc_type not in ("MULTIPLIER", "FIXED"):
+			flash("Invalid status or calculation type.")
 			return redirect(safe_referrer(url_for("admin_rewards")))
 			
 		with get_db() as connection:
@@ -4389,7 +4409,7 @@ def create_app():
 		from flask import g
 		data = request.get_json(silent=True) or {}
 		title = (data.get("title") or "").strip()
-		description = (data.get("description") or "").strip()
+		description = sanitize_html((data.get("description") or "").strip())
 		content_type = (data.get("content_type") or "Text/Article").strip()
 		category = (data.get("category") or "General").strip()
 		topic_tag = (data.get("topic_tag") or "").strip()
@@ -4464,15 +4484,16 @@ def create_app():
 		"""Submit a rating (1-5 stars) for a community post."""
 		from flask import g
 		data = request.get_json(silent=True) or {}
-		rating = data.get("rating")
-		if rating is None or not (1 <= int(rating) <= 5):
+		rating = int_or(data.get("rating"), 0)
+		if not 1 <= rating <= 5:
 			return {"error": "Rating must be an integer between 1 and 5."}, 400
-		rating = int(rating)
 		
 		with get_db() as connection:
 			post = connection.execute("SELECT created_by, status FROM posts WHERE id = ?", (post_id,)).fetchone()
 			if not post:
 				return {"error": "Post not found."}, 404
+			if post["status"] != "PUBLISHED":
+				return {"error": "Only published posts can be rated."}, 400
 			if post["created_by"] == g.api_user["id"]:
 				return {"error": "You cannot rate your own post."}, 400
 				

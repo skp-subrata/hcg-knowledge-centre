@@ -904,14 +904,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     countText.classList.remove('hidden');
                     countText.textContent = unreadCount + ' New';
                     
+                    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
                     let html = '';
                     data.notifications.forEach(n => {
-                        const targetUrl = n.target_url || '#';
+                        const targetUrl = esc(n.target_url || '#');
                         const isNew = sessionNewIds.has(n.id);
                         const highlightClass = isNew ? 'bg-indigo-50/60 dark:bg-indigo-900/40 border-l-2 border-indigo-500 pl-3' : 'px-4';
                         html += `
                             <a href="javascript:void(0)" onclick="markRead(${n.id}, '${targetUrl}')" class="block py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${highlightClass}">
-                                <p class="text-sm text-slate-800 dark:text-slate-200">${n.message}</p>
+                                <p class="text-sm text-slate-800 dark:text-slate-200">${esc(n.message)}</p>
                                 <p class="text-[10px] text-slate-400 mt-1">${new Date(n.created_at).toLocaleString()}</p>
                             </a>
                         `;
