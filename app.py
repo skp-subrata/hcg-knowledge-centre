@@ -1556,10 +1556,10 @@ def create_app():
 
 		with get_db() as connection:
 			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interests ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
-			master_depts = connection.execute("SELECT id, name FROM departments WHERE status = 'active' ORDER BY name").fetchall()
+			master_depts = connection.execute("SELECT department_id as id, department_name as name FROM departments WHERE status = 'Active' ORDER BY department_name").fetchall()
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, name FROM interests WHERE status = 'active' ORDER BY name").fetchall()
-			master_locations = connection.execute("SELECT id, name FROM locations WHERE status = 'active' ORDER BY name").fetchall()
+			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE status = 'Active' ORDER BY location_name").fetchall()
 			courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (session["user_id"], session["user_id"])).fetchall()
 			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
 			banks = connection.execute("SELECT * FROM question_banks ORDER BY id DESC").fetchall()
@@ -2424,10 +2424,10 @@ def create_app():
 			
 		with get_db() as connection:
 			user_data = connection.execute("SELECT u.*, COALESCE(GROUP_CONCAT(ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN user_interests ui ON ui.user_id = u.id WHERE u.id = ? GROUP BY u.id", (session["user_id"],)).fetchone()
-			master_depts = connection.execute("SELECT id, name FROM departments WHERE status = 'active' ORDER BY name").fetchall()
+			master_depts = connection.execute("SELECT department_id as id, department_name as name FROM departments WHERE status = 'Active' ORDER BY department_name").fetchall()
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, name FROM interests WHERE status = 'active' ORDER BY name").fetchall()
-			master_locations = connection.execute("SELECT id, name FROM locations WHERE status = 'active' ORDER BY name").fetchall()
+			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE status = 'Active' ORDER BY location_name").fetchall()
 		return render_template("profile.html", user_data=user_data, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.context_processor
@@ -4460,11 +4460,13 @@ def api_add_department():
     name = (data.get("name") or "").strip()
     if not name:
         return {"error": "Department name is required."}, 400
+    code = ''.join([w[0] for w in name.split()]).upper()
+    if len(code) < 2: code = name[:3].upper()
     with get_db() as connection:
         try:
             dept_id = connection.execute(
-                "INSERT INTO departments (name, created_by) VALUES (?, ?)",
-                (name, session.get("user_id", getattr(g, "api_user", {}).get("id")))
+                "INSERT INTO departments (department_name, department_code, created_by) VALUES (?, ?, ?)",
+                (name, code, session.get("user_id", getattr(g, "api_user", {}).get("id")))
             ).lastrowid
             return {"message": "Department added.", "id": dept_id, "name": name}, 201
         except sqlite3.IntegrityError:
@@ -4511,15 +4513,103 @@ def api_add_location():
     name = (data.get("name") or "").strip()
     if not name:
         return {"error": "Location name is required."}, 400
+    code = ''.join([w[0] for w in name.split()]).upper()
+    if len(code) < 3: code = name[:3].upper()
     with get_db() as connection:
         try:
             loc_id = connection.execute(
-                "INSERT INTO locations (name, created_by) VALUES (?, ?)",
-                (name, session.get("user_id", getattr(g, "api_user", {}).get("id")))
+                "INSERT INTO locations (location_name, location_code, city, country, created_by) VALUES (?, ?, ?, ?, ?)",
+                (name, code, name, 'India', session.get("user_id", getattr(g, "api_user", {}).get("id")))
             ).lastrowid
             return {"message": "Location added.", "id": loc_id, "name": name}, 201
         except sqlite3.IntegrityError:
             return {"error": "Location already exists."}, 409
+
+
+@app.route("/admin/masters", methods=["GET", "POST"])
+@admin_required
+def master_management():
+    if request.method == "POST":
+        action = request.form.get("action")
+        user_id = session.get("user_id")
+        with get_db() as conn:
+            try:
+                if action == "add_department":
+                    name = request.form.get("department_name", "").strip()
+                    code = request.form.get("department_code", "").strip()
+                    desc = request.form.get("description", "").strip()
+                    status = request.form.get("status", "Active")
+                    if not name or not code:
+                        flash("Department Name and Code are mandatory.")
+                    else:
+                        conn.execute("INSERT INTO departments (department_name, department_code, description, status, created_by) VALUES (?, ?, ?, ?, ?)", (name, code, desc, status, user_id))
+                        flash("Department created successfully.")
+                        
+                elif action == "edit_department":
+                    dept_id = request.form.get("record_id")
+                    name = request.form.get("department_name", "").strip()
+                    code = request.form.get("department_code", "").strip()
+                    desc = request.form.get("description", "").strip()
+                    status = request.form.get("status", "Active")
+                    if not name or not code:
+                        flash("Department Name and Code are mandatory.")
+                    else:
+                        conn.execute("UPDATE departments SET department_name = ?, department_code = ?, description = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (name, code, desc, status, user_id, dept_id))
+                        flash("Department updated successfully.")
+                        
+                elif action == "toggle_department":
+                    dept_id = request.form.get("record_id")
+                    new_status = request.form.get("status")
+                    conn.execute("UPDATE departments SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (new_status, user_id, dept_id))
+                    flash(f"Department marked as {new_status}.")
+
+                elif action == "add_location":
+                    name = request.form.get("location_name", "").strip()
+                    code = request.form.get("location_code", "").strip()
+                    city = request.form.get("city", "").strip()
+                    country = request.form.get("country", "").strip()
+                    address = request.form.get("address", "").strip()
+                    state = request.form.get("state", "").strip()
+                    postal_code = request.form.get("postal_code", "").strip()
+                    status = request.form.get("status", "Active")
+                    if not name or not code or not city or not country:
+                        flash("Location Name, Code, City, and Country are mandatory.")
+                    else:
+                        conn.execute("INSERT INTO locations (location_name, location_code, city, country, address, state, postal_code, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (name, code, city, country, address, state, postal_code, status, user_id))
+                        flash("Location created successfully.")
+                        
+                elif action == "edit_location":
+                    loc_id = request.form.get("record_id")
+                    name = request.form.get("location_name", "").strip()
+                    code = request.form.get("location_code", "").strip()
+                    city = request.form.get("city", "").strip()
+                    country = request.form.get("country", "").strip()
+                    address = request.form.get("address", "").strip()
+                    state = request.form.get("state", "").strip()
+                    postal_code = request.form.get("postal_code", "").strip()
+                    status = request.form.get("status", "Active")
+                    if not name or not code or not city or not country:
+                        flash("Location Name, Code, City, and Country are mandatory.")
+                    else:
+                        conn.execute("UPDATE locations SET location_name = ?, location_code = ?, city = ?, country = ?, address = ?, state = ?, postal_code = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (name, code, city, country, address, state, postal_code, status, user_id, loc_id))
+                        flash("Location updated successfully.")
+                        
+                elif action == "toggle_location":
+                    loc_id = request.form.get("record_id")
+                    new_status = request.form.get("status")
+                    conn.execute("UPDATE locations SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (new_status, user_id, loc_id))
+                    flash(f"Location marked as {new_status}.")
+                    
+            except sqlite3.IntegrityError:
+                flash("Error: Name or Code must be unique.")
+                
+        return redirect(safe_referrer(url_for('master_management')))
+        
+    with get_db() as connection:
+        departments = connection.execute("SELECT * FROM departments ORDER BY department_name").fetchall()
+        locations = connection.execute("SELECT * FROM locations ORDER BY location_name").fetchall()
+        
+    return render_template("master_management.html", departments=[dict(d) for d in departments], locations=[dict(l) for l in locations], user=session.get("user"), role=session.get("role"), profile_picture=session.get("profile_picture"))
 
 if __name__ == "__main__":
 	app.run(debug=True)
