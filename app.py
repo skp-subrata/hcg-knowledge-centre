@@ -821,6 +821,36 @@ def get_user_course_record(connection, user_id, course_id):
 	).fetchone()
 
 
+def int_or(value, default):
+	"""Parse an integer from a form/DB value; blank or invalid values fall back to *default*."""
+	try:
+		return int(str(value).strip())
+	except (TypeError, ValueError):
+		return default
+
+
+def issue_certificate(connection, user_id, course_id):
+	"""Return the learner's certificate uid for a course, creating the row only once."""
+	existing = connection.execute(
+		"SELECT cert_uid FROM certificates WHERE student_id = ? AND course_id = ?", (user_id, course_id)
+	).fetchone()
+	if existing:
+		return existing["cert_uid"]
+	cert_uid = f"CERT-{course_id}-{user_id}-{os.urandom(4).hex().upper()}"
+	connection.execute(
+		"INSERT INTO certificates (student_id, course_id, cert_uid, issued_date, file_url) VALUES (?, ?, ?, DATE('now'), '')",
+		(user_id, course_id, cert_uid),
+	)
+	return cert_uid
+
+
+def course_requires_post_assessment(connection, course_id):
+	"""True when the course has a 'post' assessment; only those certify (a 'pre' check is a readiness test)."""
+	return connection.execute(
+		"SELECT 1 FROM assessments WHERE course_id = ? AND type = 'post' LIMIT 1", (course_id,)
+	).fetchone() is not None
+
+
 def user_has_course_access(connection, user_id, course_id):
 	"""Check whether a user already has an active course assignment."""
 	return connection.execute(
@@ -1516,9 +1546,13 @@ def create_app():
 						if not bank:
 							bank = (connection.execute("INSERT INTO question_banks (name, category, created_by) VALUES (?, 'Manual', ?)", (bank_name, session["user_id"])).lastrowid,)
 						explanation = request.form.get("explanation", "").strip() or None
+						correct_option = request.form.get("correct_option", "").strip().lower()
+						if correct_option not in ("a", "b", "c", "d"):
+							flash("The correct option must be A, B, C or D.")
+							return redirect(safe_referrer(url_for("admin_panel")))
 						question_id = connection.execute(
 							"INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, difficulty, created_by, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-							(bank[0], request.form["question_text"].strip(), request.form["option_a"].strip(), request.form["option_b"].strip(), request.form["option_c"].strip(), request.form["option_d"].strip(), request.form["correct_option"], int(request.form.get("marks", 1)), request.form.get("difficulty", "medium"), session["user_id"], explanation),
+							(bank[0], request.form["question_text"].strip(), request.form["option_a"].strip(), request.form["option_b"].strip(), request.form["option_c"].strip(), request.form["option_d"].strip(), correct_option, int_or(request.form.get("marks"), 1), request.form.get("difficulty", "medium"), session["user_id"], explanation),
 						).lastrowid
 						connection.execute("INSERT INTO assessment_questions (assessment_id, question_id) VALUES (?, ?)", (request.form["assessment_id"], question_id))
 						flash("Question added and linked to assessment successfully.")
@@ -1527,7 +1561,7 @@ def create_app():
 			elif action == "add_assessment":
 				with get_db() as connection:
 					if course_is_manageable(connection, request.form["course_id"], session["user_id"], session["role"]):
-						connection.execute("INSERT INTO assessments (course_id, type, title, pass_percentage, max_attempts) VALUES (?, ?, ?, ?, ?)", (request.form["course_id"], request.form["assessment_type"], request.form["assessment_title"].strip(), request.form.get("pass_percentage", 60), request.form.get("max_attempts", 1)))
+						connection.execute("INSERT INTO assessments (course_id, type, title, pass_percentage, max_attempts) VALUES (?, ?, ?, ?, ?)", (request.form["course_id"], request.form["assessment_type"], request.form["assessment_title"].strip(), int_or(request.form.get("pass_percentage"), 60), int_or(request.form.get("max_attempts"), 1)))
 						flash("Assessment created successfully.")
 					else:
 						flash("You can only manage courses you created.")
@@ -1545,7 +1579,7 @@ def create_app():
 				with get_db() as connection:
 					course = connection.execute("SELECT course_id FROM assessments WHERE id = ?", (request.form["record_id"],)).fetchone()
 					if course and course_is_manageable(connection, course["course_id"], session["user_id"], session["role"]):
-						connection.execute("UPDATE assessments SET title = ?, type = ?, pass_percentage = ?, max_attempts = ? WHERE id = ?", (request.form["title"].strip(), request.form["type"], request.form["pass_percentage"], request.form["max_attempts"], request.form["record_id"]))
+						connection.execute("UPDATE assessments SET title = ?, type = ?, pass_percentage = ?, max_attempts = ? WHERE id = ?", (request.form["title"].strip(), request.form["type"], int_or(request.form.get("pass_percentage"), 60), int_or(request.form.get("max_attempts"), 1), request.form["record_id"]))
 						flash("Assessment updated successfully.")
 			elif action == "generate_api_creds":
 				target_user_id = int(request.form["target_user_id"])
@@ -1714,33 +1748,45 @@ def create_app():
 					flash("This course is already certified.")
 					return redirect(safe_referrer(url_for("course_detail", course_id=assessment_row["course_id"])))
 				attempt_count = connection.execute("SELECT COUNT(*) AS n FROM assessment_attempts WHERE assessment_id = ? AND student_id = ?", (assessment_id, session["user_id"])).fetchone()["n"]
-				attempt = connection.execute("INSERT INTO assessment_attempts (assessment_id, student_id, attempt_no, status, result) VALUES (?, ?, ?, 'evaluated', 'fail')", (assessment_id, session["user_id"], attempt_count + 1))
-				attempt_id = attempt.lastrowid
+				max_attempts = int_or(assessment_row["max_attempts"], 1)
+				if attempt_count >= max_attempts:
+					flash(f"You have used all {max_attempts} attempt(s) for this assessment.")
+					return redirect(safe_referrer(url_for("course_detail", course_id=assessment_row["course_id"])))
+				pass_mark = int_or(assessment_row["pass_percentage"], 60)
 				score = 0
+				answers = []
 				for question in questions:
 					selected = request.form.get(f"q{question['id']}")
-					correct = selected == question["correct_option"]
+					correct = (selected or "").strip().lower() == (question["correct_option"] or "").strip().lower()
 					marks = question["marks"] if correct else 0
 					score += marks
-					connection.execute("INSERT INTO attempt_answers (attempt_id, question_id, selected_option, is_correct, marks_awarded) VALUES (?, ?, ?, ?, ?)", (attempt_id, question["id"], selected, correct, marks))
+					answers.append((question["id"], selected, correct, marks))
 				percentage = (score / max(sum(q["marks"] for q in questions), 1)) * 100
-				result = "pass" if percentage >= assessment_row["pass_percentage"] else "fail"
-				connection.execute("UPDATE assessment_attempts SET score=?, percentage=?, result=?, submitted_at=CURRENT_TIMESTAMP, status='submitted' WHERE id=?", (score, percentage, result, attempt_id))
+				result = "pass" if percentage >= pass_mark else "fail"
+				# Only a 'post' assessment leads to certification (unless the course has none); a 'pre' pass keeps the course in progress.
+				certifiable = result == "pass" and (assessment_row["type"] == "post" or not course_requires_post_assessment(connection, assessment_row["course_id"]))
+				next_status = "FEEDBACK_PENDING" if certifiable else ("IN_PROGRESS" if result == "pass" else "ASSESSMENT_FAILED")
+				attempt_id = connection.execute(
+					"INSERT INTO assessment_attempts (assessment_id, student_id, attempt_no, score, percentage, status, result, submitted_at) VALUES (?, ?, ?, ?, ?, 'submitted', ?, CURRENT_TIMESTAMP)",
+					(assessment_id, session["user_id"], attempt_count + 1, score, percentage, result),
+				).lastrowid
+				for question_id, selected, correct, marks in answers:
+					connection.execute("INSERT INTO attempt_answers (attempt_id, question_id, selected_option, is_correct, marks_awarded) VALUES (?, ?, ?, ?, ?)", (attempt_id, question_id, selected, correct, marks))
 				course = connection.execute("SELECT c.name FROM courses c WHERE c.id = ?", (assessment_row["course_id"],)).fetchone()
 				cert_row = get_user_course_record(connection, session["user_id"], assessment_row["course_id"])
 				if cert_row is None:
 					connection.execute(
 						"INSERT INTO course_certifications (user_id, course_id, user_name, course_name, course_start_date, course_completion_date, assessment_score, pass_mark, assessment_attempts, latest_assessment_status, certification_status, badge) VALUES (?, ?, ?, ?, DATE('now'), DATE('now'), ?, ?, ?, ?, ?, ?)",
-						(session["user_id"], assessment_row["course_id"], session["user"], course["name"], percentage, assessment_row["pass_percentage"], attempt_count + 1, "FEEDBACK_PENDING" if result == "pass" else "ASSESSMENT_FAILED", "FEEDBACK_PENDING" if result == "pass" else "ASSESSMENT_FAILED", "NOT CERTIFIED" if result == "fail" else "NOT CERTIFIED")
+						(session["user_id"], assessment_row["course_id"], session["user"], course["name"], percentage, pass_mark, attempt_count + 1, next_status, next_status, determine_badge(percentage, pass_mark))
 					)
 				else:
 					connection.execute(
 						"UPDATE course_certifications SET user_name = ?, course_name = ?, assessment_score = ?, pass_mark = ?, assessment_attempts = ?, latest_assessment_status = ?, certification_status = ?, badge = ?, course_completion_date = COALESCE(course_completion_date, DATE('now')) WHERE user_id = ? AND course_id = ?",
-						(session["user"], course["name"], percentage, assessment_row["pass_percentage"], attempt_count + 1, "FEEDBACK_PENDING" if result == "pass" else "ASSESSMENT_FAILED", "FEEDBACK_PENDING" if result == "pass" else "ASSESSMENT_FAILED", determine_badge(percentage, assessment_row["pass_percentage"]), session["user_id"], assessment_row["course_id"])
+						(session["user"], course["name"], percentage, pass_mark, attempt_count + 1, next_status, next_status, determine_badge(percentage, pass_mark), session["user_id"], assessment_row["course_id"])
 					)
-				if result == "pass":
+				if certifiable:
 					connection.execute("UPDATE course_assignments SET status = 'feedback_pending', completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (assessment_row["course_id"], session["user_id"]))
-				else:
+				elif result == "fail":
 					connection.execute("UPDATE course_assignments SET status = 'assessment_failed', completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (assessment_row["course_id"], session["user_id"]))
 				return redirect(url_for("assessment_result", attempt_id=attempt_id))
 		return render_template("assessment.html", assessment=assessment_row, questions=questions)
@@ -2002,22 +2048,24 @@ def create_app():
 				if certification and certification["certification_status"] == "CERTIFIED":
 					flash("A certificate has already been issued for this course.")
 					return redirect(safe_referrer(url_for("certificate", course_id=course_id)))
-				assessment = connection.execute(
-					"SELECT COALESCE(MAX(percentage),0) AS latest_pct FROM assessment_attempts WHERE student_id = ? AND assessment_id IN (SELECT id FROM assessments WHERE course_id = ?)",
+				# The certificate is based on the latest passing attempt of a 'post' assessment (any type if the course has no
+				# post assessment), graded against that assessment's own pass mark.
+				passing = connection.execute(
+					"""SELECT aa.percentage, aa.score, a.pass_percentage
+					   FROM assessment_attempts aa JOIN assessments a ON a.id = aa.assessment_id
+					   WHERE aa.student_id = ? AND a.course_id = ? AND aa.result = 'pass'
+					     AND (a.type = 'post' OR NOT EXISTS (SELECT 1 FROM assessments p WHERE p.course_id = a.course_id AND p.type = 'post'))
+					   ORDER BY aa.id DESC LIMIT 1""",
 					(session["user_id"], course_id),
 				).fetchone()
-				final_score = float(assessment["latest_pct"]) if assessment else 0.0
-				pass_mark = connection.execute("SELECT COALESCE(pass_percentage, 60) AS pass_mark FROM assessments WHERE course_id = ? ORDER BY id LIMIT 1", (course_id,)).fetchone()
-				pass_mark = pass_mark["pass_mark"] if pass_mark else 60
-				if final_score < pass_mark:
+				if not passing:
 					flash("Certificate cannot be generated for a failed assessment.")
 					return redirect(safe_referrer(url_for("course_detail", course_id=course_id)))
-				certificate_id = f"CERT-{course_id}-{session['user_id']}-{os.urandom(4).hex().upper()}"
+				final_score = float(passing["percentage"] or 0)
+				pass_mark = int_or(passing["pass_percentage"], 60)
+				attempt_score = passing["score"] or 0
+				certificate_id = issue_certificate(connection, session["user_id"], course_id)
 				badge = determine_badge(final_score, pass_mark)
-				connection.execute(
-					"INSERT INTO certificates (student_id, course_id, cert_uid, issued_date, file_url) VALUES (?, ?, ?, DATE('now'), ?) ON CONFLICT(cert_uid) DO NOTHING",
-					(session["user_id"], course_id, certificate_id, "")
-				)
 				connection.execute(
 					"INSERT INTO course_certifications (user_id, course_id, user_name, course_name, course_start_date, course_completion_date, assessment_score, pass_mark, assessment_attempts, latest_assessment_status, feedback_rating, feedback_comments, feedback_submitted_at, certificate_id, certificate_generated_at, badge, certification_status) VALUES (?, ?, ?, ?, DATE('now'), DATE('now'), ?, ?, (SELECT COUNT(*) FROM assessment_attempts WHERE student_id = ? AND assessment_id IN (SELECT id FROM assessments WHERE course_id = ?)), 'CERTIFIED', ?, ?, CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP, ?, 'CERTIFIED') ON CONFLICT(user_id, course_id) DO UPDATE SET user_name = excluded.user_name, course_name = excluded.course_name, assessment_score = excluded.assessment_score, pass_mark = excluded.pass_mark, assessment_attempts = excluded.assessment_attempts, latest_assessment_status = 'CERTIFIED', feedback_rating = excluded.feedback_rating, feedback_comments = excluded.feedback_comments, feedback_submitted_at = CURRENT_TIMESTAMP, certificate_id = excluded.certificate_id, certificate_generated_at = CURRENT_TIMESTAMP, badge = excluded.badge, certification_status = 'CERTIFIED'",
 					(session["user_id"], course_id, session["user"], course["name"], final_score, pass_mark, session["user_id"], course_id, int(rating), comments, certificate_id, badge)
@@ -2029,11 +2077,6 @@ def create_app():
 				connection.execute("UPDATE course_assignments SET status='certified', completed_at=COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"]))
 				
 				# Reward Engine integration
-				score_row = connection.execute(
-					"SELECT COALESCE(MAX(score), 0) AS max_score FROM assessment_attempts WHERE student_id = ? AND assessment_id IN (SELECT id FROM assessments WHERE course_id = ?)",
-					(session["user_id"], course_id)
-				).fetchone()
-				attempt_score = score_row["max_score"] if score_row else 0
 				
 				# 1. Course Certification Reward
 				process_reward_event(
@@ -4541,6 +4584,8 @@ def create_app():
 				
 			if not course_is_visible(connection, assessment["course_id"], g.api_user["id"]):
 				return {"error": "Access forbidden: you do not have access to this course content."}, 403
+			if g.api_user["role"] == "basic user" and not user_has_course_access(connection, g.api_user["id"], assessment["course_id"]):
+				return {"error": "Access forbidden: you are not assigned to this course."}, 403
 				
 			prior_attempts = connection.execute(
 				"SELECT COUNT(*) as count FROM assessment_attempts WHERE assessment_id = ? AND student_id = ?",
@@ -4548,7 +4593,7 @@ def create_app():
 			).fetchone()
 			attempt_no = (prior_attempts["count"] or 0) + 1
 			
-			if attempt_no > assessment["max_attempts"]:
+			if attempt_no > int_or(assessment["max_attempts"], 1):
 				return {"error": f"You have already reached the maximum limit of {assessment['max_attempts']} attempts."}, 403
 				
 			questions = connection.execute(
@@ -4583,7 +4628,8 @@ def create_app():
 				answers_to_insert.append((q["id"], user_ans, is_correct, marks_awarded))
 				
 			percentage = (marks_obtained / total_marks) * 100 if total_marks > 0 else 0
-			result = "pass" if percentage >= assessment["pass_percentage"] else "fail"
+			pass_mark = int_or(assessment["pass_percentage"], 60)
+			result = "pass" if percentage >= pass_mark else "fail"
 			
 			try:
 				cursor = connection.execute(
@@ -4601,16 +4647,14 @@ def create_app():
 					)
 					
 				if result == "pass" and assessment["type"] == "post":
-					import string
-					import random
-					cert_uid = "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
-					
-					cursor_cert = connection.execute(
-						"INSERT INTO certificates (student_id, course_id, cert_uid) VALUES (?, ?, ?)",
-						(g.api_user["id"], assessment["course_id"], cert_uid)
+					certificate_id = issue_certificate(connection, g.api_user["id"], assessment["course_id"])
+					badge = determine_badge(percentage, pass_mark)
+					connection.execute(
+						"""INSERT INTO course_certifications (user_id, course_id, user_name, course_name, course_start_date, course_completion_date, assessment_score, pass_mark, assessment_attempts, latest_assessment_status, certificate_id, certificate_generated_at, badge, certification_status)
+						   VALUES (?, ?, ?, ?, DATE('now'), DATE('now'), ?, ?, ?, 'CERTIFIED', ?, CURRENT_TIMESTAMP, ?, 'CERTIFIED')
+						   ON CONFLICT(user_id, course_id) DO UPDATE SET assessment_score = excluded.assessment_score, pass_mark = excluded.pass_mark, assessment_attempts = excluded.assessment_attempts, latest_assessment_status = 'CERTIFIED', certificate_id = excluded.certificate_id, certificate_generated_at = CURRENT_TIMESTAMP, badge = excluded.badge, certification_status = 'CERTIFIED'""",
+						(g.api_user["id"], assessment["course_id"], g.api_user["full_name"], assessment["course_name"], percentage, pass_mark, attempt_no, certificate_id, badge),
 					)
-					certificate_id = cursor_cert.lastrowid
-					cursor_cert.close()
 					
 					connection.execute(
 						"UPDATE course_assignments SET status='certified', completed_at=COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE course_id = ? AND student_id = ?",
@@ -4626,18 +4670,6 @@ def create_app():
 						source_reference_type="CERTIFICATE",
 						description=f"Course Certification - {assessment['course_name']} (Score: {marks_obtained})",
 						input_value=marks_obtained,
-						actor_id=g.api_user["id"]
-					)
-					# 2. Owner Course Reward
-					ref_id = f"CRATE-{assessment['course_id']}-{g.api_user['id']}"
-					process_reward_event(
-						connection=connection,
-						user_id=assessment["course_owner_id"],
-						event_name="COURSE_OWNER_RATING",
-						source_reference_id=ref_id,
-						source_reference_type="COURSE_RATING",
-						description=f"Course Rating received - {assessment['course_name']} (Rating: 5/10)",
-						input_value=5,
 						actor_id=g.api_user["id"]
 					)
 			except Exception as e:

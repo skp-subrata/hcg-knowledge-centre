@@ -188,3 +188,47 @@ class FakeHTTPResponse:
 
 	def __exit__(self, *exc):
 		return False
+
+
+def make_assessment(db_path, course_id, kind="post", pass_percentage=60, max_attempts=1, questions=(("Question 1", "a", 1),), creator_id=1, title=None):
+	"""Create a question bank, its questions and an assessment on *course_id*.
+
+	*questions* is a sequence of (text, correct_option, marks). Returns (assessment_id, [question_id, ...]).
+	"""
+	connection = _connect(db_path)
+	try:
+		with connection:
+			title = title or f"{kind.title()} assessment {course_id}"
+			bank_id = connection.execute(
+				"INSERT INTO question_banks (name, category, created_by) VALUES (?, 'Testing', ?)", (f"{title} bank", creator_id)
+			).lastrowid
+			assessment_id = connection.execute(
+				"INSERT INTO assessments (course_id, type, title, pass_percentage, max_attempts) VALUES (?, ?, ?, ?, ?)",
+				(course_id, kind, title, pass_percentage, max_attempts),
+			).lastrowid
+			question_ids = []
+			for text, correct, marks in questions:
+				question_id = connection.execute(
+					"INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, difficulty, created_by) "
+					"VALUES (?, ?, 'A', 'B', 'C', 'D', ?, ?, 'medium', ?)",
+					(bank_id, text, correct, marks, creator_id),
+				).lastrowid
+				connection.execute("INSERT INTO assessment_questions (assessment_id, question_id) VALUES (?, ?)", (assessment_id, question_id))
+				question_ids.append(question_id)
+	finally:
+		connection.close()
+	return assessment_id, question_ids
+
+
+def assign(db_path, course_id, user_id, status="in_progress"):
+	"""Give *user_id* an assignment on *course_id* (idempotent)."""
+	connection = _connect(db_path)
+	try:
+		with connection:
+			connection.execute(
+				"INSERT INTO course_assignments (course_id, student_id, status) VALUES (?, ?, ?) "
+				"ON CONFLICT(course_id, student_id) DO UPDATE SET status = excluded.status",
+				(course_id, user_id, status),
+			)
+	finally:
+		connection.close()

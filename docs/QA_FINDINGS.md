@@ -35,13 +35,13 @@ Route-level smoke cannot see these; each gets a flow test in Phase 2.
 | QA-005 | admin delete | `POST /admin/delete/module/<id>` → 500 (`modules` table never exists) | `delete_record` allow-list |
 | QA-006 | rewards admin | `POST /admin/rewards/source/update` with an unknown `calculation_type`/`status` → 500 (CHECK constraint, no validation) | `admin_update_reward_source` |
 | QA-007 | rewards admin | adjust/settle with unknown or non-numeric `user_id` → 500 | `admin_adjust_rewards`, `admin_settle_rewards` → **fixed** (tests/test_rewards.py) |
-| QA-008 | assessments | blank `pass_percentage`/`marks` stored as `''` → later `TypeError`/`ValueError` 500 | `add_assessment`, `add_question`, `assessment()` |
+| QA-008 | assessments | blank `pass_percentage`/`marks` stored as `''` → later `TypeError`/`ValueError` 500 | `add_assessment`, `add_question`, `assessment()` → **fixed** (int_or() for pass %, attempts and marks; option validated; tests/test_assessments.py) |
 | QA-009 | courses | `duration_minutes=abc` → 500 | `courses_create` |
 | QA-010 | groups | non-integer or unknown ids in member/assign/upload forms → 500 | group routes |
 | QA-011 | API v1 | non-integer `rating` / `points` → 500 instead of 400 | `api_rate_post`, `api_settle_rewards`, `api_adjust_rewards` → **fixed** (tests/test_rewards.py, API reward routes) |
 | QA-016 | impersonation | admin impersonating a user can `GET /switch-role` → `role=admin` under the victim's `user_id`; moderator can mint/read an admin's API key via `/admin` | `view_as`, `switch_role`, `admin_panel` |
-| QA-018 | assessments | `max_attempts` never enforced on the web path (API enforces it) | `assessment()` |
-| QA-019 | certification | passing only the 1-question `pre` assessment certifies (feedback uses MAX over all assessments); API submit never writes `course_certifications` | `feedback_form`, `api_submit_assessment` |
+| QA-018 | assessments | `max_attempts` never enforced on the web path (API enforces it) | `assessment()` → **fixed** (web assessment() enforces max_attempts) |
+| QA-019 | certification | passing only the 1-question `pre` assessment certifies (feedback uses MAX over all assessments); API submit never writes `course_certifications` | `feedback_form`, `api_submit_assessment` → **fixed** (only post-assessment passes certify; API submit writes course_certifications; one certificate per learner/course (006)) |
 | QA-020 | rewards | web and API ledgers use opposite signs for settlements/resets; API adjust stores `abs()`; two reward reference key spaces → double pay | reward admin routes, API reward routes → **fixed** (tests/test_rewards.py; both surfaces now share one ledger convention) |
 | QA-021 | auth | inactive users can log in and keep API access; API-created mixed-case usernames can never log in | `home()`, `api_required`, `api_create_user` |
 | QA-022 | community | post body rendered with `\|safe` and notification text via `innerHTML` → stored XSS; attachments accept any file type | templates, `create_post`/`edit_post`, `base.html` |

@@ -91,6 +91,7 @@ MAY_DENY = {
 	"assessment_result": {"student", "mod", "admin"}, "assessment_review": {"student", "mod", "admin"},
 	"add_user_interest": {"student", "mod"},
 	"delete_user_interest": {"student", "mod"},
+	"api_submit_assessment": {"api_student"},  # not assigned to the course used by the matrix
 	"api_get_attempt": {"api_student"},
 	"api_get_attempt_review": {"api_student"},
 	"api_get_user": {"api_student"},
