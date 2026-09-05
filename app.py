@@ -13,6 +13,7 @@ from uuid import uuid4
 from flask import Flask, flash, redirect, render_template, request, send_file, send_from_directory, session, url_for, jsonify
 from openpyxl import Workbook, load_workbook
 from storage import save_file
+from db_init import apply_init_scripts, applied_scripts
 
 
 DATABASE = Path(os.getenv("LMS_DATABASE", Path(__file__).with_name("users.db")))
@@ -460,7 +461,13 @@ def init_db():
 			CREATE INDEX IF NOT EXISTS idx_reward_tx_user ON reward_transactions(user_id);
 			CREATE INDEX IF NOT EXISTS idx_reward_tx_src ON reward_transactions(reward_source, source_reference_id);
 		""")
-		seed_demo_data(connection)
+		# Apply the SQL init scripts in init_scripts/ (master tables, interests,
+		# profile columns, starter master data). Each script runs once per database.
+		apply_init_scripts(connection)
+		# Demo data (sample users, demo accounts, demo courses) is for local use.
+		# Deployments set LMS_SEED_DEMO=0 to get only the schema, master data and the bootstrap admin.
+		if os.getenv("LMS_SEED_DEMO", "1") == "1":
+			seed_demo_data(connection)
 
 
 def seed_demo_data(connection):
@@ -489,6 +496,13 @@ def seed_demo_data(connection):
 			connection.execute("ALTER TABLE courses ADD COLUMN thumbnail_color TEXT DEFAULT '#6366f1'")
 
 		connection.execute("INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id) VALUES (?, ?, ?, ?, ?)", (name, username, generate_password_hash("learn123"), role, f"EMP-{len(columns) + 1:04d}" if role == "moderator" else f"EMP-{abs(hash(username)) % 9000 + 1000:04d}"))
+
+	# Demo accounts documented in README.md (password == username). Local use only.
+	for full_name, username, role in (("Admin", "admin", "admin"), ("Moderator", "mod", "moderator"), ("Student", "student", "basic user")):
+		connection.execute(
+			"INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			(full_name, username, generate_password_hash(username), role, f"EMP-{username.upper()}", "Operations", "Hyderabad", 1),
+		)
 
 	# Create 100 additional sample users with mandatory employee IDs.
 	for idx in range(1, 101):
@@ -523,7 +537,9 @@ def seed_demo_data(connection):
 	if not assessment:
 		assessment = (connection.execute("INSERT INTO assessments (course_id, type, title, pass_percentage) VALUES (?, 'pre', 'Python readiness check', 60)", (course_id,)).lastrowid,)
 	connection.execute("INSERT OR IGNORE INTO assessment_questions (assessment_id, question_id) VALUES (?, ?)", (assessment[0], question[0]))
-	connection.execute("INSERT OR IGNORE INTO notifications (user_id, message, type) VALUES (?, 'Python Foundations is ready for you.', 'assignment')", (student,))
+	# notifications has no unique key, so INSERT OR IGNORE would add a duplicate on every start-up.
+	if not connection.execute("SELECT 1 FROM notifications WHERE user_id = ? AND message = 'Python Foundations is ready for you.'", (student,)).fetchone():
+		connection.execute("INSERT INTO notifications (user_id, message, type) VALUES (?, 'Python Foundations is ready for you.', 'assignment')", (student,))
 	seed_course_questions(connection, admin)
 
 
@@ -1605,10 +1621,10 @@ def create_app():
 
 		with get_db() as connection:
 			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interest ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
-			master_depts = connection.execute("SELECT department_id as id, department_name as name FROM departments WHERE status = 'Active' ORDER BY department_name").fetchall()
-			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
-			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE status = 'active' ORDER BY name").fetchall()
-			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE status = 'Active' ORDER BY location_name").fetchall()
+			master_depts = connection.execute("SELECT department_id as id, department_name as name FROM departments WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY department_name").fetchall()
+			master_positions = connection.execute("SELECT id, name FROM positions WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
+			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
+			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY location_name").fetchall()
 			try:
 				releases = connection.execute("SELECT * FROM app_releases ORDER BY id DESC").fetchall()
 			except Exception:
@@ -2475,10 +2491,10 @@ def create_app():
 			
 		with get_db() as connection:
 			user_data = connection.execute("SELECT u.*, COALESCE(GROUP_CONCAT(ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN user_interest ui ON ui.user_id = u.id WHERE u.id = ? GROUP BY u.id", (session["user_id"],)).fetchone()
-			master_depts = connection.execute("SELECT department_id as id, department_name as name FROM departments WHERE status = 'Active' ORDER BY department_name").fetchall()
-			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
-			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE status = 'active' ORDER BY name").fetchall()
-			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE status = 'Active' ORDER BY location_name").fetchall()
+			master_depts = connection.execute("SELECT department_id as id, department_name as name FROM departments WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY department_name").fetchall()
+			master_positions = connection.execute("SELECT id, name FROM positions WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
+			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
+			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY location_name").fetchall()
 			try:
 				releases = connection.execute("SELECT * FROM app_releases ORDER BY id DESC").fetchall()
 			except Exception:
@@ -3686,10 +3702,10 @@ def create_app():
 		search = request.args.get("search", "").strip()
 		with get_db() as conn:
 			if search:
-				query = "SELECT id, interest_name as name FROM interest_master WHERE status = 'Active' AND interest_name LIKE ? ORDER BY interest_name"
+				query = "SELECT id, interest_name as name FROM interest_master WHERE LOWER(COALESCE(status, 'active')) = 'active' AND interest_name LIKE ? ORDER BY interest_name"
 				rows = conn.execute(query, (f"%{search}%",)).fetchall()
 			else:
-				rows = conn.execute("SELECT id, interest_name as name FROM interest_master WHERE status = 'Active' ORDER BY interest_name").fetchall()
+				rows = conn.execute("SELECT id, interest_name as name FROM interest_master WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY interest_name").fetchall()
 		return jsonify([dict(r) for r in rows])
 
 	@app.post("/api/interests")
@@ -4945,6 +4961,16 @@ def create_app():
 	        
 	    return render_template("master_management.html", departments=[dict(d) for d in departments], locations=[dict(l) for l in locations], user=session.get("user"), role=session.get("role"), profile_picture=session.get("profile_picture"))
 
+	@app.cli.command("init-db")
+	def init_db_command():
+		"""Create tables, apply init_scripts/*.sql and seed demo data (safe to re-run)."""
+		init_db()
+		with get_db() as connection:
+			applied = applied_scripts(connection)
+		print(f"Database ready: {DATABASE}")
+		for name, applied_at in applied:
+			print(f"  init script {name} (applied {applied_at})")
+
 	return app
 
 
@@ -5012,7 +5038,11 @@ def api_add_location():
 
 
 if __name__ == "__main__":
-	app.run(debug=True)
+	app.run(
+		host=os.getenv("LMS_HOST", "127.0.0.1"),
+		port=int(os.getenv("LMS_PORT", "5000")),
+		debug=os.getenv("LMS_DEBUG", "1") == "1",
+	)
 
 
 
