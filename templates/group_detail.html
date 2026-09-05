@@ -1,204 +1,112 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, btn_icon, icon, stat_tile, badge, status_badge, table, select_field, empty_state, avatar %}
 
-{% block title %}{{ group.name }} | HCG Knowledge Centre{% endblock %}
+{% block title %}{{ group.name }} · Groups · HCG Knowledge Centre{% endblock %}
 
 {% block content %}
-<div class="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-    <div>
-        <div class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 mb-2">Group</div>
-        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50">{{ group.name }}</h1>
-    </div>
-    <a href="{{ url_for('groups_page') }}" class="btn-secondary px-5 py-3 rounded-full">Back to Groups</a>
+<header class="page-header">
+  <div class="min-w-0">
+    <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li><a href="{{ url_for('groups_page') }}">Groups</a></li><li><span aria-current="page">{{ group.name }}</span></li></ol></nav>
+    <div class="flex items-center gap-2 mb-2">{{ status_badge(group.status) }}<span class="caption">{{ group.group_type or 'General' }}</span></div>
+    <h1>{{ group.name }}</h1>
+    <p class="text-fg-2 mt-2 max-w-3xl">{{ group.description or 'No description has been added for this group yet.' }}</p>
+  </div>
+</header>
+
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+  {{ stat_tile("Members", user_count or 0) }}
+  {{ stat_tile("Courses", course_count or 0) }}
+  {{ stat_tile("Certifications", certified_count or 0) }}
+  {{ stat_tile("Course access", overall_progress or 0, "member-course assignments") }}
 </div>
 
-<section class="grid md:grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
-    <div class="glass-panel p-5">
-        <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Status</div>
-        <div class="text-xl font-bold text-slate-900 dark:text-slate-50">{{ group.status|title }}</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+  <dl class="card lg:col-span-1 text-sm flex flex-col gap-3">
+    <div class="flex justify-between gap-4"><dt class="text-fg-2">Created by</dt><dd class="font-medium">{{ group.creator_name }}</dd></div>
+    <div class="flex justify-between gap-4 border-t hairline pt-3"><dt class="text-fg-2">Created</dt><dd class="font-medium tabular">{{ (group.created_at or '')[:10] }}</dd></div>
+    <div class="flex justify-between gap-4 border-t hairline pt-3"><dt class="text-fg-2">Type</dt><dd class="font-medium">{{ group.group_type or 'General' }}</dd></div>
+  </dl>
+  <form method="post" action="{{ url_for('assign_group_course', group_id=group.id) }}" class="card lg:col-span-2" aria-labelledby="assign-title">
+    <h2 id="assign-title" class="text-base mb-4">Assign a course to every member</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-x-4 items-end">
+      {{ select_field("course_id", "Course", all_courses, placeholder="Choose a course", required=True) }}
+      <div class="field">{{ btn("Assign course", "primary", type="submit", icon_name="book") }}</div>
     </div>
-    <div class="glass-panel p-5">
-        <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Created By</div>
-        <div class="text-xl font-bold text-slate-900 dark:text-slate-50">{{ group.creator_name }}</div>
-    </div>
-    <div class="glass-panel p-5">
-        <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Members</div>
-        <div class="text-xl font-bold text-slate-900 dark:text-slate-50">{{ user_count or 0 }}</div>
-    </div>
-    <div class="glass-panel p-5">
-        <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Courses</div>
-        <div class="text-xl font-bold text-slate-900 dark:text-slate-50">{{ course_count or 0 }}</div>
-    </div>
-    <div class="glass-panel p-5">
-        <div class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Certifications</div>
-        <div class="text-xl font-bold text-slate-900 dark:text-slate-50">{{ certified_count or 0 }}</div>
-    </div>
+    <p class="caption">Members who already have the course keep their progress; the course owner is skipped.</p>
+  </form>
+</div>
+
+<section aria-labelledby="members-title" class="mb-8">
+  <div class="flex items-end justify-between mb-4"><h2 id="members-title">Members</h2><span class="caption">{{ members|length }}</span></div>
+  {% if members %}
+  {% call table("group-members", ["Name", "Employee ID", "Email", "Role", "Department", "Location", "Status", {"label": "Actions", "align": "right"}], caption="Group members") %}
+    {% for member in members %}
+    <tr>
+      <td><span class="flex items-center gap-2">{{ avatar(member.full_name, size="sm") }}<span class="font-medium">{{ member.full_name }}</span></span></td>
+      <td class="text-fg-2">{{ member.employee_id or '–' }}</td>
+      <td class="text-fg-2">{{ member.email or '–' }}</td>
+      <td>{{ badge((member.role or '')|title, {"admin": "info", "moderator": "warning"}.get(member.role, "neutral")) }}</td>
+      <td class="text-fg-2">{{ member.department or '–' }}</td>
+      <td class="text-fg-2">{{ member.location or '–' }}</td>
+      <td>{{ status_badge(member.user_status or 'active') }}</td>
+      <td class="num"><form method="post" action="{{ url_for('remove_group_member', group_id=group.id) }}" data-confirm="Remove {{ member.full_name }} from {{ group.name }}? Their course access is kept." data-confirm-title="Remove member" data-confirm-label="Remove" data-confirm-danger><input type="hidden" name="user_id" value="{{ member.user_id }}">{{ btn_icon("Remove " ~ member.full_name, "trash", size="sm", type="submit") }}</form></td>
+    </tr>
+    {% endfor %}
+  {% endcall %}
+  {% else %}
+  <div class="card p-0">{{ empty_state("No members yet", "Add members from the Groups page or upload a CSV.", "users") }}</div>
+  {% endif %}
 </section>
 
-<section class="glass-panel p-6 mb-8">
-    <div class="grid md:grid-cols-2 gap-6">
-        <div>
-            <div class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-[0.18em] mb-2">Group Details</div>
-            <dl class="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-                <div class="flex justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2"><dt>Type</dt><dd>{{ group.group_type or 'General' }}</dd></div>
-                <div class="flex justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2"><dt>Created</dt><dd>{{ group.created_at }}</dd></div>
-                <div class="flex justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2"><dt>Overall access</dt><dd>{{ overall_progress or 0 }}</dd></div>
-            </dl>
-        </div>
-        <div>
-            <div class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-[0.18em] mb-2">Description</div>
-            <p class="text-slate-700 dark:text-slate-300 leading-7">{{ group.description or 'No description has been added for this group yet.' }}</p>
-        </div>
-    </div>
-</section>
-
-<section class="glass-panel p-6 mb-8">
-    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-5">
-        <h2 class="text-2xl font-semibold text-slate-900 dark:text-slate-50">Assign Course</h2>
-    </div>
-    <form method="post" action="{{ url_for('assign_group_course', group_id=group.id) }}" class="space-y-4">
-        <div>
-            <label class="form-label">Select Course</label>
-            <select name="course_id" class="form-input" required>
-                <option value="">Choose a course</option>
-                {% for course in all_courses %}
-                <option value="{{ course.id }}">{{ course.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <button class="btn-primary px-6 py-3 rounded-full">Assign Course to Group</button>
+<section aria-labelledby="mods-title" class="mb-8">
+  <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
+    <h2 id="mods-title">Moderators</h2>
+    {% if role == 'admin' %}
+    <form method="post" action="{{ url_for('add_group_moderator', group_id=group.id) }}" class="flex items-end gap-2">
+      <div class="field mb-0"><label class="sr-only" for="f-moderator_id">Moderator to add</label><select id="f-moderator_id" name="moderator_id" class="select min-w-[220px]" required><option value="">Select a moderator</option>{% for mod in eligible_moderators %}<option value="{{ mod.id }}">{{ mod.full_name }}</option>{% endfor %}</select></div>
+      {{ btn("Add", "secondary", type="submit", icon_name="plus") }}
     </form>
+    {% endif %}
+  </div>
+  {% if moderators %}
+  {% call table("group-moderators", ["Moderator", "Assigned", "Status"] + ([{"label": "Actions", "align": "right"}] if role == 'admin' else []), caption="Group moderators") %}
+    {% for mod in moderators %}
+    <tr>
+      <td><span class="flex items-center gap-2">{{ avatar(mod.full_name, size="sm") }}<span class="font-medium">{{ mod.full_name }}</span></span></td>
+      <td class="text-fg-2 tabular">{{ (mod.assigned_at or '').split(' ')[0] }}</td>
+      <td>{{ status_badge(mod.status) }}</td>
+      {% if role == 'admin' %}
+      <td class="num"><div class="inline-flex gap-1">
+        <form method="post" action="{{ url_for('toggle_group_moderator', group_id=group.id, user_id=mod.user_id) }}">{{ btn("Deactivate" if (mod.status or '')|lower == 'active' else "Activate", "secondary", type="submit", size="sm") }}</form>
+        <form method="post" action="{{ url_for('remove_group_moderator', group_id=group.id, user_id=mod.user_id) }}" data-confirm="Remove {{ mod.full_name }} as a moderator of this group?" data-confirm-title="Remove moderator" data-confirm-label="Remove" data-confirm-danger>{{ btn_icon("Remove moderator " ~ mod.full_name, "trash", size="sm", type="submit") }}</form>
+      </div></td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  {% endcall %}
+  {% else %}
+  <div class="card p-0">{{ empty_state("No moderators", "Administrators can add moderators who then manage this group.", "shield") }}</div>
+  {% endif %}
 </section>
 
-<section class="glass-panel p-6">
-    <h2 class="text-2xl font-semibold mb-5 text-slate-900 dark:text-slate-50">Members</h2>
-    <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-            <thead>
-                <tr class="border-b border-slate-200 dark:border-slate-800">
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">User Name</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Employee ID</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Email</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Role</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Department</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Location</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Status</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for member in members %}
-                <tr class="border-b border-slate-200 dark:border-slate-800">
-                    <td class="p-3 text-slate-800 dark:text-slate-200">{{ member.full_name }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ member.employee_id or 'N/A' }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ member.email or 'N/A' }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ member.role }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ member.department or 'N/A' }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ member.location or 'N/A' }}</td>
-                    <td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ member.user_status or member.is_active }}</span></td>
-                    <td class="p-3">
-                        <form method="post" action="{{ url_for('remove_group_member', group_id=group.id) }}">
-                            <input type="hidden" name="user_id" value="{{ member.user_id }}">
-                            <button class="text-red-600 dark:text-red-400 font-medium">Remove</button>
-                        </form>
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="8" class="p-5 text-center text-slate-500 dark:text-slate-400">No members are currently assigned to this group.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
-
-<section class="glass-panel p-6 mt-8">
-    <div class="flex justify-between items-center mb-5">
-        <h2 class="text-2xl font-semibold text-slate-900 dark:text-slate-50">Moderators</h2>
-        {% if role == 'admin' %}
-        <form method="post" action="{{ url_for('add_group_moderator', group_id=group.id) }}" class="flex gap-2">
-            <select name="moderator_id" class="form-input text-sm" required>
-                <option value="" disabled selected>Select Moderator</option>
-                {% for mod in eligible_moderators %}
-                <option value="{{ mod.id }}">{{ mod.full_name }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn-primary px-4 py-2 text-sm rounded-lg">Add</button>
-        </form>
-        {% endif %}
-    </div>
-    <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-            <thead>
-                <tr class="border-b border-slate-200 dark:border-slate-800">
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Moderator</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Role</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Assigned Date</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Status</th>
-                    {% if role == 'admin' %}
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs text-right">Action</th>
-                    {% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for mod in moderators %}
-                <tr class="border-b border-slate-200 dark:border-slate-800">
-                    <td class="p-3 text-slate-800 dark:text-slate-200">{{ mod.full_name }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">Moderator</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ mod.assigned_at.split(' ')[0] }}</td>
-                    <td class="p-3">
-                        <span class="px-2 py-1 rounded-full text-xs font-medium {% if mod.status|lower == 'active' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300{% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400{% endif %}">
-                            {{ mod.status }}
-                        </span>
-                    </td>
-                    {% if role == 'admin' %}
-                    <td class="p-3 flex justify-end gap-3">
-                        <form method="post" action="{{ url_for('toggle_group_moderator', group_id=group.id, user_id=mod.user_id) }}">
-                            <button class="text-indigo-600 dark:text-indigo-400 font-medium text-sm">Toggle Status</button>
-                        </form>
-                        <form method="post" action="{{ url_for('remove_group_moderator', group_id=group.id, user_id=mod.user_id) }}">
-                            <button class="text-red-600 dark:text-red-400 font-medium text-sm">Remove</button>
-                        </form>
-                    </td>
-                    {% endif %}
-                </tr>
-                {% else %}
-                <tr><td colspan="5" class="p-5 text-center text-slate-500 dark:text-slate-400">No moderators assigned.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
-
-<section class="glass-panel p-6 mt-8">
-    <h2 class="text-2xl font-semibold mb-5 text-slate-900 dark:text-slate-50">Assigned Courses</h2>
-    <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-            <thead>
-                <tr class="border-b border-slate-200 dark:border-slate-800">
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Course</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Assigned Date</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Assigned By</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Members</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Completed</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Certified</th>
-                    <th class="p-3 font-bold text-slate-500 uppercase text-xs">Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for course in assigned_courses %}
-                <tr class="border-b border-slate-200 dark:border-slate-800">
-                    <td class="p-3 text-slate-800 dark:text-slate-200 font-medium">{{ course.course_name }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ course.assigned_at }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ course.assigned_by_name or 'Admin' }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ course.member_access or 0 }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ course.completed_count or 0 }}</td>
-                    <td class="p-3 text-slate-700 dark:text-slate-300">{{ course.certified_count or 0 }}</td>
-                    <td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">{{ course.status or 'Active' }}</span></td>
-                </tr>
-                {% else %}
-                <tr><td colspan="7" class="p-5 text-center text-slate-500 dark:text-slate-400">No courses have been assigned to this group yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+<section aria-labelledby="courses-title">
+  <div class="flex items-end justify-between mb-4"><h2 id="courses-title">Assigned courses</h2><span class="caption">{{ assigned_courses|length }}</span></div>
+  {% if assigned_courses %}
+  {% call table("group-courses", ["Course", "Assigned", "By", {"label": "Members", "align": "right"}, {"label": "Completed", "align": "right"}, {"label": "Certified", "align": "right"}, "Status"], caption="Courses assigned to the group") %}
+    {% for course in assigned_courses %}
+    <tr>
+      <td class="font-medium">{{ course.course_name }}</td>
+      <td class="text-fg-2 tabular">{{ (course.assigned_at or '')[:10] }}</td>
+      <td class="text-fg-2">{{ course.assigned_by_name or 'Admin' }}</td>
+      <td class="num">{{ course.member_access or 0 }}</td>
+      <td class="num">{{ course.completed_count or 0 }}</td>
+      <td class="num">{{ course.certified_count or 0 }}</td>
+      <td>{{ status_badge(course.status or 'active') }}</td>
+    </tr>
+    {% endfor %}
+  {% endcall %}
+  {% else %}
+  <div class="card p-0">{{ empty_state("No courses assigned", "Use the form above to assign a course to everyone in the group.", "book") }}</div>
+  {% endif %}
 </section>
 {% endblock %}
