@@ -970,7 +970,7 @@ def create_app():
 			password = request.form.get("password", "")
 			with get_db() as connection:
 				user = connection.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-			if user and check_password_hash(user["password_hash"], password):
+			if user and user["is_active"] in (None, 1) and check_password_hash(user["password_hash"], password):
 				session.pop("impersonator_id", None)
 				session.update(
                     user=user["full_name"], 
@@ -1141,6 +1141,11 @@ def create_app():
 			group = connection.execute("SELECT g.*, u.full_name AS creator_name FROM groups g JOIN users u ON u.id = g.created_by WHERE g.id = ?", (group_id,)).fetchone()
 			if not group:
 				flash("Group not found.")
+				return redirect(safe_referrer(url_for("groups_page")))
+			if session.get("role") != "admin" and not connection.execute(
+				"SELECT 1 FROM group_moderators WHERE group_id = ? AND user_id = ? AND status = 'Active'", (group_id, session.get("user_id"))
+			).fetchone():
+				flash("You can only view groups you moderate.")
 				return redirect(safe_referrer(url_for("groups_page")))
 			members = connection.execute("""
 				SELECT gm.*, u.full_name, u.username, u.role, u.email, u.department, u.location, COALESCE(u.is_active, 1) AS is_active
@@ -1600,7 +1605,7 @@ def create_app():
 					if course and course_is_manageable(connection, course["course_id"], session["user_id"], session["role"]):
 						connection.execute("UPDATE assessments SET title = ?, type = ?, pass_percentage = ?, max_attempts = ? WHERE id = ?", (request.form["title"].strip(), request.form["type"], int_or(request.form.get("pass_percentage"), 60), int_or(request.form.get("max_attempts"), 1), request.form["record_id"]))
 						flash("Assessment updated successfully.")
-			elif action == "generate_api_creds":
+			elif action == "generate_api_creds" and session.get("role") == "admin":
 				target_user_id = int(request.form["target_user_id"])
 				import os
 				api_key = "ak_" + os.urandom(16).hex()
@@ -1612,7 +1617,7 @@ def create_app():
 						(target_user_id, api_key, api_secret)
 					)
 				flash("API credentials generated successfully.")
-			elif action == "revoke_api_creds":
+			elif action == "revoke_api_creds" and session.get("role") == "admin":
 				target_user_id = int(request.form["target_user_id"])
 				with get_db() as connection:
 					connection.execute("UPDATE api_credentials SET status = 'inactive' WHERE user_id = ?", (target_user_id,))
@@ -1704,7 +1709,7 @@ def create_app():
 				groups = connection.execute("SELECT * FROM groups ORDER BY id DESC").fetchall()
 			else:
 				groups = connection.execute("SELECT g.* FROM groups g JOIN group_moderators gm ON g.id = gm.group_id WHERE gm.user_id = ? AND gm.status = 'Active' ORDER BY g.id DESC", (session["user_id"],)).fetchall()
-			api_creds = connection.execute("SELECT ac.*, u.username, u.full_name, u.role FROM api_credentials ac JOIN users u ON u.id = ac.user_id ORDER BY ac.id DESC").fetchall()
+			api_creds = connection.execute("SELECT ac.*, u.username, u.full_name, u.role FROM api_credentials ac JOIN users u ON u.id = ac.user_id ORDER BY ac.id DESC").fetchall() if session.get("role") == "admin" else []
 			
 			assignable_courses = connection.execute("SELECT id, name FROM courses WHERE LOWER(status) = 'published' ORDER BY name").fetchall()
 		return render_template("admin.html", users=[dict(u) for u in users], courses=courses, assignable_courses=assignable_courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
@@ -2458,7 +2463,7 @@ def create_app():
 		if not target:
 			return redirect(url_for("admin_panel"))
 		session["impersonator_id"] = session["user_id"]
-		session.update(user=target["full_name"], user_id=target["id"], role=target["role"])
+		session.update(user=target["full_name"], user_id=target["id"], role=target["role"], actual_role=target["role"])
 		return redirect(url_for("home"))
 
 	@app.get("/admin/exit-view")
@@ -2474,7 +2479,7 @@ def create_app():
 			session.clear()
 			return redirect(url_for("home"))
 		session.pop("impersonator_id", None)
-		session.update(user=admin["full_name"], user_id=admin["id"], role=admin["role"])
+		session.update(user=admin["full_name"], user_id=admin["id"], role=admin["role"], actual_role=admin["role"])
 		return redirect(url_for("admin_panel"))
 
 	@app.get("/uploads/<path:filename>")
@@ -2487,6 +2492,9 @@ def create_app():
 		"""Toggle between basic user and admin view for staff."""
 		if "user_id" not in session:
 			return redirect(url_for("home"))
+		if session.get("impersonator_id"):
+			flash("Exit the view-as session before switching roles.")
+			return redirect(safe_referrer(url_for("home")))
 		if session.get("actual_role") not in ("admin", "moderator"):
 			flash("Only staff members can switch roles.")
 			return redirect(safe_referrer(url_for("home")))
@@ -2929,6 +2937,10 @@ def create_app():
 			flash("Post not found.")
 			return redirect(safe_referrer(url_for("approval_queue")))
 			
+		if post["created_by"] == reviewer_id:
+			flash("You cannot review your own post.")
+			return redirect(safe_referrer(url_for("approval_queue")))
+
 		old_status = post["status"]
 		
 		if action == "APPROVE":
