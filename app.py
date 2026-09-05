@@ -327,6 +327,17 @@ def init_db():
 				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), message TEXT NOT NULL, type TEXT DEFAULT 'system', is_read INTEGER DEFAULT 0, target_url TEXT DEFAULT '#', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 			CREATE TABLE IF NOT EXISTS audit_logs (
 				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER REFERENCES users(id), action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+						CREATE TABLE IF NOT EXISTS app_releases (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				version_number TEXT UNIQUE NOT NULL,
+				release_title TEXT NOT NULL,
+				release_date TEXT DEFAULT CURRENT_TIMESTAMP,
+				features TEXT,
+				improvements TEXT,
+				bug_fixes TEXT,
+				is_active INTEGER DEFAULT 0
+			);
+
 			CREATE TABLE IF NOT EXISTS api_credentials (
 				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, api_key TEXT UNIQUE NOT NULL, api_secret TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, status TEXT CHECK(status IN ('active', 'inactive')) DEFAULT 'active');
 			
@@ -1568,7 +1579,7 @@ def create_app():
 			api_creds = connection.execute("SELECT ac.*, u.username, u.full_name, u.role FROM api_credentials ac JOIN users u ON u.id = ac.user_id ORDER BY ac.id DESC").fetchall()
 			
 			assignable_courses = connection.execute("SELECT id, name FROM courses WHERE status = 'published' ORDER BY name").fetchall()
-		return render_template("admin.html", users=[dict(u) for u in users], courses=courses, assignable_courses=assignable_courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+		return render_template("admin.html", users=[dict(u) for u in users], courses=courses, assignable_courses=assignable_courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, releases=releases, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.route("/assessments/<int:assessment_id>", methods=["GET", "POST"])
 	def assessment(assessment_id):
@@ -2423,7 +2434,7 @@ def create_app():
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE status = 'active' ORDER BY name").fetchall()
 			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE status = 'Active' ORDER BY location_name").fetchall()
-		return render_template("profile.html", user_data=user_data, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+		return render_template("profile.html", user_data=user_data, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, releases=releases, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.context_processor
 	def inject_notifications():
@@ -3701,6 +3712,28 @@ def create_app():
 		)
 
 	# â”€â”€ USERS API â”€â”€
+
+	
+	@app.route('/api/v1/releases/active', methods=['GET'])
+	def get_active_release():
+		with get_db() as conn:
+			release = conn.execute("SELECT * FROM app_releases WHERE is_active = 1 LIMIT 1").fetchone()
+			if release:
+				import json
+				def parse_json(val):
+					if not val: return []
+					try: return json.loads(val)
+					except: return [val]
+				return jsonify({
+					"id": release["id"],
+					"version_number": release["version_number"],
+					"release_title": release["release_title"],
+					"release_date": release["release_date"],
+					"features": parse_json(release["features"]),
+					"improvements": parse_json(release["improvements"]),
+					"bug_fixes": parse_json(release["bug_fixes"])
+				})
+			return jsonify({"error": "No active release found"}), 404
 
 	@app.get("/api/v1/users")
 	@api_staff_required

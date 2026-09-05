@@ -711,17 +711,97 @@
             document.body.style.overflow = '';
         }
 
-        // Auto-popup Release Notes Modal logic
-        const CURRENT_VERSION = 'v1.5.0';
-        const releaseNotesModal = document.getElementById('release-notes-modal');
-        
-        if (releaseNotesModal) {
-            const seenVersion = localStorage.getItem('seen_version');
-            if (seenVersion !== CURRENT_VERSION) {
-                setTimeout(() => {
-                    releaseNotesModal.classList.remove('hidden');
-                    document.body.style.overflow = 'hidden';
-                }, 500); // 500ms delay for smooth entrance
+        // Dynamic Release Notes Engine
+        let CURRENT_ACTIVE_VERSION = null;
+
+        async function fetchActiveReleaseData() {
+            try {
+                const response = await fetch('/api/v1/releases/active');
+                if (response.ok) {
+                    const release = await response.json();
+                    CURRENT_ACTIVE_VERSION = release.version_number;
+                    
+                    const sideText = document.getElementById('sidebar-version-text');
+                    if (sideText) sideText.textContent = 'v' + release.version_number;
+                    
+                    const modText = document.getElementById('modal-version-text');
+                    if (modText) modText.textContent = 'v' + release.version_number;
+                    
+                    const modTitle = document.getElementById('modal-release-title');
+                    if (modTitle) modTitle.textContent = release.release_title;
+                    
+                    const hovTitle = document.getElementById('hover-release-title');
+                    if (hovTitle) hovTitle.textContent = release.release_title;
+                    
+                    const dateStr = release.release_date ? release.release_date.split(' ')[0] : '';
+                    const modDate = document.getElementById('modal-release-date');
+                    if (modDate) modDate.textContent = dateStr || 'Latest Release';
+                    
+                    const hovDate = document.getElementById('hover-release-date');
+                    if (hovDate) hovDate.textContent = 'Version ' + release.version_number + (dateStr ? ' - ' + dateStr : '');
+                    
+                    let contentHtml = '';
+                    let hoverHtml = '';
+                    
+                    if (release.features && release.features.length > 0) {
+                        contentHtml += `<div class="mb-6"><h4 class="text-sm font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-2 mb-3">Features</h4><ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300">`;
+                        hoverHtml += `<div class="mb-2"><h5 class="font-bold text-slate-800 dark:text-slate-200 mb-1 text-sm">Features</h5><ul class="list-disc pl-4 text-slate-600 dark:text-slate-400 space-y-1">`;
+                        release.features.forEach(f => {
+                            contentHtml += `<li>${f}</li>`;
+                            hoverHtml += `<li>${f}</li>`;
+                        });
+                        contentHtml += `</ul></div>`;
+                        hoverHtml += `</ul></div>`;
+                    }
+                    if (release.improvements && release.improvements.length > 0) {
+                        contentHtml += `<div class="mb-6"><h4 class="text-sm font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 flex items-center gap-2 mb-3">Improvements</h4><ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300">`;
+                        hoverHtml += `<div class="mb-2"><h5 class="font-bold text-slate-800 dark:text-slate-200 mb-1 text-sm">Improvements</h5><ul class="list-disc pl-4 text-slate-600 dark:text-slate-400 space-y-1">`;
+                        release.improvements.forEach(f => {
+                            contentHtml += `<li>${f}</li>`;
+                            hoverHtml += `<li>${f}</li>`;
+                        });
+                        contentHtml += `</ul></div>`;
+                        hoverHtml += `</ul></div>`;
+                    }
+                    if (release.bug_fixes && release.bug_fixes.length > 0) {
+                        contentHtml += `<div class="mb-6"><h4 class="text-sm font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2 mb-3">Bug Fixes</h4><ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300">`;
+                        hoverHtml += `<div class="mb-2"><h5 class="font-bold text-slate-800 dark:text-slate-200 mb-1 text-sm">Bug Fixes</h5><ul class="list-disc pl-4 text-slate-600 dark:text-slate-400 space-y-1">`;
+                        release.bug_fixes.forEach(f => {
+                            contentHtml += `<li>${f}</li>`;
+                            hoverHtml += `<li>${f}</li>`;
+                        });
+                        contentHtml += `</ul></div>`;
+                        hoverHtml += `</ul></div>`;
+                    }
+                    
+                    const modContent = document.getElementById('modal-release-content');
+                    if (modContent) modContent.innerHTML = contentHtml || '<p class="text-slate-500 text-sm">No specific details provided for this release.</p>';
+                    
+                    const hovContent = document.getElementById('hover-release-content');
+                    if (hovContent) hovContent.innerHTML = hoverHtml || '<p class="text-slate-500 text-xs">No specific details provided for this release.</p>';
+                    
+                    // Auto-popup if unseen
+                    const seenVersion = localStorage.getItem('seen_version');
+                    if (seenVersion !== CURRENT_ACTIVE_VERSION) {
+                        setTimeout(() => {
+                            const modal = document.getElementById('release-notes-modal');
+                            if (modal) {
+                                modal.classList.remove('hidden');
+                                document.body.style.overflow = 'hidden';
+                            }
+                        }, 500);
+                    }
+                }
+            } catch (err) {
+                console.error("Error loading release notes:", err);
+            }
+        }
+
+        function openReleaseNotesModal() {
+            const modal = document.getElementById('release-notes-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
             }
         }
 
@@ -730,9 +810,13 @@
             if (modal) {
                 modal.classList.add('hidden');
                 document.body.style.overflow = '';
-                localStorage.setItem('seen_version', CURRENT_VERSION);
+                if (CURRENT_ACTIVE_VERSION) {
+                    localStorage.setItem('seen_version', CURRENT_ACTIVE_VERSION);
+                }
             }
         }
+
+        document.addEventListener('DOMContentLoaded', fetchActiveReleaseData);
 
         if (menuBtn && sideMenu) {
             menuBtn.addEventListener('click', openDrawer);
