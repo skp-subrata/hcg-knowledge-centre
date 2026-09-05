@@ -58,10 +58,8 @@
                         </select>
                         <select id="departmentFilter" class="form-input">
                             <option value="">All departments</option>
-                            {% for user in users %}
-                                {% if user.department %}
-                                <option value="{{ user.department }}">{{ user.department }}</option>
-                                {% endif %}
+                            {% for dept in master_depts %}
+                            <option value="{{ dept.department_name }}">{{ dept.department_name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -79,10 +77,10 @@
                     <label class="form-label">Available users</label>
                     <div class="max-h-64 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/20 dark:bg-black/20 p-2">
                         {% for user in users %}
-                        <label class="user-option flex items-center justify-between gap-3 rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" data-name="{{ user.full_name|lower }}" data-role="{{ user.role }}" data-department="{{ user.department|default('')|lower }}" data-location="{{ user.location|default('')|lower }}">
+                        <label class="user-option flex items-center justify-between gap-3 rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" data-name="{{ user.full_name|lower }}" data-role="{{ user.role }}" data-department="{{ (user.resolved_department or user.department or '')|lower }}" data-location="{{ user.location|default('')|lower }}">
                             <span>
                                 <span class="font-medium">{{ user.full_name }}</span>
-                                <span class="text-slate-500 dark:text-slate-400 block">{{ user.role }} · {{ user.department or 'N/A' }}</span>
+                                <span class="text-slate-500 dark:text-slate-400 block">{{ user.role }} · {{ user.resolved_department or user.department or 'N/A' }}</span>
                             </span>
                             <input type="checkbox" name="selected_users" value="{{ user.id }}" class="h-4 w-4 rounded border-slate-300">
                         </label>
@@ -147,6 +145,28 @@
     const departmentFilter = document.getElementById('departmentFilter');
     const locationFilter = document.getElementById('locationFilter');
 
+    async function loadDepartmentMasterOptions() {
+        if (!departmentFilter) return;
+        try {
+            const res = await fetch('/api/departments');
+            if (!res.ok) return;
+            const depts = await res.json();
+            if (Array.isArray(depts) && depts.length > 0) {
+                const curVal = departmentFilter.value;
+                departmentFilter.innerHTML = '<option value="">All departments</option>';
+                depts.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.department_name;
+                    opt.textContent = d.department_name;
+                    departmentFilter.appendChild(opt);
+                });
+                if (curVal) departmentFilter.value = curVal;
+            }
+        } catch(e) {
+            console.error('Error loading departments from API:', e);
+        }
+    }
+
     function applyUserFilters() {
         const term = (userSearch?.value || '').trim().toLowerCase();
         const role = (roleFilter?.value || '').trim().toLowerCase();
@@ -171,6 +191,10 @@
     [userSearch, roleFilter, departmentFilter, locationFilter].forEach((element) => {
         if (element) element.addEventListener('input', applyUserFilters);
         if (element) element.addEventListener('change', applyUserFilters);
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadDepartmentMasterOptions();
     });
 </script>
 {% endblock %}

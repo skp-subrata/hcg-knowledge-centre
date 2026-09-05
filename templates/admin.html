@@ -392,6 +392,7 @@ async function addMaster(type, el) {
             </table>
         </div>
         <p id="courses-empty" class="hidden text-center text-slate-400 text-sm py-6">No courses match your search or filter.</p>
+        <div id="courses-pagination" class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500"></div>
     </section>
 
     <!-- ═══ USERS TABLE ═══ -->
@@ -401,7 +402,7 @@ async function addMaster(type, el) {
             <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
                 <div class="relative">
                     <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
-                    <input id="userSearch" type="text" placeholder="Search name, username…" class="form-input pl-9 h-9 text-sm w-full sm:w-56" oninput="filterTable('users-tbody','userSearch',['userFilterBtns'])">
+                    <input id="userSearch" type="text" placeholder="Search name, username…" class="form-input pl-9 h-9 text-sm w-full sm:w-56">
                 </div>
                 <div class="flex gap-1.5 flex-wrap" id="userFilterBtns">
                     <button class="adm-chip active" data-col="3" data-val="">All Roles</button>
@@ -424,8 +425,7 @@ async function addMaster(type, el) {
                 </thead>
                 <tbody id="users-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
                     {% for item in users %}
-                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition user-row"
-                        data-search="{{ item.full_name|lower }} {{ item.username|lower }} {{ item.employee_id|default('')|lower }} {{ item.email|default('')|lower }} {{ item.role|lower }} {{ item.course_ids or '' }}">
+                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition user-row">
                         <td class="p-3 w-[20%] font-semibold">{{ item.full_name }}</td>
                           <td class="p-3 w-[20%] text-slate-500 dark:text-slate-400 text-sm">{{ item.username }}</td>
                           <td class="p-3 w-[25%] text-slate-500 dark:text-slate-400 text-sm">{{ item.course_ids or '-' }}</td>
@@ -456,6 +456,7 @@ async function addMaster(type, el) {
             </table>
         </div>
         <p id="users-empty" class="hidden text-center text-slate-400 text-sm py-6">No users match your search or filter.</p>
+        <div id="users-pagination" class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500"></div>
     </section>
 
     <!-- ═══ API CREDENTIALS TABLE ═══ -->
@@ -466,7 +467,11 @@ async function addMaster(type, el) {
                 <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">API Developer Access</h2>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Manage developers' API credentials, view doc site and launch playground.</p>
             </div>
-            <div class="flex gap-3">
+            <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                <div class="relative">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
+                    <input id="apiCredSearch" type="text" placeholder="Search API key, user…" class="form-input pl-9 h-9 text-sm w-full sm:w-56">
+                </div>
                 <a href="/api/v1/docs" class="btn-secondary text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 font-semibold">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
                     API Docs & Playground
@@ -503,7 +508,7 @@ async function addMaster(type, el) {
                         <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                <tbody id="api-creds-tbody" class="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
                     {% for item in api_creds %}
                     <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
                         <td class="p-3 font-semibold">
@@ -571,6 +576,8 @@ async function addMaster(type, el) {
                 </tbody>
             </table>
         </div>
+        <p id="api-creds-empty" class="hidden text-center text-slate-400 text-sm py-6">No API credentials match your search.</p>
+        <div id="api-creds-pagination" class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500"></div>
     </section>
     {% endif %}
 
@@ -581,7 +588,7 @@ async function addMaster(type, el) {
             <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
                 <div class="relative">
                     <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
-                    <input id="assessSearch" type="text" placeholder="Search title, course…" class="form-input pl-9 h-9 text-sm w-full sm:w-56" oninput="filterTable('assess-tbody','assessSearch',['assessFilterBtns'])">
+                    <input id="assessSearch" type="text" placeholder="Search title, course…" class="form-input pl-9 h-9 text-sm w-full sm:w-56">
                 </div>
                 <div class="flex gap-1.5 flex-wrap" id="assessFilterBtns">
                     <button class="adm-chip active" data-col="3" data-val="">All Types</button>
@@ -603,8 +610,7 @@ async function addMaster(type, el) {
                 </thead>
                 <tbody id="assess-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
                     {% for item in assessments %}
-                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition assess-row"
-                        data-search="#{{ item.id }} {{ item.title|lower }} {{ item.course_name|lower }} {{ item.type|lower }}">
+                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition assess-row">
                         <td class="p-3 font-bold text-slate-500 font-medium">#{{ item.id }}</td>
                         <td class="p-3 font-semibold">{{ item.title }}</td>
                         <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">{{ item.course_name }}</td>
@@ -640,6 +646,7 @@ async function addMaster(type, el) {
             </table>
         </div>
         <p id="assess-empty" class="hidden text-center text-slate-400 text-sm py-6">No assessments match your search or filter.</p>
+        <div id="assess-pagination" class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500"></div>
     </section>
 </div>
 
@@ -661,53 +668,402 @@ async function addMaster(type, el) {
 </style>
 
 <script>
-// ── Generic search + chip filter for any table ──────────────────────────────
-// activeFilters[tbodyId] = { col, val }
-const activeFilters = {};
+const currentUserRole = "{{ role }}";
 
-function filterTable(tbodyId, searchId, chipGroupIds) {
-    const tbody    = document.getElementById(tbodyId);
-    const search   = document.getElementById(searchId)?.value.toLowerCase().trim() || '';
-    const filter   = activeFilters[tbodyId] || { col: null, val: '' };
-    const rows     = tbody.querySelectorAll('tr[data-search]');
-    const emptyMsg = document.getElementById(tbodyId.replace('-tbody','') + '-empty')
-                  || document.getElementById(tbodyId.replace('tbody','empty'));
-    let visible = 0;
+const activeState = {
+    users: { page: 1, search: '', role: '' },
+    courses: { page: 1, search: '', status: '' },
+    'api-creds': { page: 1, search: '' },
+    assessments: { page: 1, search: '', type: '' }
+};
 
-    rows.forEach(row => {
-        const text   = row.dataset.search || '';
-        const cells  = row.querySelectorAll('td');
-        const colVal = filter.col !== null && cells[filter.col]
-                       ? cells[filter.col].textContent.toLowerCase().trim()
-                       : '';
-        const matchSearch = !search || text.includes(search);
-        const matchFilter = !filter.val || colVal.includes(filter.val.toLowerCase());
-        const show = matchSearch && matchFilter;
-        row.classList.toggle('hidden', !show);
-        if (show) visible++;
-    });
+let debounceTimers = {};
 
-    if (emptyMsg) emptyMsg.classList.toggle('hidden', visible > 0 || rows.length === 0);
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
-// Wire up chip buttons
-document.querySelectorAll('.adm-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-        // Find the sibling group
-        const group = chip.closest('[id$="FilterBtns"]');
-        if (!group) return;
-        group.querySelectorAll('.adm-chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
+function renderPagination(containerId, pagination, onPageChangeName) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
 
-        // Find which table this group belongs to
-        const section = group.closest('section');
-        const tbody   = section.querySelector('tbody[id]');
-        const searchEl = section.querySelector('input[type="text"]');
-        if (!tbody) return;
+    const { page, pageSize, totalRecords, totalPages } = pagination;
+    if (totalRecords === 0) {
+        container.innerHTML = '';
+        return;
+    }
 
-        activeFilters[tbody.id] = { col: parseInt(chip.dataset.col), val: chip.dataset.val };
-        filterTable(tbody.id, searchEl?.id, []);
+    const startRec = (page - 1) * pageSize + 1;
+    const endRec = Math.min(page * pageSize, totalRecords);
+
+    let btnHtml = '';
+
+    // Prev Button
+    const prevDisabled = page <= 1;
+    btnHtml += `<button type="button" onclick="${onPageChangeName}(${page - 1})" class="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-800 ${prevDisabled ? 'opacity-40 cursor-not-allowed text-slate-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'}" ${prevDisabled ? 'disabled' : ''}>Previous</button>`;
+
+    // Page Numbers
+    const pagesToShow = [];
+    for (let p = 1; p <= totalPages; p++) {
+        if (p === 1 || p === totalPages || (p >= page - 2 && p <= page + 2)) {
+            pagesToShow.push(p);
+        } else if (pagesToShow[pagesToShow.length - 1] !== '...') {
+            pagesToShow.push('...');
+        }
+    }
+
+    pagesToShow.forEach(p => {
+        if (p === '...') {
+            btnHtml += `<span class="px-2 py-1 text-xs text-slate-400 font-medium">...</span>`;
+        } else {
+            const isActive = p === page;
+            btnHtml += `<button type="button" onclick="${onPageChangeName}(${p})" class="px-2.5 py-1 text-xs font-semibold rounded-lg ${isActive ? 'bg-indigo-600 text-white shadow-sm' : 'border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">${p}</button>`;
+        }
     });
+
+    // Next Button
+    const nextDisabled = page >= totalPages;
+    btnHtml += `<button type="button" onclick="${onPageChangeName}(${page + 1})" class="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-800 ${nextDisabled ? 'opacity-40 cursor-not-allowed text-slate-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'}" ${nextDisabled ? 'disabled' : ''}>Next</button>`;
+
+    container.innerHTML = `
+        <div class="text-xs text-slate-500 font-medium">
+            Showing <span class="font-bold text-slate-700 dark:text-slate-300">${startRec}–${endRec}</span> of <span class="font-bold text-slate-700 dark:text-slate-300">${totalRecords}</span>
+        </div>
+        <div class="flex gap-1 items-center flex-wrap">${btnHtml}</div>
+    `;
+}
+
+window.usersMap = {};
+
+// ── USERS TABLE ──
+async function fetchUsers(page = 1) {
+    activeState.users.page = page;
+    const { search, role } = activeState.users;
+    const tbody = document.getElementById('users-tbody');
+    const emptyMsg = document.getElementById('users-empty');
+    if (!tbody) return;
+
+    const url = `/api/admin/users?page=${page}&pageSize=15&search=${encodeURIComponent(search)}&role=${encodeURIComponent(role)}`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const resData = await res.json();
+        const data = resData.data || [];
+        const pagination = resData.pagination || { page: 1, pageSize: 15, totalRecords: 0, totalPages: 1 };
+
+        if (data.length === 0) {
+            tbody.innerHTML = '';
+            if (emptyMsg) emptyMsg.classList.remove('hidden');
+        } else {
+            if (emptyMsg) emptyMsg.classList.add('hidden');
+            data.forEach(u => { window.usersMap[u.id] = u; });
+            tbody.innerHTML = data.map(item => `
+                <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition user-row">
+                    <td class="p-3 w-[20%] font-semibold">${escapeHtml(item.full_name)}</td>
+                    <td class="p-3 w-[20%] text-slate-500 dark:text-slate-400 text-sm">${escapeHtml(item.username)}</td>
+                    <td class="p-3 w-[25%] text-slate-500 dark:text-slate-400 text-sm">${escapeHtml(item.course_ids || '-')}</td>
+                    <td class="p-3 w-[15%]">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            item.role === 'admin' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' :
+                            item.role === 'moderator' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                            'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                        }">${escapeHtml(item.role)}</span>
+                    </td>
+                    <td class="p-3 w-[20%] text-right space-y-1">
+                        ${currentUserRole === 'admin' ? `
+                        <div class="flex gap-2 justify-end">
+                            <form method="post" action="/admin/view-as/${item.id}" class="inline">
+                                <button type="submit" class="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline">Preview as</button>
+                            </form>
+                            <form method="post" action="/admin/delete/user/${item.id}" class="inline" onsubmit="return confirm('Delete this user?')">
+                                <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Delete</button>
+                            </form>
+                        </div>
+                        <button type="button" onclick="openEditUserModalById(${item.id})" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-block mt-1">Edit User Data</button>
+                        ` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        }
+        renderPagination('users-pagination', pagination, 'fetchUsers');
+    } catch(e) { console.error('Error fetching users:', e); }
+}
+
+// ── COURSES TABLE ──
+async function fetchCourses(page = 1) {
+    activeState.courses.page = page;
+    const { search, status } = activeState.courses;
+    const tbody = document.getElementById('courses-tbody');
+    const emptyMsg = document.getElementById('courses-empty');
+    if (!tbody) return;
+
+    const url = `/api/admin/courses?page=${page}&pageSize=15&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const resData = await res.json();
+        const data = resData.data || [];
+        const pagination = resData.pagination || { page: 1, pageSize: 15, totalRecords: 0, totalPages: 1 };
+
+        if (data.length === 0) {
+            tbody.innerHTML = '';
+            if (emptyMsg) emptyMsg.classList.remove('hidden');
+        } else {
+            if (emptyMsg) emptyMsg.classList.add('hidden');
+            tbody.innerHTML = data.map(item => `
+                <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition course-row">
+                    <td class="p-3 font-bold text-slate-500 font-medium">#${item.id}</td>
+                    <td class="p-3 font-semibold">${escapeHtml(item.name)}</td>
+                    <td class="p-3 text-slate-500 dark:text-slate-400">${escapeHtml(item.category || 'General')}</td>
+                    <td class="p-3">
+                        <span class="px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 text-[10px] font-bold uppercase tracking-wider">${escapeHtml(item.content_type || 'URL')}</span>
+                    </td>
+                    <td class="p-3">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            item.status === 'draft' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                            'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                        }">${escapeHtml(item.status || 'published')}</span>
+                    </td>
+                    <td class="p-3 w-[20%] text-right space-y-1">
+                        <form method="post" action="/admin/delete/course/${item.id}" onsubmit="return confirm('Delete this course?')" class="inline">
+                            <button type="submit" class="text-xs text-red-500 font-semibold hover:underline">Delete</button>
+                        </form>
+                        <form method="post" class="flex gap-1 justify-end flex-wrap mt-1">
+                            <input type="hidden" name="action" value="update_course">
+                            <input type="hidden" name="record_id" value="${item.id}">
+                            <input name="name" value="${escapeHtml(item.name)}" class="form-input h-8 w-32 text-xs" required>
+                            <input name="category" value="${escapeHtml(item.category || 'General')}" class="form-input h-8 w-24 text-xs">
+                            <select name="status" class="form-input h-8 w-24 text-xs">
+                                <option value="published" ${item.status === 'published' || !item.status ? 'selected' : ''}>published</option>
+                                <option value="draft" ${item.status === 'draft' ? 'selected' : ''}>draft</option>
+                            </select>
+                            <button type="submit" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2">Update</button>
+                        </form>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        renderPagination('courses-pagination', pagination, 'fetchCourses');
+    } catch(e) { console.error('Error fetching courses:', e); }
+}
+
+// ── API CREDENTIALS TABLE ──
+async function fetchApiCreds(page = 1) {
+    activeState['api-creds'].page = page;
+    const { search } = activeState['api-creds'];
+    const tbody = document.getElementById('api-creds-tbody');
+    const emptyMsg = document.getElementById('api-creds-empty');
+    if (!tbody) return;
+
+    const url = `/api/admin/api-credentials?page=${page}&pageSize=15&search=${encodeURIComponent(search)}`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const resData = await res.json();
+        const data = resData.data || [];
+        const pagination = resData.pagination || { page: 1, pageSize: 15, totalRecords: 0, totalPages: 1 };
+
+        if (data.length === 0) {
+            tbody.innerHTML = '';
+            if (emptyMsg) emptyMsg.classList.remove('hidden');
+        } else {
+            if (emptyMsg) emptyMsg.classList.add('hidden');
+            tbody.innerHTML = data.map(item => `
+                <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
+                    <td class="p-3 font-semibold">
+                        <span class="block text-slate-900 dark:text-slate-50">${escapeHtml(item.full_name)}</span>
+                        <span class="text-xs text-slate-400 font-medium">@${escapeHtml(item.username)}</span>
+                    </td>
+                    <td class="p-3">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            item.role === 'admin' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' :
+                            item.role === 'moderator' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' :
+                            'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                        }">${escapeHtml(item.role ? item.role.charAt(0).toUpperCase() + item.role.slice(1) : '')}</span>
+                    </td>
+                    <td class="p-3">
+                        <div class="flex items-center gap-2 group">
+                            <span class="font-mono text-xs text-slate-700 dark:text-slate-300">${escapeHtml(item.api_key)}</span>
+                            <button type="button" onclick="navigator.clipboard.writeText('${escapeHtml(item.api_key)}'); this.innerHTML='<svg class=\\'w-3.5 h-3.5 text-green-500\\' fill=\\'none\\' viewBox=\\'0 0 24 24\\' stroke=\\'currentColor\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M5 13l4 4L19 7\\'></path></svg>'; setTimeout(() => { this.innerHTML='<svg class=\\'w-3.5 h-3.5\\' fill=\\'none\\' viewBox=\\'0 0 24 24\\' stroke=\\'currentColor\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z\\'></path></svg>' }, 2000);" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition opacity-0 group-hover:opacity-100 focus:opacity-100" title="Copy API Key">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                        </div>
+                    </td>
+                    <td class="p-3">
+                        ${item.status === 'active' ? `
+                        <div class="flex items-center gap-2 group">
+                            <span class="font-mono text-xs text-slate-700 dark:text-slate-300" id="secret-${item.id}" data-secret="${escapeHtml(item.api_secret)}">••••••••••••••••</span>
+                            <button type="button" onclick="const el=document.getElementById('secret-${item.id}'); if(el.innerText==='••••••••••••••••'){el.innerText=el.dataset.secret;}else{el.innerText='••••••••••••••••';}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition opacity-0 group-hover:opacity-100 focus:opacity-100" title="Toggle Visibility">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                            </button>
+                            <button type="button" onclick="navigator.clipboard.writeText('${escapeHtml(item.api_secret)}'); this.innerHTML='<svg class=\\'w-3.5 h-3.5 text-green-500\\' fill=\\'none\\' viewBox=\\'0 0 24 24\\' stroke=\\'currentColor\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M5 13l4 4L19 7\\'></path></svg>'; setTimeout(() => { this.innerHTML='<svg class=\\'w-3.5 h-3.5\\' fill=\\'none\\' viewBox=\\'0 0 24 24\\' stroke=\\'currentColor\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z\\'></path></svg>' }, 2000);" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition opacity-0 group-hover:opacity-100 focus:opacity-100" title="Copy API Secret">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                        </div>
+                        ` : `
+                        <span class="font-mono text-xs text-slate-400 line-through">${escapeHtml(item.api_secret ? item.api_secret.substring(0, 8) : '')}...</span>
+                        `}
+                    </td>
+                    <td class="p-3">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            item.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                            'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        }">${escapeHtml(item.status)}</span>
+                    </td>
+                    <td class="p-3 text-right space-x-2">
+                        ${item.status === 'active' ? `
+                        <a href="/admin/api-credentials/${item.user_id}/download" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">Download JSON</a>
+                        <form class="inline" method="post" onsubmit="return confirm('Revoke credentials for @${escapeHtml(item.username)}?')">
+                            <input type="hidden" name="action" value="revoke_api_creds">
+                            <input type="hidden" name="target_user_id" value="${item.user_id}">
+                            <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Revoke</button>
+                        </form>
+                        ` : `
+                        <span class="text-xs text-slate-400 italic">Revoked</span>
+                        `}
+                    </td>
+                </tr>
+            `).join('');
+        }
+        renderPagination('api-creds-pagination', pagination, 'fetchApiCreds');
+    } catch(e) { console.error('Error fetching API creds:', e); }
+}
+
+// ── ASSESSMENTS TABLE ──
+async function fetchAssessments(page = 1) {
+    activeState.assessments.page = page;
+    const { search, type } = activeState.assessments;
+    const tbody = document.getElementById('assess-tbody');
+    const emptyMsg = document.getElementById('assess-empty');
+    if (!tbody) return;
+
+    const url = `/api/admin/assessments?page=${page}&pageSize=15&search=${encodeURIComponent(search)}&type=${encodeURIComponent(type)}`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const resData = await res.json();
+        const data = resData.data || [];
+        const pagination = resData.pagination || { page: 1, pageSize: 15, totalRecords: 0, totalPages: 1 };
+
+        if (data.length === 0) {
+            tbody.innerHTML = '';
+            if (emptyMsg) emptyMsg.classList.remove('hidden');
+        } else {
+            if (emptyMsg) emptyMsg.classList.add('hidden');
+            tbody.innerHTML = data.map(item => `
+                <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition assess-row">
+                    <td class="p-3 font-bold text-slate-500 font-medium">#${item.id}</td>
+                    <td class="p-3 font-semibold">${escapeHtml(item.title)}</td>
+                    <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">${escapeHtml(item.course_name || '')}</td>
+                    <td class="p-3">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            item.type === 'pre' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                            'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
+                        }">${item.type === 'pre' ? 'Pre' : 'Post'}</span>
+                    </td>
+                    <td class="p-3 w-[20%] text-right space-y-1">
+                        <div class="flex gap-2 justify-end">
+                            <a href="/admin/assessment/${item.id}/download-questions" class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:underline">CSV</a>
+                            <form class="inline" method="post" action="/admin/delete/assessment/${item.id}" onsubmit="return confirm('Delete this assessment?')">
+                                <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Delete</button>
+                            </form>
+                        </div>
+                        <form class="mt-1 flex gap-1 justify-end flex-wrap" method="post">
+                            <input type="hidden" name="action" value="update_assessment">
+                            <input type="hidden" name="record_id" value="${item.id}">
+                            <input type="hidden" name="type" value="${escapeHtml(item.type)}">
+                            <input type="hidden" name="max_attempts" value="${item.max_attempts || 1}">
+                            <input class="form-input h-8 w-36 text-xs" name="title" value="${escapeHtml(item.title)}" required>
+                            <input class="form-input h-8 w-20 text-xs" name="pass_percentage" type="number" value="${item.pass_percentage || 80}" min="1" max="100" title="Pass %">
+                            <button class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2" type="submit">Update</button>
+                        </form>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        renderPagination('assess-pagination', pagination, 'fetchAssessments');
+    } catch(e) { console.error('Error fetching assessments:', e); }
+}
+
+function openEditUserModalById(id) {
+    const user = window.usersMap[id];
+    if (user) {
+        openEditUserModal(user);
+    }
+}
+
+// ── DEBOUNCED SEARCH & CHIP EVENT LISTENERS ──
+function setupTableListeners() {
+    const searchInputs = [
+        { id: 'userSearch', table: 'users', fetcher: fetchUsers },
+        { id: 'courseSearch', table: 'courses', fetcher: fetchCourses },
+        { id: 'apiCredSearch', table: 'api-creds', fetcher: fetchApiCreds },
+        { id: 'assessSearch', table: 'assessments', fetcher: fetchAssessments }
+    ];
+
+    searchInputs.forEach(({ id, table, fetcher }) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.addEventListener('input', (e) => {
+            clearTimeout(debounceTimers[table]);
+            debounceTimers[table] = setTimeout(() => {
+                activeState[table].search = e.target.value.trim();
+                fetcher(1);
+            }, 300);
+        });
+    });
+
+    // Chip click handler for Users
+    document.querySelectorAll('#userFilterBtns .adm-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            document.querySelectorAll('#userFilterBtns .adm-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            activeState.users.role = chip.dataset.val || '';
+            fetchUsers(1);
+        });
+    });
+
+    // Chip click handler for Courses
+    document.querySelectorAll('#courseFilterBtns .adm-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            document.querySelectorAll('#courseFilterBtns .adm-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            const val = chip.dataset.val || '';
+            if (val === 'published' || val === 'draft') {
+                activeState.courses.status = val;
+            } else {
+                activeState.courses.status = '';
+                activeState.courses.search = val;
+                const searchEl = document.getElementById('courseSearch');
+                if (searchEl) searchEl.value = val;
+            }
+            fetchCourses(1);
+        });
+    });
+
+    // Chip click handler for Assessments
+    document.querySelectorAll('#assessFilterBtns .adm-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            document.querySelectorAll('#assessFilterBtns .adm-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            activeState.assessments.type = chip.dataset.val || '';
+            fetchAssessments(1);
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    setupTableListeners();
+    fetchUsers(1);
+    fetchCourses(1);
+    fetchApiCreds(1);
+    fetchAssessments(1);
 });
 </script>
 
@@ -719,7 +1075,11 @@ document.querySelectorAll('.adm-chip').forEach(chip => {
         </button>
         <div class="p-6">
             <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-6">Edit User Data</h2>
-            <form method="post" id="editUserForm">
+            <!-- Inline error message -->
+            <div id="editUserError" class="hidden mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm font-medium"></div>
+            <!-- Inline success message -->
+            <div id="editUserSuccess" class="hidden mb-4 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm font-medium"></div>
+            <form id="editUserForm" novalidate>
                 <input type="hidden" name="action" value="update_user">
                 <input type="hidden" name="record_id" id="edit_record_id">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -777,7 +1137,7 @@ document.querySelectorAll('.adm-chip').forEach(chip => {
                         </select>
                     </div>
                 </div>
-                <button type="submit" class="btn-primary w-full mt-6">Save Changes</button>
+                <button type="submit" id="editUserSubmitBtn" class="btn-primary w-full mt-6">Save Changes</button>
             </form>
         </div>
     </div>
@@ -798,12 +1158,25 @@ function openEditUserModal(user) {
     setVal('edit_role', user.role || 'basic user');
     setVal('edit_department_id', user.department_id);
     setVal('edit_position_id', user.position_id);
-    setVal('edit_location_id', user.location_id || user.location);
+    setVal('edit_location_id', user.location_id);
+
+    // Clear any previous error/success messages
+    const errEl = document.getElementById('editUserError');
+    const okEl  = document.getElementById('editUserSuccess');
+    if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
+    if (okEl)  { okEl.textContent  = ''; okEl.classList.add('hidden'); }
 
     const modal = document.getElementById('editUserModal');
     if (modal) {
         modal.classList.remove('hidden');
         modal.style.display = 'flex';
+    }
+}
+
+function openEditUserModalById(id) {
+    const user = window.usersMap[id];
+    if (user) {
+        openEditUserModal(user);
     }
 }
 
@@ -814,6 +1187,97 @@ function closeEditUserModal() {
         modal.style.display = 'none';
     }
 }
+
+function showEditUserError(msg) {
+    const errEl = document.getElementById('editUserError');
+    const okEl  = document.getElementById('editUserSuccess');
+    if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+    if (okEl)  { okEl.classList.add('hidden'); }
+    console.error('[EditUser] Error:', msg);
+}
+
+function showEditUserSuccess(msg) {
+    const errEl = document.getElementById('editUserError');
+    const okEl  = document.getElementById('editUserSuccess');
+    if (errEl) { errEl.classList.add('hidden'); }
+    if (okEl)  { okEl.textContent = msg; okEl.classList.remove('hidden'); }
+}
+
+// Intercept the Edit User form and submit via AJAX
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('editUserForm');
+    if (!form) return;
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // --- Client-side mandatory validation ---
+        const fields = [
+            { id: 'edit_full_name',    label: 'Full Name' },
+            { id: 'edit_username',     label: 'Username' },
+            { id: 'edit_employee_id',  label: 'Employee ID' },
+            { id: 'edit_email',        label: 'Email ID' },
+            { id: 'edit_phone_number', label: 'Phone Number' },
+        ];
+        const missing = fields.filter(f => {
+            const el = document.getElementById(f.id);
+            return !el || !el.value.trim();
+        }).map(f => f.label);
+
+        if (missing.length > 0) {
+            showEditUserError('Please fill in the required fields: ' + missing.join(', '));
+            return;
+        }
+
+        // --- Email format validation ---
+        const emailEl = document.getElementById('edit_email');
+        if (emailEl && emailEl.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value)) {
+            showEditUserError('Please enter a valid email address.');
+            return;
+        }
+
+        // --- Disable button & show loading state ---
+        const btn = document.getElementById('editUserSubmitBtn');
+        const origText = btn ? btn.textContent : 'Save Changes';
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+        try {
+            const formData = new FormData(form);
+            const res = await fetch('/admin', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData,
+                credentials: 'same-origin',
+            });
+
+            let data = {};
+            const contentType = res.headers.get('Content-Type') || '';
+            if (contentType.includes('application/json')) {
+                data = await res.json();
+            }
+
+            if (res.ok && data.success) {
+                showEditUserSuccess(data.message || 'User updated successfully.');
+                // Refresh the users table without full page reload
+                if (typeof fetchUsers === 'function') {
+                    const currentPage = (window.activeState && window.activeState.users)
+                        ? window.activeState.users.page : 1;
+                    fetchUsers(currentPage);
+                }
+                // Close modal after a short delay so user sees the success message
+                setTimeout(() => closeEditUserModal(), 1200);
+            } else {
+                const errMsg = data.error || 'Unable to update user. Please check the required fields and try again.';
+                showEditUserError(errMsg);
+            }
+        } catch (err) {
+            console.error('[EditUser] Network error:', err);
+            showEditUserError('A network error occurred. Please check your connection and try again.');
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = origText; }
+        }
+    });
+});
 </script>
 
 {% endblock %}
