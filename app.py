@@ -101,10 +101,9 @@ def process_reward_event(connection, user_id, event_name, source_reference_id, s
 	)
 
 	# 7. Update wallet totals
-	if tx_type == "EARN":
-		total_earned += points_to_award
-	elif tx_type in ("ADJUSTMENT", "REVERSAL"):
-		total_adjusted += abs(points_to_award)
+	# Every engine transaction is a source-driven earning or its correction, so the net
+	# goes to total_earned. total_adjusted is reserved for manual administrator operations.
+	total_earned += points_to_award
 
 	connection.execute(
 		"""UPDATE user_wallets 
@@ -3366,7 +3365,7 @@ def create_app():
 				   JOIN users u ON u.id = t.user_id
 				   ORDER BY t.id DESC LIMIT 100"""
 			).fetchall()
-			all_students = connection.execute("SELECT id, full_name, username FROM users WHERE role='basic' OR role='basic user'").fetchall()
+			all_students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user'").fetchall()
 			
 		return render_template(
 			"reward_admin.html",
@@ -3414,7 +3413,10 @@ def create_app():
 	@app.post("/admin/rewards/settle")
 	@admin_required
 	def admin_settle_rewards():
-		user_id = request.form.get("user_id")
+		user_id = request.form.get("user_id", type=int)
+		if user_id is None:
+			flash("Select a user.")
+			return redirect(safe_referrer(url_for("admin_rewards")))
 		points = request.form.get("points", 0)
 		remarks = request.form.get("remarks", "Settle points").strip()
 		
@@ -3463,6 +3465,12 @@ def create_app():
 	def admin_reset_rewards():
 		user_id = request.form.get("user_id")
 		confirm = request.form.get("confirm")
+		if user_id != "all":
+			try:
+				user_id = int(user_id)
+			except (TypeError, ValueError):
+				flash("Select a user.")
+				return redirect(safe_referrer(url_for("admin_rewards")))
 		
 		if confirm != "YES":
 			flash("Please confirm the warning checkboxes to execute a reset.")
@@ -3529,7 +3537,10 @@ def create_app():
 	@app.post("/admin/rewards/adjust")
 	@admin_required
 	def admin_adjust_rewards():
-		user_id = request.form.get("user_id")
+		user_id = request.form.get("user_id", type=int)
+		if user_id is None:
+			flash("Select a user.")
+			return redirect(safe_referrer(url_for("admin_rewards")))
 		points = request.form.get("points", 0)
 		remarks = request.form.get("remarks", "Manual adjustment").strip()
 		
@@ -4338,18 +4349,6 @@ def create_app():
 					reviewers = connection.execute("SELECT id FROM users WHERE role IN ('admin', 'moderator')").fetchall()
 					for r in reviewers:
 						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review", url_for("approval_queue"))
-				else:
-					# Author Post reward trigger
-					process_reward_event(
-						connection=connection,
-						user_id=g.api_user["id"],
-						event_name="MY_POST_RATING",
-						source_reference_id=f"POST-{post_id}",
-						source_reference_type="POST_CREATION",
-						description=f"Approved community post: {title}",
-						input_value=0,
-						actor_id=g.api_user["id"]
-					)
 			except Exception as e:
 				import traceback
 				traceback.print_exc()
@@ -4765,9 +4764,12 @@ def create_app():
 		data = request.get_json(silent=True) or {}
 		target_user_id = data.get("target_user_id")
 		points = data.get("points")
-		if not target_user_id or points is None or int(points) <= 0:
+		try:
+			points = int(points)
+		except (TypeError, ValueError):
+			return {"error": "points must be an integer."}, 400
+		if not target_user_id or points <= 0:
 			return {"error": "Missing or invalid target_user_id or positive points parameter."}, 400
-		points = int(points)
 		
 		with get_db() as connection:
 			user = connection.execute("SELECT id FROM users WHERE id = ?", (target_user_id,)).fetchone()
@@ -4783,9 +4785,9 @@ def create_app():
 				import uuid
 				ref_id = f"SETTLE-{uuid.uuid4().hex[:8]}"
 				connection.execute(
-					"""INSERT INTO reward_transactions (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after)
-					   VALUES (?, 'MANUAL_SETTLEMENT', ?, 'ADMIN_SETTLEMENT', 'Points settled by Administrator', ?, 'SETTLEMENT', ?, ?)""",
-					(target_user_id, ref_id, points, balance, balance - points)
+					"""INSERT INTO reward_transactions (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after, created_by, settlement_id)
+					   VALUES (?, 'MANUAL_SETTLEMENT', ?, 'ADMIN_SETTLEMENT', 'Points settled by Administrator', ?, 'SETTLEMENT', ?, ?, ?, ?)""",
+					(target_user_id, ref_id, -points, balance, balance - points, g.api_user["id"], ref_id)
 				)
 				connection.execute(
 					"UPDATE user_wallets SET current_balance = current_balance - ?, total_settled = total_settled + ? WHERE user_id = ?",
@@ -4804,9 +4806,14 @@ def create_app():
 		points = data.get("points")
 		description = (data.get("description") or "Balance manual adjustment by Administrator").strip()
 		
-		if not target_user_id or points is None:
-			return {"error": "Missing target_user_id or points parameters."}, 400
-		points = int(points)
+		try:
+			points = int(points)
+		except (TypeError, ValueError):
+			return {"error": "points must be an integer."}, 400
+		if not target_user_id:
+			return {"error": "Missing target_user_id parameter."}, 400
+		if points == 0:
+			return {"error": "points must be a non-zero integer."}, 400
 		
 		with get_db() as connection:
 			user = connection.execute("SELECT id FROM users WHERE id = ?", (target_user_id,)).fetchone()
@@ -4826,13 +4833,13 @@ def create_app():
 				import uuid
 				ref_id = f"ADJ-{uuid.uuid4().hex[:8]}"
 				connection.execute(
-					"""INSERT INTO reward_transactions (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after)
-					   VALUES (?, 'MANUAL_ADJUSTMENT', ?, 'ADMIN_ADJUSTMENT', ?, ?, 'ADJUSTMENT', ?, ?)""",
-					(target_user_id, ref_id, description, abs(points), balance, new_balance)
+					"""INSERT INTO reward_transactions (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after, created_by)
+					   VALUES (?, 'MANUAL_ADJUSTMENT', ?, 'ADMIN_ADJUSTMENT', ?, ?, ?, ?, ?, ?)""",
+					(target_user_id, ref_id, description, points, "ADJUSTMENT" if points > 0 else "REVERSAL", balance, new_balance, g.api_user["id"])
 				)
 				connection.execute(
 					"UPDATE user_wallets SET current_balance = ?, total_adjusted = total_adjusted + ? WHERE user_id = ?",
-					(new_balance, points, target_user_id)
+					(new_balance, abs(points), target_user_id)
 				)
 			except Exception as e:
 				return {"error": f"Adjustment failed: {str(e)}"}, 500
@@ -4861,12 +4868,12 @@ def create_app():
 				import uuid
 				ref_id = f"RESET-{uuid.uuid4().hex[:8]}"
 				connection.execute(
-					"""INSERT INTO reward_transactions (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after)
-					   VALUES (?, 'USER_RESET', ?, 'ADMIN_RESET', 'Rewards wallet reset to zero by Administrator', ?, 'SETTLEMENT', ?, 0)""",
-					(target_user_id, ref_id, balance, balance)
+					"""INSERT INTO reward_transactions (user_id, reward_source, source_reference_id, source_reference_type, description, points, transaction_type, balance_before, balance_after, created_by)
+					   VALUES (?, 'USER_RESET', ?, 'ADMIN_RESET', 'Rewards wallet reset to zero by Administrator', ?, 'ADJUSTMENT', ?, 0, ?)""",
+					(target_user_id, ref_id, -balance, balance, g.api_user["id"])
 				)
 				connection.execute(
-					"UPDATE user_wallets SET current_balance = 0, total_adjusted = total_adjusted - ? WHERE user_id = ?",
+					"UPDATE user_wallets SET current_balance = 0, total_adjusted = total_adjusted + ? WHERE user_id = ?",
 					(balance, target_user_id)
 				)
 			except Exception as e:
