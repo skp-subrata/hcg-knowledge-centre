@@ -21,7 +21,7 @@ import pytest
 from flask import got_request_exception
 
 import app as app_module
-from tests.helpers import MATRIX_RESULTS, FakeHTTPResponse, build_world
+from tests.helpers import MATRIX_RESULTS, FakeHTTPResponse
 
 WEB_PERSONAS = ("anon", "student", "mod", "admin", "imp_admin")
 API_PERSONAS = ("anon", "api_student", "api_mod", "api_admin")
@@ -99,18 +99,6 @@ MAY_DENY = {
 
 # (endpoint, method, persona) -> QA id. Each xfails; the test fails once the defect is fixed.
 KNOWN_ISSUES = {}
-for _p in ("api_student", "api_mod", "api_admin"):
-	KNOWN_ISSUES[("api_add_department", "POST", _p)] = "QA-001 g is not imported at module scope -> NameError"
-	KNOWN_ISSUES[("api_add_position", "POST", _p)] = "QA-001 g is not imported at module scope -> NameError"
-	KNOWN_ISSUES[("api_add_location", "POST", _p)] = "QA-001 g is not imported at module scope -> NameError"
-	KNOWN_ISSUES[("api_get_leaderboard", "GET", _p)] = "QA-002 selects FROM wallets (table is user_wallets)"
-	KNOWN_ISSUES[("api_get_course", "GET", _p)] = "QA-003 reads session['user_id'] under API-key auth"
-	KNOWN_ISSUES[("api_comment_post", "POST", _p)] = "QA-017 inserts column 'comment' (real column comment_text)"
-for _p in ("api_mod", "api_admin"):
-	KNOWN_ISSUES[("api_assign_course", "POST", _p)] = "QA-003 reads session['user_id'] under API-key auth"
-KNOWN_ISSUES[("api_get_course", "GET", "unknown-id")] = "QA-003 reads session['user_id'] before checking the id"
-KNOWN_ISSUES[("api_assign_course", "POST", "unknown-id")] = "QA-003 reads session['user_id'] before checking the id"
-KNOWN_ISSUES[("create_interest", "POST", "anon")] = "QA-004 anonymous POST /api/interests -> NameError instead of 401"
 KNOWN_ISSUES[("proxy_embed", "GET", "anon")] = "QA-012 /proxy/embed is unauthenticated (SSRF / open proxy)"
 KNOWN_ISSUES[("uploaded_file", "GET", "anon")] = "QA-013 /uploads/<file> is served to anonymous users"
 KNOWN_ISSUES[("get_user_interests", "GET", "anon")] = "QA-014 /api/users/<id>/interests readable anonymously"
@@ -146,11 +134,6 @@ def _case_id(case):
 # ---------------------------------------------------------------------------
 # fixtures
 # ---------------------------------------------------------------------------
-@pytest.fixture
-def world(db_path):
-	return build_world(db_path, app_module.UPLOAD_FOLDER)
-
-
 @pytest.fixture
 def smoke_mode(monkeypatch):
 	"""Return 500s instead of raising, and remember the exception for the failure message."""

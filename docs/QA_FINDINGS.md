@@ -6,15 +6,15 @@ Severity: **S1** blocker or security, **S2** major (wrong result, data integrity
 
 | id | area | type | sev | persona | steps | expected | actual | evidence | status |
 |---|---|---|---|---|---|---|---|---|---|
-| QA-001 | API v1 masters | logic | S1 | any API key | `POST /api/v1/departments` (also `/positions`, `/locations`) with `{"name": "X"}` | 201 | 500 `NameError: g` (also: routes are registered after `create_app()` and require API headers although the admin page calls them with a session) | `app.py` module-level routes after `app = create_app()`; `test_route_matrix` xfail | xfail |
-| QA-002 | API v1 rewards | logic | S1 | any API key | `GET /api/v1/leaderboard` | 200 list | 500 `no such table: wallets` (table is `user_wallets`) | `api_get_leaderboard`; `test_route_matrix` xfail | xfail |
-| QA-003 | API v1 courses | logic | S1 | any API key, no browser session | `GET /api/v1/courses/<id>`, `POST /api/v1/courses/<id>/assign` | 200 / 201 | 500 `KeyError: 'user_id'` (reads `session` under API-key auth; works only from the browser playground) | `api_get_course`, `api_assign_course`; `test_route_matrix` xfail incl. unknown-id pass | xfail |
-| QA-004 | interests API | security | S2 | anonymous | `POST /api/interests {"interest_name": "x"}` | 401 | 500 `NameError: g`; with any session the row is created (no role check) | `create_interest`; `test_route_matrix` xfail | xfail |
+| QA-001 | API v1 masters | logic | S1 | any API key | `POST /api/v1/departments` (also `/positions`, `/locations`) with `{"name": "X"}` | 201 | 500 `NameError: g` (also: routes are registered after `create_app()` and require API headers although the admin page calls them with a session) | `app.py` module-level routes after `app = create_app()`; `test_route_matrix` xfail | fixed |
+| QA-002 | API v1 rewards | logic | S1 | any API key | `GET /api/v1/leaderboard` | 200 list | 500 `no such table: wallets` (table is `user_wallets`) | `api_get_leaderboard`; `test_route_matrix` xfail | fixed |
+| QA-003 | API v1 courses | logic | S1 | any API key, no browser session | `GET /api/v1/courses/<id>`, `POST /api/v1/courses/<id>/assign` | 200 / 201 | 500 `KeyError: 'user_id'` (reads `session` under API-key auth; works only from the browser playground) | `api_get_course`, `api_assign_course`; `test_route_matrix` xfail incl. unknown-id pass | fixed |
+| QA-004 | interests API | security | S2 | anonymous | `POST /api/interests {"interest_name": "x"}` | 401 | 500 `NameError: g`; with any session the row is created (no role check) | `create_interest`; `test_route_matrix` xfail | fixed |
 | QA-012 | embed proxy | security | S1 | anonymous | `GET /proxy/embed?url=<any>` | login required, http(s) only, course URLs only | 200: fetches any URL (incl. `file://`, private hosts) and strips X-Frame-Options / CSP | `proxy_embed`; `test_route_matrix` xfail | xfail |
 | QA-013 | uploads | security | S1 | anonymous | `GET /uploads/<file>` | login required; non-media as attachment | 200 inline for anyone who knows the name | `uploaded_file`; `test_route_matrix` xfail | xfail |
 | QA-014 | interests API | privacy | S3 | anonymous | `GET /api/users/<id>/interests` | 401 | 200 (enumerable per user id) | `get_user_interests`; `test_route_matrix` xfail | xfail |
 | QA-015 | routing | logic | S3 | staff | `GET /admin/reports` | one handler | registered twice (`admin_reports` staff, `reports` admin); second is dead code | `test_smoke::test_no_duplicate_url_rules` xfail | xfail |
-| QA-017 | API v1 community | logic | S1 | any API key | `POST /api/v1/posts/<id>/comment {"comment": "x"}` | 201 | 500: inserts column `comment`, real column is `comment_text` | `api_comment_post`; `test_route_matrix` xfail | xfail |
+| QA-017 | API v1 community | logic | S1 | any API key | `POST /api/v1/posts/<id>/comment {"comment": "x"}` | 201 | 500: inserts column `comment`, real column is `comment_text` | `api_comment_post`; `test_route_matrix` xfail | fixed |
 
 ## Decisions needed (public routes seen by the matrix)
 

@@ -10,7 +10,7 @@ from urllib.parse import parse_qs
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from uuid import uuid4
-from flask import Flask, flash, redirect, render_template, request, send_file, send_from_directory, session, url_for, jsonify
+from flask import Flask, flash, g, redirect, render_template, request, send_file, send_from_directory, session, url_for, jsonify
 from openpyxl import Workbook, load_workbook
 from storage import save_file
 from db_init import apply_init_scripts, applied_scripts
@@ -663,6 +663,25 @@ def api_admin_required(view):
 		if g.api_user["role"] != "admin":
 			return {"error": "Access forbidden: administrator permissions required."}, 403
 		return view(*args, **kwargs)
+	return wrapped
+
+
+def staff_session_or_api_required(view):
+	"""Allow a logged-in staff session (the Admin page) or valid API-key headers.
+
+	Populates ``g.api_user`` either way so the view can rely on it.
+	"""
+	@wraps(view)
+	def wrapped(*args, **kwargs):
+		if session.get("user_id") and session.get("role") in ("admin", "moderator"):
+			g.api_user = {
+				"id": session["user_id"],
+				"username": None,
+				"role": session["role"],
+				"full_name": session.get("user"),
+			}
+			return view(*args, **kwargs)
+		return api_required(view)(*args, **kwargs)
 	return wrapped
 
 
@@ -3715,8 +3734,10 @@ def create_app():
 		if not name:
 			return {"error": "Interest name is required."}, 400
 		
+		if not session.get("user_id"):
+			return {"error": "Login required."}, 401
 		normalized = " ".join(name.lower().split())
-		user_id = session.get("user_id") or getattr(g, "api_user", {}).get("id")
+		user_id = session["user_id"]
 		
 		with get_db() as conn:
 			existing = conn.execute("SELECT id, interest_name as name FROM interest_master WHERE normalized_name = ?", (normalized,)).fetchone()
@@ -4199,7 +4220,7 @@ def create_app():
 				FROM courses c
 				LEFT JOIN users u ON c.created_by = u.id
 				WHERE c.id = ?
-			""", (session["user_id"], course_id,)).fetchone()
+			""", (g.api_user["id"], course_id,)).fetchone()
 			if not course:
 				return {"error": "Course not found."}, 404
 			if not course_is_visible(connection, course_id, g.api_user["id"]):
@@ -4228,7 +4249,7 @@ def create_app():
 				FROM courses c
 				LEFT JOIN users u ON c.created_by = u.id
 				WHERE c.id = ?
-			""", (session["user_id"], course_id,)).fetchone()
+			""", (g.api_user["id"], course_id,)).fetchone()
 			if not course:
 				return {"error": "Course not found."}, 404
 			student = connection.execute("SELECT * FROM users WHERE id = ? AND role = 'basic user'", (student_id,)).fetchone()
@@ -4434,7 +4455,7 @@ def create_app():
 				return {"error": "Post not found."}, 404
 			try:
 				comment_id = connection.execute(
-					"INSERT INTO post_comments (post_id, user_id, comment) VALUES (?, ?, ?)",
+					"INSERT INTO post_comments (post_id, user_id, comment_text) VALUES (?, ?, ?)",
 					(post_id, g.api_user["id"], comment_text)
 				).lastrowid
 				try:
@@ -4702,7 +4723,7 @@ def create_app():
 		with get_db() as connection:
 			leaders = connection.execute('''
 				SELECT u.id, u.username, u.full_name, w.total_earned 
-				FROM wallets w JOIN users u ON u.id = w.user_id 
+				FROM user_wallets w JOIN users u ON u.id = w.user_id 
 				ORDER BY w.total_earned DESC LIMIT 10
 			''').fetchall()
 		return {"leaderboard": [dict(l) for l in leaders]}
@@ -4961,6 +4982,63 @@ def create_app():
 	        
 	    return render_template("master_management.html", departments=[dict(d) for d in departments], locations=[dict(l) for l in locations], user=session.get("user"), role=session.get("role"), profile_picture=session.get("profile_picture"))
 
+	# Master-data quick-add endpoints, used by the Admin page (session) and by API clients (headers).
+	@app.post("/api/v1/departments")
+	@staff_session_or_api_required
+	def api_add_department():
+	    data = request.get_json(silent=True) or {}
+	    name = (data.get("name") or "").strip()
+	    if not name:
+	        return {"error": "Department name is required."}, 400
+	    code = ''.join([w[0] for w in name.split()]).upper()
+	    if len(code) < 2: code = name[:3].upper()
+	    with get_db() as connection:
+	        try:
+	            dept_id = connection.execute(
+	                "INSERT INTO departments (department_name, department_code, created_by) VALUES (?, ?, ?)",
+	                (name, code, g.api_user["id"])
+	            ).lastrowid
+	            return {"message": "Department added.", "id": dept_id, "name": name}, 201
+	        except sqlite3.IntegrityError:
+	            return {"error": "Department already exists."}, 409
+
+	@app.post("/api/v1/positions")
+	@staff_session_or_api_required
+	def api_add_position():
+	    data = request.get_json(silent=True) or {}
+	    name = (data.get("name") or "").strip()
+	    if not name:
+	        return {"error": "Position name is required."}, 400
+	    with get_db() as connection:
+	        try:
+	            pos_id = connection.execute(
+	                "INSERT INTO positions (name, created_by) VALUES (?, ?)",
+	                (name, g.api_user["id"])
+	            ).lastrowid
+	            return {"message": "Position added.", "id": pos_id, "name": name}, 201
+	        except sqlite3.IntegrityError:
+	            return {"error": "Position already exists."}, 409
+
+
+	@app.post("/api/v1/locations")
+	@staff_session_or_api_required
+	def api_add_location():
+	    data = request.get_json(silent=True) or {}
+	    name = (data.get("name") or "").strip()
+	    if not name:
+	        return {"error": "Location name is required."}, 400
+	    code = ''.join([w[0] for w in name.split()]).upper()
+	    if len(code) < 3: code = name[:3].upper()
+	    with get_db() as connection:
+	        try:
+	            loc_id = connection.execute(
+	                "INSERT INTO locations (location_name, location_code, city, country, created_by) VALUES (?, ?, ?, ?, ?)",
+	                (name, code, name, 'India', g.api_user["id"])
+	            ).lastrowid
+	            return {"message": "Location added.", "id": loc_id, "name": name}, 201
+	        except sqlite3.IntegrityError:
+	            return {"error": "Location already exists."}, 409
+
 	@app.cli.command("init-db")
 	def init_db_command():
 		"""Create tables, apply init_scripts/*.sql and seed demo data (safe to re-run)."""
@@ -4979,71 +5057,9 @@ app = create_app()
 
 
 
-@app.post("/api/v1/departments")
-@api_required
-def api_add_department():
-    data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
-    if not name:
-        return {"error": "Department name is required."}, 400
-    code = ''.join([w[0] for w in name.split()]).upper()
-    if len(code) < 2: code = name[:3].upper()
-    with get_db() as connection:
-        try:
-            dept_id = connection.execute(
-                "INSERT INTO departments (department_name, department_code, created_by) VALUES (?, ?, ?)",
-                (name, code, session.get("user_id", getattr(g, "api_user", {}).get("id")))
-            ).lastrowid
-            return {"message": "Department added.", "id": dept_id, "name": name}, 201
-        except sqlite3.IntegrityError:
-            return {"error": "Department already exists."}, 409
-
-@app.post("/api/v1/positions")
-@api_required
-def api_add_position():
-    data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
-    if not name:
-        return {"error": "Position name is required."}, 400
-    with get_db() as connection:
-        try:
-            pos_id = connection.execute(
-                "INSERT INTO positions (name, created_by) VALUES (?, ?)",
-                (name, session.get("user_id", getattr(g, "api_user", {}).get("id")))
-            ).lastrowid
-            return {"message": "Position added.", "id": pos_id, "name": name}, 201
-        except sqlite3.IntegrityError:
-            return {"error": "Position already exists."}, 409
-
-
-@app.post("/api/v1/locations")
-@api_required
-def api_add_location():
-    data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
-    if not name:
-        return {"error": "Location name is required."}, 400
-    code = ''.join([w[0] for w in name.split()]).upper()
-    if len(code) < 3: code = name[:3].upper()
-    with get_db() as connection:
-        try:
-            loc_id = connection.execute(
-                "INSERT INTO locations (location_name, location_code, city, country, created_by) VALUES (?, ?, ?, ?, ?)",
-                (name, code, name, 'India', session.get("user_id", getattr(g, "api_user", {}).get("id")))
-            ).lastrowid
-            return {"message": "Location added.", "id": loc_id, "name": name}, 201
-        except sqlite3.IntegrityError:
-            return {"error": "Location already exists."}, 409
-
-
-
 if __name__ == "__main__":
 	app.run(
 		host=os.getenv("LMS_HOST", "127.0.0.1"),
 		port=int(os.getenv("LMS_PORT", "5000")),
 		debug=os.getenv("LMS_DEBUG", "1") == "1",
 	)
-
-
-
-# Trigger reload

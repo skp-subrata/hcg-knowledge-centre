@@ -9,10 +9,13 @@ async function addMaster(type, el) {
     let name = prompt("Enter new " + type.slice(0, -1) + " name:");
     if (!name) return;
     
-    let res = await fetch('/api/v1/' + type, {
+    // departments/positions/locations live under /api/v1; interests have their own endpoint
+    let url = type === 'interests' ? '/api/interests' : '/api/v1/' + type;
+    let payload = type === 'interests' ? {interest_name: name} : {name: name};
+    let res = await fetch(url, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({name: name})
+        body: JSON.stringify(payload)
     });
     let data = await res.json();
     if (res.ok) {
@@ -30,7 +33,7 @@ async function addMaster(type, el) {
                 else { select.value = data.id; }
             }
         });
-        alert(data.message);
+        alert(data.message || (data.name + ' added.'));
     } else {
         alert(data.error);
     }

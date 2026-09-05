@@ -224,3 +224,11 @@ def pytest_sessionfinish(session, exitstatus):
 		lines.append(f"| {method} | `{rule}` | " + " | ".join(cells) + " |")
 	Path(out).parent.mkdir(parents=True, exist_ok=True)
 	Path(out).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+@pytest.fixture
+def world(db_path):
+	"""The seeded database plus a group, posts, an attempt, a certified course, a wallet and API keys."""
+	from tests.helpers import build_world
+
+	return build_world(db_path, app_module.UPLOAD_FOLDER)
