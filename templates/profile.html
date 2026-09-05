@@ -1,196 +1,138 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, icon, field, select_field, textarea_field, file_field, avatar %}
 
-{% block title %}Edit Profile | HCG Knowledge Centre{% endblock %}
-
+{% block title %}Edit profile · HCG Knowledge Centre{% endblock %}
 
 {% block content %}
-<section class="max-w-2xl mx-auto py-10">
-    <div class="glass-panel p-8">
-        <h1 class="text-3xl font-bold mb-6">Edit Profile</h1>
-        
-        <form method="post" enctype="multipart/form-data" class="space-y-6">
-            
-            <div class="flex items-center gap-6 mb-6">
-                <div class="w-24 h-24 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 overflow-hidden flex items-center justify-center bg-cover bg-center" {% if user_data.profile_picture %}style="background-image: url('/uploads/{{ user_data.profile_picture }}')"{% endif %}>
-                    {% if not user_data.profile_picture %}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                    {% endif %}
-                </div>
-                <div>
-                    <label class="form-label block mb-2">Profile Picture</label>
-                    <input type="file" name="profile_picture" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-slate-800 dark:file:text-slate-300">
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="form-label">Display Name (Full Name) *</label>
-                    <input type="text" name="full_name" class="form-input" value="{{ user_data.full_name }}" required>
-                </div>
-                <div>
-                    <label class="form-label">Employee ID *</label>
-                    <input type="text" name="employee_id" class="form-input" value="{{ user_data.employee_id or '' }}" required>
-                </div>
-                <div>
-                    <label class="form-label">Email *</label>
-                    <input type="email" name="email" class="form-input" value="{{ user_data.email or '' }}" required>
-                </div>
-                <div>
-                    <label class="form-label">Phone Number *</label>
-                    <input type="tel" name="phone_number" class="form-input" value="{{ user_data.phone_number or '' }}" required>
-                </div>
-                <div>
-                    <label class="form-label">Department</label>
-                    <select name="department_id" class="form-input dept-select">
-                        <option value="">[ Select Department ▼ ]</option>
-                        {% for d in master_depts %}
-                        <option value="{{ d.id }}" {% if user_data.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">Position</label>
-                    <select name="position_id" class="form-input pos-select">
-                        <option value="">[ Select Position ▼ ]</option>
-                        {% for p in master_positions %}
-                        <option value="{{ p.id }}" {% if user_data.position_id == p.id %}selected{% endif %}>{{ p.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">Location *</label>
-                    <select name="location_id" class="form-input loc-select" required>
-                        <option value="">[ Select Location ▼ ]</option>
-                        {% for l in master_locations %}
-                        <option value="{{ l.id }}" {% if user_data.location_id == l.id %}selected{% endif %}>{{ l.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="md:col-span-2 relative" id="interest-container" data-userid="{{ user_data.id }}">
-                    <label class="form-label">Interests</label>
-                    <div class="form-input flex flex-wrap gap-2 items-center min-h-[42px] p-2" id="interest-chips" style="height: auto;">
-                        <div class="flex-1 min-w-[200px] relative">
-                            <input type="text" id="interest-input" class="w-full bg-transparent border-none focus:ring-0 text-sm p-0 m-0 outline-none dark:text-white" placeholder="Type to search or add an interest..." autocomplete="off">
-                            <div id="interest-dropdown" class="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 hidden max-h-60 overflow-y-auto">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="md:col-span-2">
-                    <label class="form-label">About Me</label>
-                    <textarea name="about_me" class="form-input h-24" placeholder="Short professional or personal introduction">{{ user_data.about_me or '' }}</textarea>
-                </div>
-            </div>
-            
-            <div class="pt-4 flex gap-4">
-                <button type="submit" class="btn-primary flex-1">Save Changes</button>
-                <a href="{{ url_for('home') }}" class="btn-secondary flex-1 text-center">Cancel</a>
-            </div>
-        </form>
+<div class="max-w-2xl mx-auto">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow mb-1">Account</p>
+      <h1>Edit profile</h1>
+      <p class="text-fg-2 mt-1">How you appear to colleagues, plus the details HR uses to assign courses.</p>
     </div>
-</section>
-<script>
-const userId = document.getElementById('interest-container').dataset.userid;
-const input = document.getElementById('interest-input');
-const dropdown = document.getElementById('interest-dropdown');
-const chipsContainer = document.getElementById('interest-chips');
-let activeInterests = [];
+  </header>
 
-async function loadInterests() {
-    const res = await fetch(`/api/users/${userId}/interests`);
-    activeInterests = await res.json();
-    renderChips();
-}
+  <form method="post" enctype="multipart/form-data" class="card flex flex-col">
+    <div class="flex items-center gap-5 mb-6">
+      {{ avatar(user_data.full_name, src=(url_for('uploaded_file', filename=user_data.profile_picture) if user_data.profile_picture else None), size="lg") }}
+      <div class="flex-1">{{ file_field("profile_picture", "Profile picture", accept="image/png,image/jpeg,image/gif,image/webp", hint="PNG, JPG, GIF or WebP.") }}</div>
+    </div>
 
-function renderChips() {
-    document.querySelectorAll('.interest-chip').forEach(el => el.remove());
-    activeInterests.forEach(i => {
-        const chip = document.createElement('div');
-        chip.className = "interest-chip flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-3 py-1 rounded-full text-sm font-medium border border-indigo-100 dark:border-indigo-800";
-        chip.innerHTML = `
-            ${i.name}
-            <button type="button" class="hover:text-indigo-900 dark:hover:text-white rounded-full p-0.5 transition-colors focus:outline-none" onclick="removeInterest(${i.id})">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-        `;
-        chipsContainer.insertBefore(chip, chipsContainer.firstElementChild);
-    });
-}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+      {{ field("full_name", "Full name", value=user_data.full_name, required=True, autocomplete="name") }}
+      {{ field("employee_id", "Employee ID", value=user_data.employee_id or '', required=True) }}
+      {{ field("email", "Email", type="email", value=user_data.email or '', required=True, autocomplete="email") }}
+      {{ field("phone_number", "Phone number", type="tel", value=user_data.phone_number or '', required=True, autocomplete="tel") }}
+      {{ select_field("department_id", "Department", master_depts, selected=user_data.department_id, placeholder="Select a department") }}
+      {{ select_field("position_id", "Position", master_positions, selected=user_data.position_id, placeholder="Select a position") }}
+      {{ select_field("location_id", "Location", master_locations, selected=user_data.location_id, placeholder="Select a location", required=True) }}
+      <div class="field md:col-span-2" id="interest-container" data-userid="{{ user_data.id }}">
+        <label class="field-label" for="interest-input">Interests</label>
+        <div class="input flex flex-wrap items-center gap-1.5 h-auto min-h-[2.5rem] py-1.5" id="interest-chips">
+          <span class="relative flex-1 min-w-[200px]">
+            <input id="interest-input" class="w-full bg-transparent border-0 outline-none text-sm p-0" placeholder="Type to search or add an interest" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="interest-listbox" autocomplete="off">
+            <div id="interest-listbox" class="popover popover-left w-full" role="listbox" aria-label="Interest suggestions" hidden></div>
+          </span>
+        </div>
+        <p class="field-hint">Saved as you add them. Use the arrow keys and Enter to pick a suggestion.</p>
+      </div>
+      <div class="md:col-span-2">{{ textarea_field("about_me", "About me", value=user_data.about_me or '', rows=3, placeholder="A short professional introduction") }}</div>
+    </div>
 
-async function addInterest(id, name) {
-    if(activeInterests.some(i => i.id === id)) return;
-    await fetch(`/api/users/${userId}/interests`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({interest_id: id})
-    });
-    input.value = '';
-    dropdown.classList.add('hidden');
-    loadInterests();
-}
-
-async function createNewInterest(name) {
-    const res = await fetch(`/api/interests`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({interest_name: name})
-    });
-    const data = await res.json();
-    if(data.id) {
-        addInterest(data.id, data.name);
-    }
-}
-
-async function removeInterest(id) {
-    await fetch(`/api/users/${userId}/interests/${id}`, { method: 'DELETE' });
-    loadInterests();
-}
-
-let timeout;
-input.addEventListener('input', (e) => {
-    clearTimeout(timeout);
-    const val = e.target.value.trim();
-    if(!val) {
-        dropdown.classList.add('hidden');
-        return;
-    }
-    
-    timeout = setTimeout(async () => {
-        const res = await fetch(`/api/interests?search=${val}`);
-        const suggestions = await res.json();
-        
-        dropdown.innerHTML = '';
-        let exactMatch = false;
-        
-        suggestions.forEach(s => {
-            if(s.name.toLowerCase() === val.toLowerCase()) exactMatch = true;
-            const item = document.createElement('div');
-            item.className = "px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2";
-            item.innerHTML = `<span class="text-slate-400">#</span> ${s.name}`;
-            item.onclick = () => addInterest(s.id, s.name);
-            dropdown.appendChild(item);
-        });
-        
-        if(!exactMatch) {
-            const createItem = document.createElement('div');
-            createItem.className = "px-4 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 cursor-pointer text-sm text-indigo-600 dark:text-indigo-400 font-medium border-t border-slate-100 dark:border-slate-700";
-            createItem.innerHTML = `+ Add "${val}"`;
-            createItem.onclick = () => createNewInterest(val);
-            dropdown.appendChild(createItem);
-        }
-        
-        dropdown.classList.remove('hidden');
-    }, 300);
-});
-
-// Close dropdown on click outside
-document.addEventListener('click', (e) => {
-    if(!chipsContainer.contains(e.target)) {
-        dropdown.classList.add('hidden');
-    }
-});
-
-loadInterests();
-</script>
+    <div class="flex flex-wrap justify-end gap-2 pt-4 border-t hairline">
+      {{ btn("Cancel", "secondary", href=url_for('home')) }}
+      {{ btn("Save changes", "primary", type="submit") }}
+    </div>
+  </form>
+</div>
 {% endblock %}
 
+{% block scripts %}
+<script>
+  (function () {
+    const container = document.getElementById('interest-container');
+    if (!container) return;
+    const userId = container.dataset.userid;
+    const input = document.getElementById('interest-input');
+    const listbox = document.getElementById('interest-listbox');
+    const chips = document.getElementById('interest-chips');
+    const esc = HKC.escapeHtml;
+    let active = [];
+    let options = [];
+    let highlighted = -1;
+
+    async function load() {
+      const res = await fetch(`/api/users/${userId}/interests`);
+      active = res.ok ? await res.json() : [];
+      render();
+    }
+    function render() {
+      chips.querySelectorAll('.interest-chip').forEach((el) => el.remove());
+      const anchor = chips.firstElementChild;
+      active.forEach((interest) => {
+        const chip = document.createElement('span');
+        chip.className = 'interest-chip badge badge-info';
+        chip.innerHTML = `${esc(interest.name)} <button type="button" class="-mr-1 inline-flex" aria-label="Remove ${esc(interest.name)}" data-remove-interest="${interest.id}"><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg></button>`;
+        chips.insertBefore(chip, anchor);
+      });
+    }
+    async function add(id) {
+      if (active.some((i) => i.id === id)) return close();
+      await fetch(`/api/users/${userId}/interests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interest_id: id }) });
+      input.value = ''; close(); load();
+    }
+    async function create(name) {
+      const res = await fetch('/api/interests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interest_name: name }) });
+      const data = await res.json();
+      if (data && data.id) add(data.id); else HKC.toast(data.error || 'Could not add that interest.', 'error');
+    }
+    async function remove(id) {
+      await fetch(`/api/users/${userId}/interests/${id}`, { method: 'DELETE' });
+      load();
+    }
+    function open() { listbox.hidden = false; requestAnimationFrame(() => listbox.classList.add('is-open')); input.setAttribute('aria-expanded', 'true'); }
+    function close() { listbox.classList.remove('is-open'); listbox.hidden = true; input.setAttribute('aria-expanded', 'false'); highlighted = -1; }
+    function highlight(index) {
+      const items = listbox.querySelectorAll('[role="option"]');
+      if (!items.length) return;
+      highlighted = (index + items.length) % items.length;
+      items.forEach((el, i) => { el.setAttribute('aria-selected', String(i === highlighted)); el.classList.toggle('bg-fg/10', i === highlighted); });
+      input.setAttribute('aria-activedescendant', items[highlighted].id);
+    }
+    let timer;
+    input.addEventListener('input', () => {
+      clearTimeout(timer);
+      const value = input.value.trim();
+      if (!value) return close();
+      timer = setTimeout(async () => {
+        const res = await fetch(`/api/interests?search=${encodeURIComponent(value)}`);
+        options = res.ok ? await res.json() : [];
+        const exact = options.some((s) => s.name.toLowerCase() === value.toLowerCase());
+        listbox.innerHTML = options.map((s, i) => `<button type="button" role="option" id="interest-opt-${i}" class="menu-item" data-add-interest="${s.id}"><span class="text-fg-3">#</span>${esc(s.name)}</button>`).join('')
+          + (exact ? '' : `<button type="button" role="option" id="interest-opt-new" class="menu-item text-accent" data-create-interest="${esc(value)}">+ Add “${esc(value)}”</button>`);
+        open(); highlight(0);
+      }, 250);
+    });
+    input.addEventListener('keydown', (event) => {
+      if (listbox.hidden) return;
+      if (event.key === 'ArrowDown') { event.preventDefault(); highlight(highlighted + 1); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); highlight(highlighted - 1); }
+      else if (event.key === 'Enter') { event.preventDefault(); listbox.querySelectorAll('[role="option"]')[highlighted]?.click(); }
+      else if (event.key === 'Escape') { close(); }
+    });
+    listbox.addEventListener('click', (event) => {
+      const addBtn = event.target.closest('[data-add-interest]');
+      const createBtn = event.target.closest('[data-create-interest]');
+      if (addBtn) add(Number(addBtn.dataset.addInterest));
+      else if (createBtn) create(createBtn.dataset.createInterest);
+    });
+    chips.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-remove-interest]');
+      if (btn) remove(Number(btn.dataset.removeInterest));
+    });
+    document.addEventListener('click', (event) => { if (!chips.contains(event.target)) close(); });
+    load();
+  })();
+</script>
+{% endblock %}
