@@ -1,0 +1,68 @@
+{# Navigation items are defined once here and rendered as the desktop bar, the "Manage" menu and the drawer. #}
+{% from "_macros.html" import icon %}
+
+{% macro nav_link(item, unread, class="nav-link") -%}
+{%- set href = item.href if item.href else url_for(item.endpoint) -%}
+{%- set current = request.endpoint == item.endpoint and not item.href -%}
+<a href="{{ href }}" class="{{ class }}"{% if current %} aria-current="page"{% endif %}>
+  {{ icon(item.icon) }}<span>{{ item.label }}</span>
+  {%- if item.badge == "unread" and unread %} <span class="count-badge" aria-label="{{ unread }} unread">{{ unread }}</span>{% endif -%}
+</a>
+{%- endmacro %}
+
+{% macro render_nav(role, unread=0, variant="drawer") -%}
+{%- set is_staff = role in ("admin", "moderator") -%}
+{%- set is_admin = role == "admin" -%}
+{%- set groups = [
+  {"label": "Learn", "items": [
+    {"label": "Dashboard", "endpoint": "home", "icon": "home"},
+    {"label": "My rewards", "endpoint": "rewards_dashboard", "icon": "gift"},
+  ]},
+  {"label": "Community", "items": [
+    {"label": "Community", "endpoint": "community_feed", "icon": "chat"},
+    {"label": "My posts", "endpoint": "my_posts", "icon": "document"},
+    {"label": "Notifications", "endpoint": "notifications_page", "icon": "bell", "badge": "unread"},
+    {"label": "Approval queue", "endpoint": "approval_queue", "icon": "clipboard-check", "staff": True},
+  ]},
+  {"label": "Learning & development", "staff": True, "items": [
+    {"label": "Courses", "endpoint": "courses_page", "icon": "book"},
+    {"label": "Groups", "endpoint": "groups_page", "icon": "users"},
+    {"label": "Admin workspace", "endpoint": "admin_panel", "icon": "academic-cap"},
+  ]},
+  {"label": "Management", "admin": True, "items": [
+    {"label": "Masters", "endpoint": "master_management", "icon": "cog"},
+    {"label": "Reward settings", "endpoint": "admin_rewards", "icon": "star"},
+    {"label": "View as a user", "endpoint": "view_as_page", "icon": "eye"},
+  ]},
+  {"label": "Developer tools", "staff": True, "items": [
+    {"label": "Reports & analytics", "endpoint": "admin_reports", "icon": "chart"},
+    {"label": "API docs", "endpoint": "api_docs_playground", "icon": "code", "admin": True},
+  ]},
+] -%}
+{%- if variant == "bar" -%}
+  {{ nav_link({"label": "Dashboard", "endpoint": "home", "icon": "home"}, unread) }}
+  {% if is_staff %}{{ nav_link({"label": "Courses", "endpoint": "courses_page", "icon": "book"}, unread) }}{% endif %}
+  {{ nav_link({"label": "Community", "endpoint": "community_feed", "icon": "chat"}, unread) }}
+  {{ nav_link({"label": "Rewards", "endpoint": "rewards_dashboard", "icon": "gift"}, unread) }}
+{%- elif variant == "manage" -%}
+  {% for group in groups if (group.staff and is_staff) or (group.admin and is_admin) or (not group.staff and not group.admin and group.label == "Community") %}
+    {% for item in group["items"] if (not item.get("staff") or is_staff) and (not item.get("admin") or is_admin) and item.endpoint not in ("home", "rewards_dashboard", "community_feed", "my_posts", "notifications_page", "courses_page") %}
+      <a href="{{ url_for(item.endpoint) }}" class="menu-item" role="menuitem"{% if request.endpoint == item.endpoint %} aria-current="page"{% endif %}>{{ icon(item.icon) }}<span>{{ item.label }}</span></a>
+    {% endfor %}
+  {% endfor %}
+{%- else -%}
+  <nav aria-label="Main" class="flex flex-col gap-5">
+  {% for group in groups if (not group.staff or is_staff) and (not group.admin or is_admin) %}
+    {% set visible = group["items"]|selectattr("endpoint")|list %}
+    <div>
+      <p class="eyebrow px-3 mb-1">{{ group.label }}</p>
+      <ul class="flex flex-col gap-0.5 list-none m-0 p-0">
+      {% for item in group["items"] if (not item.get("staff") or is_staff) and (not item.get("admin") or is_admin) %}
+        <li>{{ nav_link(item, unread, "menu-item") }}</li>
+      {% endfor %}
+      </ul>
+    </div>
+  {% endfor %}
+  </nav>
+{%- endif -%}
+{%- endmacro %}

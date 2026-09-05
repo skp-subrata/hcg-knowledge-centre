@@ -1,0 +1,18 @@
+{% from "_macros.html" import modal, icon %}
+{% if active_release %}
+{% call modal("release-sheet", "What's new in " ~ active_release.version_number, size="md", description=active_release.release_title) %}
+  {% set sections = [("New", active_release.features|fromjson, "sparkles", "success"), ("Improved", active_release.improvements|fromjson, "lightning", "info"), ("Fixed", active_release.bug_fixes|fromjson, "shield", "warning")] %}
+  <div class="flex flex-col gap-5">
+    {% for label, items, icon_name, tone in sections if items %}
+    <section>
+      <h3 class="flex items-center gap-2 mb-2"><span class="text-{{ tone }}">{{ icon(icon_name) }}</span>{{ label }}</h3>
+      <ul class="flex flex-col gap-1.5 pl-6 m-0 text-sm text-fg-2 list-disc">
+        {% for item in items %}<li>{{ item }}</li>{% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+    {% if active_release.release_date %}<p class="caption">Released {{ active_release.release_date }}</p>{% endif %}
+  </div>
+  <div class="sheet-footer -mx-6 -mb-5 mt-5"><button type="button" class="btn btn-primary" data-dialog-close>Got it</button></div>
+{% endcall %}
+{% endif %}

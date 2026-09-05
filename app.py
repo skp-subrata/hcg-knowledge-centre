@@ -990,7 +990,7 @@ def create_app():
                     profile_picture=user["profile_picture"] if "profile_picture" in user.keys() else ""
                 )
 				return redirect(url_for("home"))
-			flash("Invalid username or password.")
+			flash("Invalid username or password.", "error")
 		with get_db() as connection:
 			user_id = session.get("user_id", 0)
 			courses = connection.execute("""
@@ -1087,7 +1087,7 @@ def create_app():
 			group_type = request.form.get("group_type", "").strip()
 			status = request.form.get("status", "active").strip() or "active"
 			if not name:
-				flash("Group name is required.")
+				flash("Group name is required.", "error")
 				return redirect(safe_referrer(url_for("groups_page")))
 			with get_db() as connection:
 				cursor = connection.execute(
@@ -1103,7 +1103,7 @@ def create_app():
 						"INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) SELECT ?, u.id, COALESCE(u.employee_id, ''), COALESCE(u.email, ''), COALESCE(u.department, ''), COALESCE(u.location, ''), CASE WHEN COALESCE(u.is_active, 1) = 1 THEN 'active' ELSE 'inactive' END FROM users u WHERE u.id = ?",
 						(group_id, user_id)
 				)
-			flash("Group created successfully.")
+			flash("Group created successfully.", "success")
 			return redirect(safe_referrer(url_for("groups_page")))
 		with get_db() as connection:
 			if session.get("role") == "admin":
@@ -1150,12 +1150,12 @@ def create_app():
 		with get_db() as connection:
 			group = connection.execute("SELECT g.*, u.full_name AS creator_name FROM groups g JOIN users u ON u.id = g.created_by WHERE g.id = ?", (group_id,)).fetchone()
 			if not group:
-				flash("Group not found.")
+				flash("Group not found.", "error")
 				return redirect(safe_referrer(url_for("groups_page")))
 			if session.get("role") != "admin" and not connection.execute(
 				"SELECT 1 FROM group_moderators WHERE group_id = ? AND user_id = ? AND status = 'Active'", (group_id, session.get("user_id"))
 			).fetchone():
-				flash("You can only view groups you moderate.")
+				flash("You can only view groups you moderate.", "error")
 				return redirect(safe_referrer(url_for("groups_page")))
 			members = connection.execute("""
 				SELECT gm.*, u.full_name, u.username, u.role, u.email, u.department, u.location, COALESCE(u.is_active, 1) AS is_active
@@ -1200,9 +1200,9 @@ def create_app():
 			with get_db() as connection:
 				try:
 					connection.execute("INSERT INTO group_moderators (group_id, user_id) VALUES (?, ?)", (group_id, int(user_id)))
-					flash("Moderator added to group.")
+					flash("Moderator added to group.", "success")
 				except Exception:
-					flash("Could not add moderator.")
+					flash("Could not add moderator.", "error")
 		return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 
 	@app.post("/groups/<int:group_id>/moderators/<int:user_id>/remove")
@@ -1211,7 +1211,7 @@ def create_app():
 		"""Remove a moderator from the group."""
 		with get_db() as connection:
 			connection.execute("DELETE FROM group_moderators WHERE group_id = ? AND user_id = ?", (group_id, user_id))
-			flash("Moderator removed.")
+			flash("Moderator removed.", "success")
 		return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 
 	@app.post("/groups/<int:group_id>/moderators/<int:user_id>/toggle")
@@ -1223,7 +1223,7 @@ def create_app():
 			if mod:
 				new_status = 'Inactive' if mod['status'].lower() == 'active' else 'Active'
 				connection.execute("UPDATE group_moderators SET status = ? WHERE group_id = ? AND user_id = ?", (new_status, group_id, user_id))
-				flash(f"Moderator status updated to {new_status}.")
+				flash(f"Moderator status updated to {new_status}.", "success")
 		return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 
 	@app.post("/groups/<int:group_id>/members")
@@ -1235,7 +1235,7 @@ def create_app():
 		with get_db() as connection:
 			group = connection.execute("SELECT id FROM groups WHERE id = ?", (group_id,)).fetchone()
 			if not group:
-				flash("Group not found.")
+				flash("Group not found.", "error")
 				return redirect(safe_referrer(url_for("groups_page")))
 			for raw_user_id in request.form.getlist("selected_users"):
 				user_id = int(raw_user_id)
@@ -1243,7 +1243,7 @@ def create_app():
 					"INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) SELECT ?, u.id, COALESCE(u.employee_id, ''), COALESCE(u.email, ''), COALESCE(u.department, ''), COALESCE(u.location, ''), CASE WHEN COALESCE(u.is_active, 1) = 1 THEN 'active' ELSE 'inactive' END FROM users u WHERE u.id = ?",
 					(group_id, user_id)
 				)
-		flash("Selected users added to the group.")
+		flash("Selected users added to the group.", "success")
 		return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 
 	@app.post("/groups/<int:group_id>/remove-member")
@@ -1254,7 +1254,7 @@ def create_app():
 		if user_id:
 			with get_db() as connection:
 				connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, int(user_id)))
-		flash("User removed from group. Existing course access remains unchanged.")
+		flash("User removed from group. Existing course access remains unchanged.", "success")
 		return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 
 	@app.post("/groups/<int:group_id>/assign-course")
@@ -1263,17 +1263,17 @@ def create_app():
 		"""Assign a course to all members of a group with duplicate checks only on user/course access."""
 		course_id = request.form.get("course_id")
 		if not course_id:
-			flash("Please choose a course to assign.")
+			flash("Please choose a course to assign.", "error")
 			return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 		with get_db() as connection:
 			group = connection.execute("SELECT g.*, u.full_name AS creator_name FROM groups g JOIN users u ON u.id = g.created_by WHERE g.id = ?", (group_id,)).fetchone()
 			course = connection.execute("SELECT * FROM courses WHERE id = ?", (int(course_id),)).fetchone()
 			if not group or not course:
-				flash("Group or course not found.")
+				flash("Group or course not found.", "error")
 				return redirect(safe_referrer(url_for("groups_page")))
 			existing = connection.execute("SELECT * FROM group_course_assignments WHERE group_id = ? AND course_id = ?", (group_id, int(course_id))).fetchone()
 			if existing:
-				flash("This course is already assigned to the group.")
+				flash("This course is already assigned to the group.", "error")
 				return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 			connection.execute("INSERT INTO group_course_assignments (group_id, course_id, assigned_by, status) VALUES (?, ?, ?, 'active')", (group_id, int(course_id), session["user_id"]))
 			members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ? ORDER BY user_id", (group_id,)).fetchall()
@@ -1287,7 +1287,7 @@ def create_app():
 					create_group_assignment_history(connection, int(course_id), course["name"], user_id, user["full_name"], 'Group', group_id, group["name"], session["user_id"], session["user"], 'new', 'assigned')
 				else:
 					create_group_assignment_history(connection, int(course_id), course["name"], user_id, user["full_name"], 'Group', group_id, group["name"], session["user_id"], session["user"], 'Existing Access â€” No Action Taken', 'duplicate')
-		flash("Course assigned to the group. Existing access was preserved for users who already had the course.")
+		flash("Course assigned to the group. Existing access was preserved for users who already had the course.", "error")
 		return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 
 	@app.post("/groups/upload-members")
@@ -1297,10 +1297,10 @@ def create_app():
 		group_id = request.form.get("group_id")
 		file = request.files.get("members_file")
 		if not group_id or not file or not file.filename:
-			flash("Please select a group and a valid CSV upload.")
+			flash("Please select a group and a valid CSV upload.", "error")
 			return redirect(safe_referrer(url_for("groups_page")))
 		if not file.filename.lower().endswith(".csv"):
-			flash("Please upload a CSV file.")
+			flash("Please upload a CSV file.", "error")
 			return redirect(safe_referrer(url_for("groups_page")))
 		with get_db() as connection:
 			reader = csv.DictReader(TextIOWrapper(file.stream, encoding="utf-8-sig"))
@@ -1331,7 +1331,7 @@ def create_app():
 					continue
 				connection.execute("INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, 'active')", (int(group_id), user["id"], user["employee_id"], user["email"], user["department"], user["location"]))
 				added += 1
-		flash(f"Bulk upload completed: {added} added, {duplicates} duplicates, {invalid} invalid rows.")
+		flash(f"Bulk upload completed: {added} added, {duplicates} duplicates, {invalid} invalid rows.", "error")
 		return redirect(safe_referrer(url_for("group_detail", group_id=int(group_id))))
 
 	@app.get("/groups/template")
@@ -1452,15 +1452,15 @@ def create_app():
 				interests = request.form.getlist("interests")
 				
 				if not full_name or not username or len(password) < 6 or role not in ROLES or not employee_id or not email or not phone_number or not location_id:
-					flash("Enter all mandatory fields (employee ID, email, phone, location) and use a password of at least 6 chars.")
+					flash("Enter all mandatory fields (employee ID, email, phone, location) and use a password of at least 6 chars.", "error")
 				else:
 					try:
 						with get_db() as connection:
 							dup = connection.execute("SELECT employee_id, email, username FROM users WHERE username = ? OR employee_id = ? OR email = ?", (username, employee_id, email)).fetchone()
 							if dup:
-								if dup["employee_id"] == employee_id: flash("Employee ID already exists.")
-								elif dup["email"] == email: flash("Email already exists.")
-								else: flash("Username already exists.")
+								if dup["employee_id"] == employee_id: flash("Employee ID already exists.", "error")
+								elif dup["email"] == email: flash("Email already exists.", "error")
+								else: flash("Username already exists.", "error")
 							else:
 								cursor = connection.execute(
 									"INSERT INTO users (full_name, username, password_hash, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
@@ -1471,9 +1471,9 @@ def create_app():
 									if str(interest_id).isdigit():
 										connection.execute("INSERT OR IGNORE INTO user_interest (user_id, interest_id) VALUES (?, ?)", (new_user_id, int(interest_id)))
 
-								flash("User added successfully.")
+								flash("User added successfully.", "success")
 					except sqlite3.IntegrityError:
-						flash("Database integrity error occurred.")
+						flash("Database integrity error occurred.", "error")
 			elif action == "update_user" and session.get("role") == "admin":
 				user_id = request.form.get("record_id")
 				is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -1541,7 +1541,7 @@ def create_app():
 											connection.execute("INSERT OR IGNORE INTO user_interest (user_id, interest_id) VALUES (?, ?)", (user_id, int(interest_id)))
 								if is_ajax:
 									return jsonify({"success": True, "message": "User updated successfully."})
-								flash("User updated successfully.")
+								flash("User updated successfully.", "success")
 			elif action == "add_course":
 				name = request.form.get("course_name", "").strip()
 				description = request.form.get("description", "").strip()
@@ -1561,7 +1561,7 @@ def create_app():
 							(name, description, category, content_type, content_url, session["user_id"]),
 						)
 						connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)", (session["user_id"], cursor.lastrowid))
-					flash("Course created successfully.")
+					flash("Course created successfully.", "success")
 			elif action == "update_course":
 				with get_db() as connection:
 					if course_is_manageable(connection, request.form["record_id"], session["user_id"], session["role"]):
@@ -1569,11 +1569,11 @@ def create_app():
 							"UPDATE courses SET name = ?, description = ?, category = ?, status = ? WHERE id = ?",
 							(request.form["name"].strip(), request.form.get("description", "").strip(), request.form.get("category", "General").strip(), request.form.get("status", "published"), request.form["record_id"]),
 						)
-						flash("Course updated successfully.")
+						flash("Course updated successfully.", "success")
 			elif action == "add_bank":
 				with get_db() as connection:
 					connection.execute("INSERT INTO question_banks (name, category, created_by) VALUES (?, ?, ?)", (request.form["bank_name"].strip(), request.form.get("category", "General").strip(), session["user_id"]))
-				flash("Question bank created successfully.")
+				flash("Question bank created successfully.", "success")
 			elif action == "add_question":
 				with get_db() as connection:
 					assessment = connection.execute("SELECT course_id, title FROM assessments WHERE id = ?", (request.form["assessment_id"],)).fetchone()
@@ -1585,23 +1585,23 @@ def create_app():
 						explanation = request.form.get("explanation", "").strip() or None
 						correct_option = request.form.get("correct_option", "").strip().lower()
 						if correct_option not in ("a", "b", "c", "d"):
-							flash("The correct option must be A, B, C or D.")
+							flash("The correct option must be A, B, C or D.", "error")
 							return redirect(safe_referrer(url_for("admin_panel")))
 						question_id = connection.execute(
 							"INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, difficulty, created_by, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 							(bank[0], request.form["question_text"].strip(), request.form["option_a"].strip(), request.form["option_b"].strip(), request.form["option_c"].strip(), request.form["option_d"].strip(), correct_option, int_or(request.form.get("marks"), 1), request.form.get("difficulty", "medium"), session["user_id"], explanation),
 						).lastrowid
 						connection.execute("INSERT INTO assessment_questions (assessment_id, question_id) VALUES (?, ?)", (request.form["assessment_id"], question_id))
-						flash("Question added and linked to assessment successfully.")
+						flash("Question added and linked to assessment successfully.", "success")
 					else:
-						flash("You can only manage courses you created.")
+						flash("You can only manage courses you created.", "error")
 			elif action == "add_assessment":
 				with get_db() as connection:
 					if course_is_manageable(connection, request.form["course_id"], session["user_id"], session["role"]):
 						connection.execute("INSERT INTO assessments (course_id, type, title, pass_percentage, max_attempts) VALUES (?, ?, ?, ?, ?)", (request.form["course_id"], request.form["assessment_type"], request.form["assessment_title"].strip(), int_or(request.form.get("pass_percentage"), 60), int_or(request.form.get("max_attempts"), 1)))
-						flash("Assessment created successfully.")
+						flash("Assessment created successfully.", "success")
 					else:
-						flash("You can only manage courses you created.")
+						flash("You can only manage courses you created.", "error")
 			elif action == "import_questions":
 				file_obj = request.files.get("question_file")
 				if not file_obj or not file_obj.filename.lower().endswith((".xlsx", ".csv")):
@@ -1609,19 +1609,19 @@ def create_app():
 				else:
 					try:
 						created, rejected = import_questions(file_obj, session["user_id"], session["role"])
-						flash(f"Imported {created} questions; rejected {rejected} rows.")
+						flash(f"Imported {created} questions; rejected {rejected} rows.", "success")
 					except (ValueError, KeyError, TypeError):
-						flash("The workbook format is invalid. Download and use the template.")
+						flash("The workbook format is invalid. Download and use the template.", "error")
 			elif action == "update_assessment":
 				with get_db() as connection:
 					course = connection.execute("SELECT course_id FROM assessments WHERE id = ?", (request.form["record_id"],)).fetchone()
 					if course and course_is_manageable(connection, course["course_id"], session["user_id"], session["role"]):
 						connection.execute("UPDATE assessments SET title = ?, type = ?, pass_percentage = ?, max_attempts = ? WHERE id = ?", (request.form["title"].strip(), request.form["type"], int_or(request.form.get("pass_percentage"), 60), int_or(request.form.get("max_attempts"), 1), request.form["record_id"]))
-						flash("Assessment updated successfully.")
+						flash("Assessment updated successfully.", "success")
 			elif action == "generate_api_creds" and session.get("role") == "admin":
 				target_user_id = request.form.get("target_user_id", type=int)
 				if target_user_id is None:
-					flash("Select a user.")
+					flash("Select a user.", "error")
 					return redirect(safe_referrer(url_for("admin_panel")))
 				import os
 				api_key = "ak_" + os.urandom(16).hex()
@@ -1632,15 +1632,15 @@ def create_app():
 						"INSERT INTO api_credentials (user_id, api_key, api_secret, status) VALUES (?, ?, ?, 'active')",
 						(target_user_id, api_key, api_secret)
 					)
-				flash("API credentials generated successfully.")
+				flash("API credentials generated successfully.", "success")
 			elif action == "revoke_api_creds" and session.get("role") == "admin":
 				target_user_id = request.form.get("target_user_id", type=int)
 				if target_user_id is None:
-					flash("Select a user.")
+					flash("Select a user.", "error")
 					return redirect(safe_referrer(url_for("admin_panel")))
 				with get_db() as connection:
 					connection.execute("UPDATE api_credentials SET status = 'inactive' WHERE user_id = ?", (target_user_id,))
-				flash("API credentials revoked successfully.")
+				flash("API credentials revoked successfully.", "success")
 			elif action == "assign_course":
 				try:
 					with get_db() as connection:
@@ -1648,19 +1648,19 @@ def create_app():
 						course_id = int(request.form["course_id"])
 						course_row = connection.execute("SELECT name, created_by FROM courses WHERE id = ?", (course_id,)).fetchone()
 						if course_row is None:
-							flash("Select a valid course.")
+							flash("Select a valid course.", "error")
 							return redirect(safe_referrer(url_for("admin_panel")))
 						course_name = course_row["name"]
 						if assignment_type == "group":
 							group_id = int(request.form["group_id"])
 							group = connection.execute("SELECT * FROM groups WHERE id = ?", (group_id,)).fetchone()
 							if not group:
-								flash("Select a valid group.")
+								flash("Select a valid group.", "error")
 								return redirect(safe_referrer(url_for("admin_panel")))
 							if session.get("role") != "admin":
 								is_mod = connection.execute("SELECT 1 FROM group_moderators WHERE group_id = ? AND user_id = ? AND status = 'Active'", (group_id, session["user_id"])).fetchone()
 								if not is_mod:
-									flash("You can only assign courses to groups you moderate.")
+									flash("You can only assign courses to groups you moderate.", "error")
 									return redirect(safe_referrer(url_for("admin_panel")))
 							members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ? ORDER BY user_id", (group_id,)).fetchall()
 							for member in members:
@@ -1689,7 +1689,7 @@ def create_app():
 						else:
 							user_id = int(request.form["student_id"])
 							if user_id == course_row["created_by"]:
-								flash("Cannot assign a course to its owner.")
+								flash("Cannot assign a course to its owner.", "error")
 								return redirect(safe_referrer(url_for("admin_panel")))
 							user = connection.execute("SELECT full_name FROM users WHERE id = ?", (user_id,)).fetchone()
 							if user and not user_has_course_access(connection, user_id, course_id):
@@ -1710,9 +1710,9 @@ def create_app():
 										"INSERT INTO assignment_history (course_id, course_name, user_id, user_name, assignment_source, group_id, group_name, assigned_by, assigned_by_name, assignment_status, duplicate_check_result) VALUES (?, ?, ?, ?, 'Individual', NULL, NULL, ?, ?, 'duplicate', 'Existing Access â€” No Action Taken')",
 										(course_id, course_name, user_id, user["full_name"], session["user_id"], session["user"]),
 									)
-					flash("Course assignment processed. Existing course access was preserved when present.")
+					flash("Course assignment processed. Existing course access was preserved when present.", "success")
 				except (sqlite3.IntegrityError, KeyError, ValueError):
-					flash("That course assignment could not be completed.")
+					flash("That course assignment could not be completed.", "error")
 
 		with get_db() as connection:
 			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interest ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
@@ -1739,14 +1739,14 @@ def create_app():
 		if not session.get("user_id"):
 			return redirect(url_for("home"))
 		if session.get("role") == "admin":
-			flash("Admins cannot take assessments.")
+			flash("Admins cannot take assessments.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		with get_db() as connection:
 			course_id_row = connection.execute("SELECT course_id FROM assessments WHERE id = ?", (assessment_id,)).fetchone()
 			if course_id_row:
 				c_row = connection.execute("SELECT created_by FROM courses WHERE id = ?", (course_id_row["course_id"],)).fetchone()
 				if c_row and c_row["created_by"] == session["user_id"]:
-					flash("You cannot take an assessment for a course you created.")
+					flash("You cannot take an assessment for a course you created.", "error")
 					return redirect(safe_referrer(url_for("course_detail", course_id=course_id_row["course_id"])))
 
 			assessment_row = connection.execute(
@@ -1765,10 +1765,10 @@ def create_app():
 			).fetchone() is not None
 			certification = get_user_course_record(connection, session["user_id"], assessment_row["course_id"])
 			if not allowed:
-				flash("Complete the course before starting the assessment.")
+				flash("Complete the course before starting the assessment.", "error")
 				return redirect(safe_referrer(url_for("course_detail", course_id=assessment_row["course_id"])))
 			if certification and certification["certification_status"] == "CERTIFIED":
-				flash("This course is already certified. You can review the material and view your certificate, but you cannot retake the assessment.")
+				flash("This course is already certified. You can review the material and view your certificate, but you cannot retake the assessment.", "error")
 				return redirect(safe_referrer(url_for("course_detail", course_id=assessment_row["course_id"])))
 			if certification and certification["latest_assessment_status"] == "FEEDBACK_PENDING":
 				return redirect(safe_referrer(url_for("feedback_form", course_id=assessment_row["course_id"])))
@@ -1778,21 +1778,21 @@ def create_app():
 			).fetchone()
 			is_completed = assignment and get_course_status_label(assignment["status"]) in ("ASSESSMENT_PENDING", "IN_PROGRESS", "ASSESSMENT_FAILED")
 		if not is_completed:
-			flash("Complete the course before starting the assessment.")
+			flash("Complete the course before starting the assessment.", "error")
 			return redirect(safe_referrer(url_for("course_detail", course_id=assessment_row["course_id"])))
 		if request.method == "POST":
 			with get_db() as connection:
 				cert_row = get_user_course_record(connection, session["user_id"], assessment_row["course_id"])
 				if cert_row and cert_row["certification_status"] == "CERTIFIED":
-					flash("This course is already certified.")
+					flash("This course is already certified.", "error")
 					return redirect(safe_referrer(url_for("course_detail", course_id=assessment_row["course_id"])))
 				if not questions:
-					flash("This assessment has no questions yet.")
+					flash("This assessment has no questions yet.", "error")
 					return redirect(safe_referrer(url_for("course_detail", course_id=assessment_row["course_id"])))
 				attempt_count = connection.execute("SELECT COUNT(*) AS n FROM assessment_attempts WHERE assessment_id = ? AND student_id = ?", (assessment_id, session["user_id"])).fetchone()["n"]
 				max_attempts = int_or(assessment_row["max_attempts"], 1)
 				if attempt_count >= max_attempts:
-					flash(f"You have used all {max_attempts} attempt(s) for this assessment.")
+					flash(f"You have used all {max_attempts} attempt(s) for this assessment.", "error")
 					return redirect(safe_referrer(url_for("course_detail", course_id=assessment_row["course_id"])))
 				pass_mark = int_or(assessment_row["pass_percentage"], 60)
 				score = 0
@@ -1848,11 +1848,11 @@ def create_app():
 			).fetchone()
 			
 			if not attempt:
-				flash("Assessment attempt not found.")
+				flash("Assessment attempt not found.", "error")
 				return redirect(safe_referrer(url_for("home")))
 				
 			if attempt["student_id"] != session["user_id"]:
-				flash("Unauthorized access to this assessment attempt.")
+				flash("Unauthorized access to this assessment attempt.", "error")
 				return redirect(safe_referrer(url_for("home")))
 				
 			total_questions = connection.execute(
@@ -1906,11 +1906,11 @@ def create_app():
 			).fetchone()
 			
 			if not attempt:
-				flash("Assessment attempt not found.")
+				flash("Assessment attempt not found.", "error")
 				return redirect(safe_referrer(url_for("home")))
 				
 			if attempt["student_id"] != session["user_id"]:
-				flash("Unauthorized access to this assessment attempt.")
+				flash("Unauthorized access to this assessment attempt.", "error")
 				return redirect(safe_referrer(url_for("home")))
 				
 			if attempt["result"] != "pass":
@@ -2012,10 +2012,10 @@ def create_app():
 				ORDER BY cc.feedback_submitted_at DESC
 			""", (course_id,)).fetchall()
 		if not course:
-			flash("Course not found.")
+			flash("Course not found.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		if not allowed:
-			flash("You do not have permission to view this course.")
+			flash("You do not have permission to view this course.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		return render_template("course.html", course=course, progress=progress, certification=certification, assessments=assessments, stats=stats, feedbacks=feedbacks, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"), impersonating=session.get("impersonator_id"))
 
@@ -2023,19 +2023,19 @@ def create_app():
 	def complete_course(course_id):
 		"""Mark course as completed for the current student."""
 		if not session.get("user_id"):
-			flash("Please log in to continue.")
+			flash("Please log in to continue.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		if session.get("role") == "admin":
-			flash("Admins cannot complete courses. Please use 'View As Student' to simulate this action.")
+			flash("Admins cannot complete courses. Please use 'View As Student' to simulate this action.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		with get_db() as connection:
 			course = connection.execute("SELECT created_by FROM courses WHERE id = ?", (course_id,)).fetchone()
 			if course and course["created_by"] == session["user_id"]:
-				flash("You cannot take or participate in a course you created.")
+				flash("You cannot take or participate in a course you created.", "error")
 				return redirect(safe_referrer(url_for("course_detail", course_id=course_id)))
 			certification = get_user_course_record(connection, session["user_id"], course_id)
 			if certification and certification["certification_status"] == "CERTIFIED":
-				flash("Course already certified; you can review the material and view the certificate.")
+				flash("Course already certified; you can review the material and view the certificate.", "error")
 				return redirect(safe_referrer(url_for("course_detail", course_id=course_id)))
 			
 			assignment = connection.execute("SELECT status FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, session["user_id"])).fetchone()
@@ -2051,10 +2051,10 @@ def create_app():
 	def feedback_form(course_id):
 		"""Collect mandatory feedback and issue the certificate if valid."""
 		if not session.get("user_id"):
-			flash("Please log in to continue.")
+			flash("Please log in to continue.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		if session.get("role") == "admin":
-			flash("Admins cannot submit feedback. Please use 'View As Student' to simulate this action.")
+			flash("Admins cannot submit feedback. Please use 'View As Student' to simulate this action.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		with get_db() as connection:
 			course = connection.execute("""
@@ -2066,10 +2066,10 @@ def create_app():
 			""", (session["user_id"], course_id,)).fetchone()
 			certification = get_user_course_record(connection, session["user_id"], course_id)
 			if not course:
-				flash("Course not found.")
+				flash("Course not found.", "error")
 				return redirect(safe_referrer(url_for("home")))
 			if not course_is_visible(connection, course_id, session["user_id"]):
-				flash("You do not have permission to access this course.")
+				flash("You do not have permission to access this course.", "error")
 				return redirect(safe_referrer(url_for("home")))
 			if certification and certification["certification_status"] == "CERTIFIED":
 				return redirect(safe_referrer(url_for("certificate", course_id=course_id)))
@@ -2079,15 +2079,15 @@ def create_app():
 			rating = request.form.get("rating", "").strip()
 			comments = request.form.get("comments", "").strip()
 			if not rating or not rating.isdigit() or not 1 <= int(rating) <= 10:
-				flash("Overall rating is mandatory and must be between 1 and 10.")
+				flash("Overall rating is mandatory and must be between 1 and 10.", "error")
 				return redirect(safe_referrer(url_for("feedback_form", course_id=course_id)))
 			if not comments:
-				flash("Feedback comments are required before the certificate can be generated.")
+				flash("Feedback comments are required before the certificate can be generated.", "error")
 				return redirect(safe_referrer(url_for("feedback_form", course_id=course_id)))
 			with get_db() as connection:
 				certification = get_user_course_record(connection, session["user_id"], course_id)
 				if certification and certification["certification_status"] == "CERTIFIED":
-					flash("A certificate has already been issued for this course.")
+					flash("A certificate has already been issued for this course.", "error")
 					return redirect(safe_referrer(url_for("certificate", course_id=course_id)))
 				# The certificate is based on the latest passing attempt of a 'post' assessment (any type if the course has no
 				# post assessment), graded against that assessment's own pass mark.
@@ -2100,7 +2100,7 @@ def create_app():
 					(session["user_id"], course_id),
 				).fetchone()
 				if not passing:
-					flash("Certificate cannot be generated for a failed assessment.")
+					flash("Certificate cannot be generated for a failed assessment.", "error")
 					return redirect(safe_referrer(url_for("course_detail", course_id=course_id)))
 				final_score = float(passing["percentage"] or 0)
 				pass_mark = int_or(passing["pass_percentage"], 60)
@@ -2152,7 +2152,7 @@ def create_app():
 					description=f"Rated course - {course['name']}",
 					actor_id=session["user_id"]
 				)
-			flash("Feedback submitted successfully. Your certificate and badge have been created.")
+			flash("Feedback submitted successfully. Your certificate and badge have been created.", "success")
 			return redirect(safe_referrer(url_for("certificate", course_id=course_id)))
 		return render_template("feedback.html", course=course, user=session.get("user"), certification=certification)
 
@@ -2171,13 +2171,13 @@ def create_app():
 			""", (session["user_id"], course_id,)).fetchone()
 			certification = get_user_course_record(connection, session["user_id"], course_id)
 			if not course:
-				flash("Course not found.")
+				flash("Course not found.", "error")
 				return redirect(safe_referrer(url_for("home")))
 			if not course_is_visible(connection, course_id, session["user_id"]):
-				flash("You do not have permission to access this course.")
+				flash("You do not have permission to access this course.", "error")
 				return redirect(safe_referrer(url_for("home")))
 			if not certification or certification["certification_status"] != "CERTIFIED":
-				flash("Certificate is not available until feedback is submitted and the course is certified.")
+				flash("Certificate is not available until feedback is submitted and the course is certified.", "error")
 				return redirect(safe_referrer(url_for("course_detail", course_id=course_id)))
 		return render_template("certificate.html", course=course, certification=certification, user=session.get("user"))
 
@@ -2196,13 +2196,13 @@ def create_app():
 			""", (session["user_id"], course_id,)).fetchone()
 			certification = get_user_course_record(connection, session["user_id"], course_id)
 			if not course:
-				flash("Course not found.")
+				flash("Course not found.", "error")
 				return redirect(safe_referrer(url_for("home")))
 			if not course_is_visible(connection, course_id, session["user_id"]):
-				flash("You do not have permission to access this course.")
+				flash("You do not have permission to access this course.", "error")
 				return redirect(safe_referrer(url_for("home")))
 			if not certification or certification["certification_status"] != "CERTIFIED":
-				flash("Certificate is not available until feedback is submitted and the course is certified.")
+				flash("Certificate is not available until feedback is submitted and the course is certified.", "error")
 				return redirect(safe_referrer(url_for("course_detail", course_id=course_id)))
 		response = render_template("certificate.html", course=course, certification=certification, user=session.get("user"), download_mode=True)
 		return response
@@ -2225,7 +2225,7 @@ def create_app():
 				(user_id,)
 			).fetchone()
 			if not creds:
-				flash("No active API credentials found for this user.")
+				flash("No active API credentials found for this user.", "warning")
 				return redirect(safe_referrer(url_for("admin_panel")))
 				
 			import json
@@ -2251,41 +2251,41 @@ def create_app():
 		allowed = {"user": "users", "course": "courses", "assessment": "assessments"}
 		table = allowed.get(resource)
 		if not table or resource == "user" and record_id == session.get("user_id"):
-			flash("This record cannot be deleted.")
+			flash("This record cannot be deleted.", "error")
 			return redirect(safe_referrer(url_for("admin_panel")))
 
 		with get_db() as connection:
 			if resource == "course":
 				course = connection.execute("SELECT created_by, status FROM courses WHERE id = ?", (record_id,)).fetchone()
 				if not course:
-					flash("Course not found.")
+					flash("Course not found.", "error")
 					return redirect(safe_referrer(url_for("courses_page")))
 				if session.get("role") != "admin" and course["created_by"] != session.get("user_id"):
-					flash("You can only delete courses you created.")
+					flash("You can only delete courses you created.", "error")
 					return redirect(safe_referrer(url_for("courses_page")))
 				if (course["status"] or "").lower() != "draft":
-					flash(f"Cannot delete a {course['status']} course. You can only delete draft courses.")
+					flash(f"Cannot delete a {course['status']} course. You can only delete draft courses.", "error")
 					return redirect(safe_referrer(url_for("courses_page")))
 			elif resource == "user" and session.get("role") != "admin":
-				flash("You do not have permission to delete users.")
+				flash("You do not have permission to delete users.", "error")
 				return redirect(safe_referrer(url_for("admin_panel")))
 
 		try:
 			with get_db() as connection:
 				cursor = connection.execute(f"DELETE FROM {table} WHERE id = ?", (record_id,))
 				if cursor.rowcount:
-					flash(f"{resource.title()} deleted successfully.")
+					flash(f"{resource.title()} deleted successfully.", "success")
 				else:
-					flash("Record not found.")
+					flash("Record not found.", "error")
 		except sqlite3.IntegrityError:
-			flash("This record is still in use and cannot be deleted.")
+			flash("This record is still in use and cannot be deleted.", "error")
 		return redirect(safe_referrer(url_for("admin_panel")))
 
 	@app.get("/assessments/<int:assessment_id>/questions/download")
 	def download_assessment_questions(assessment_id):
 		"""Download assessment questions for admins or owning moderators only."""
 		if session.get("role") not in ("admin", "moderator"):
-			flash("You must be an admin or moderator to download assessment questions.")
+			flash("You must be an admin or moderator to download assessment questions.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		stream = question_csv(assessment_id, session["user_id"], session["role"])
 		if stream is None:
@@ -2379,7 +2379,7 @@ def create_app():
 				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)",
 				(session["user_id"], cursor.lastrowid)
 			)
-		flash(f"Course '{name}' created successfully.")
+		flash(f"Course '{name}' created successfully.", "success")
 		return redirect(safe_referrer(url_for("courses_page")))
 
 	@app.post("/courses/<int:course_id>/update")
@@ -2388,13 +2388,13 @@ def create_app():
 		"""Inline update a course from the course list."""
 		with get_db() as connection:
 			if not course_is_manageable(connection, course_id, session["user_id"], session["role"]):
-				flash("You can only edit courses you created.")
+				flash("You can only edit courses you created.", "error")
 				return redirect(safe_referrer(url_for("courses_page")))
 			
 			# Get existing course to check current content
 			existing = connection.execute("SELECT content_url, content_type FROM courses WHERE id = ?", (course_id,)).fetchone()
 			if not existing:
-				flash("Course not found.")
+				flash("Course not found.", "error")
 				return redirect(safe_referrer(url_for("courses_page")))
 
 			source_type = request.form.get("source_type", "url")
@@ -2428,7 +2428,7 @@ def create_app():
 					new_url = existing["content_url"] or "#"
 					content_type = existing["content_type"] or "URL"
 				else:
-					flash("Please provide a valid URL or file for publication.")
+					flash("Please provide a valid URL or file for publication.", "error")
 					return redirect(safe_referrer(url_for("courses_page")))
 
 			connection.execute(
@@ -2451,7 +2451,7 @@ def create_app():
 				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'update', 'course', ?)",
 				(session["user_id"], course_id)
 			)
-		flash("Course updated.")
+		flash("Course updated.", "success")
 		return redirect(safe_referrer(url_for("courses_page")))
 
 	@app.post("/courses/<int:course_id>/publish")
@@ -2460,12 +2460,12 @@ def create_app():
 		"""Quick publish a course."""
 		with get_db() as connection:
 			if not course_is_manageable(connection, course_id, session["user_id"], session["role"]):
-				flash("You can only publish courses you created.")
+				flash("You can only publish courses you created.", "error")
 				return redirect(safe_referrer(url_for("courses_page")))
 			
 			course = connection.execute("SELECT content_url, content_type FROM courses WHERE id = ?", (course_id,)).fetchone()
 			if not course or course["content_url"] == "#" or not course["content_url"]:
-				flash("Please upload educational material or add a URL before publishing this course.")
+				flash("Please upload educational material or add a URL before publishing this course.", "error")
 				return redirect(safe_referrer(url_for("courses_page")))
 
 			connection.execute("UPDATE courses SET status = 'published' WHERE id = ?", (course_id,))
@@ -2473,7 +2473,7 @@ def create_app():
 				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'publish', 'course', ?)",
 				(session["user_id"], course_id)
 			)
-		flash("Course published successfully!")
+		flash("Course published successfully!", "success")
 		return redirect(safe_referrer(url_for("courses_page")))
 
 
@@ -2501,7 +2501,7 @@ def create_app():
 		"""Restore the administrator after a view-as session."""
 		admin_id = session.get("impersonator_id")
 		if not admin_id:
-			flash("You are not currently impersonating another user.")
+			flash("You are not currently impersonating another user.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		with get_db() as connection:
 			admin = connection.execute("SELECT id, full_name, role FROM users WHERE id = ? AND role = 'admin'", (admin_id,)).fetchone()
@@ -2527,10 +2527,10 @@ def create_app():
 		if "user_id" not in session:
 			return redirect(url_for("home"))
 		if session.get("impersonator_id"):
-			flash("Exit the view-as session before switching roles.")
+			flash("Exit the view-as session before switching roles.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		if session.get("actual_role") not in ("admin", "moderator"):
-			flash("Only staff members can switch roles.")
+			flash("Only staff members can switch roles.", "error")
 			return redirect(safe_referrer(url_for("home")))
 		
 		# Toggle the active role
@@ -2566,20 +2566,20 @@ def create_app():
 			interests = request.form.getlist("interests")
 
 			if not full_name or not email or not phone_number or not employee_id or not location_id:
-				flash("Name, Employee ID, Email, Phone, and Location are mandatory.")
+				flash("Name, Employee ID, Email, Phone, and Location are mandatory.", "error")
 				return redirect(safe_referrer(url_for("profile")))
 				
 			with get_db() as connection:
 				dup = connection.execute("SELECT id, employee_id, email FROM users WHERE (employee_id = ? OR email = ?) AND id != ?", (employee_id, email, session["user_id"])).fetchone()
 				if dup:
-					if dup["employee_id"] == employee_id: flash("Employee ID already in use.")
-					else: flash("Email already in use.")
+					if dup["employee_id"] == employee_id: flash("Employee ID already in use.", "error")
+					else: flash("Email already in use.", "error")
 					return redirect(safe_referrer(url_for("profile")))
 					
 				if pic and pic.filename:
 					ext = os.path.splitext(pic.filename)[1].lower()
 					if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
-						flash("Profile picture must be a PNG, JPG, GIF or WebP image.")
+						flash("Profile picture must be a PNG, JPG, GIF or WebP image.", "error")
 						return redirect(safe_referrer(url_for("profile")))
 					pic_filename = uuid4().hex + ext
 					pic.save(os.path.join(UPLOAD_FOLDER, pic_filename))
@@ -2591,7 +2591,7 @@ def create_app():
 					
 			session["user"] = full_name
 			session["profile_picture"] = pic_filename
-			flash("Profile updated successfully.")
+			flash("Profile updated successfully.", "success")
 			return redirect(safe_referrer(url_for("profile")))
 			
 		with get_db() as connection:
@@ -2700,7 +2700,7 @@ def create_app():
 				for file in attachments:
 					if file and file.filename:
 						if not attachment_allowed(file.filename):
-							flash(f"Skipped attachment '{file.filename}': file type not allowed.")
+							flash(f"Skipped attachment '{file.filename}': file type not allowed.", "error")
 							continue
 						ext = os.path.splitext(file.filename)[1].lower()
 						file_name = secure_filename(file.filename)
@@ -2727,7 +2727,7 @@ def create_app():
 					for r in reviewers:
 						create_notification(connection, r["id"], f"New content '{title}' is waiting for approval.", "pending_review", url_for("approval_queue"))
 						
-			flash("Post created successfully!")
+			flash("Post created successfully!", "success")
 			return redirect(safe_referrer(url_for("my_posts")))
 			
 		return render_template("create_post.html", role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
@@ -2744,11 +2744,11 @@ def create_app():
 			post = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
 			
 		if not post:
-			flash("Post not found.")
+			flash("Post not found.", "error")
 			return redirect(safe_referrer(url_for("my_posts")))
 			
 		if post["created_by"] != user_id and role != "admin":
-			flash("Unauthorized to edit this post.")
+			flash("Unauthorized to edit this post.", "error")
 			return redirect(safe_referrer(url_for("my_posts")))
 			
 		with get_db() as connection:
@@ -2827,7 +2827,7 @@ def create_app():
 				for file in new_attachments:
 					if file and file.filename:
 						if not attachment_allowed(file.filename):
-							flash(f"Skipped attachment '{file.filename}': file type not allowed.")
+							flash(f"Skipped attachment '{file.filename}': file type not allowed.", "error")
 							continue
 						ext = os.path.splitext(file.filename)[1].lower()
 						file_name = secure_filename(file.filename)
@@ -2864,7 +2864,7 @@ def create_app():
 					for r in reviewers:
 						create_notification(connection, r["id"], f"Post '{title}' is waiting for approval.", "pending_review", url_for("approval_queue"))
 						
-			flash("Post updated successfully!")
+			flash("Post updated successfully!", "success")
 			return redirect(safe_referrer(url_for("my_posts")))
 			
 		return render_template("edit_post.html", post=post, attachments=attachments, approval_history=approval_history, role=role, user=session.get("user"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
@@ -2903,22 +2903,22 @@ def create_app():
 			post = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
 			
 		if not post:
-			flash("Post not found.")
+			flash("Post not found.", "error")
 			return redirect(safe_referrer(url_for("my_posts")))
 			
 		is_owner = post["created_by"] == user_id
 		if role == "basic user":
 			if not is_owner:
-				flash("You can only inactivate your own posts.")
+				flash("You can only inactivate your own posts.", "error")
 				return redirect(safe_referrer(url_for("my_posts")))
 		elif role != "admin" and not is_owner:
-			flash("Unauthorized to inactivate this post.")
+			flash("Unauthorized to inactivate this post.", "error")
 			return redirect(safe_referrer(url_for("my_posts")))
 			
 		with get_db() as connection:
 			connection.execute("UPDATE posts SET status = 'INACTIVE' WHERE id = ?", (post_id,))
 			
-		flash("Post inactivated and removed from public forum.")
+		flash("Post inactivated and removed from public forum.", "success")
 		return redirect(safe_referrer(url_for("my_posts")))
 
 	@app.get("/community/approval-queue")
@@ -2926,7 +2926,7 @@ def create_app():
 		if "user_id" not in session:
 			return redirect(url_for("home"))
 		if session.get("role") not in ("admin", "moderator"):
-			flash("You must be an admin or moderator to access the approval queue.")
+			flash("You must be an admin or moderator to access the approval queue.", "error")
 			return redirect(safe_referrer(url_for("home")))
 			
 		role = session.get("role")
@@ -2956,7 +2956,7 @@ def create_app():
 		if "user_id" not in session:
 			return redirect(url_for("home"))
 		if session.get("role") not in ("admin", "moderator"):
-			flash("You do not have permission to review community content.")
+			flash("You do not have permission to review community content.", "error")
 			return redirect(safe_referrer(url_for("home")))
 			
 		if request.method == "GET":
@@ -2970,14 +2970,14 @@ def create_app():
 			post = connection.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
 			
 		if not post:
-			flash("Post not found.")
+			flash("Post not found.", "error")
 			return redirect(safe_referrer(url_for("approval_queue")))
 			
 		if post["created_by"] == reviewer_id:
-			flash("You cannot review your own post.")
+			flash("You cannot review your own post.", "error")
 			return redirect(safe_referrer(url_for("approval_queue")))
 		if post["status"] not in ("PENDING_APPROVAL", "UNPUBLISHED"):
-			flash("This post is not awaiting review.")
+			flash("This post is not awaiting review.", "error")
 			return redirect(safe_referrer(url_for("approval_queue")))
 
 		old_status = post["status"]
@@ -3001,7 +3001,7 @@ def create_app():
 			notif_type = "change_request"
 			published_by = None
 		else:
-			flash("Invalid action.")
+			flash("Invalid action.", "error")
 			return redirect(safe_referrer(url_for("approval_queue")))
 			
 		with get_db() as connection:
@@ -3028,7 +3028,7 @@ def create_app():
 			
 			create_notification(connection, post["created_by"], notif_message, notif_type, url_for("post_detail", post_id=post_id))
 			
-		flash(f"Decision '{action}' submitted successfully!")
+		flash(f"Decision '{action}' submitted successfully!", "success")
 		return redirect(safe_referrer(url_for("approval_queue")))
 
 	@app.get("/community")
@@ -3104,13 +3104,13 @@ def create_app():
 			).fetchone()
 			
 		if not post:
-			flash("Post not found.")
+			flash("Post not found.", "error")
 			return redirect(safe_referrer(url_for("community_feed")))
 			
 		is_creator = post["created_by"] == user_id
 		is_reviewer = role in ("admin", "moderator")
 		if post["status"] != "PUBLISHED" and not (is_creator or is_reviewer):
-			flash("Unauthorized to view this post.")
+			flash("Unauthorized to view this post.", "error")
 			return redirect(safe_referrer(url_for("community_feed")))
 			
 		with get_db() as connection:
@@ -3144,26 +3144,26 @@ def create_app():
 			rating = 0
 			
 		if rating < 1 or rating > 5:
-			flash("Invalid rating. Must be between 1 and 5.")
+			flash("Invalid rating. Must be between 1 and 5.", "error")
 			return redirect(safe_referrer(url_for("post_detail", post_id=post_id)))
 			
 		with get_db() as connection:
 			post = connection.execute("SELECT created_by, status FROM posts WHERE id = ?", (post_id,)).fetchone()
 			if not post:
-				flash("Post not found.")
+				flash("Post not found.", "error")
 				return redirect(safe_referrer(url_for("community_feed")))
 				
 			if post["created_by"] == user_id:
-				flash("You cannot rate your own post.")
+				flash("You cannot rate your own post.", "error")
 				return redirect(safe_referrer(url_for("post_detail", post_id=post_id)))
 				
 			if post["status"] != "PUBLISHED":
-				flash("Only published posts can be rated.")
+				flash("Only published posts can be rated.", "success")
 				return redirect(safe_referrer(url_for("community_feed")))
 				
 			existing = connection.execute("SELECT id FROM post_ratings WHERE post_id = ? AND user_id = ?", (post_id, user_id)).fetchone()
 			if existing:
-				flash("You have already rated this post. Your rating cannot be changed.")
+				flash("You have already rated this post. Your rating cannot be changed.", "error")
 				return redirect(safe_referrer(url_for("post_detail", post_id=post_id)))
 				
 			connection.execute(
@@ -3205,7 +3205,7 @@ def create_app():
 				actor_id=user_id
 			)
 			
-		flash("Thank you for your rating!")
+		flash("Thank you for your rating!", "success")
 		return redirect(safe_referrer(url_for("post_detail", post_id=post_id)))
 
 	@app.post("/community/post/<int:post_id>/comment")
@@ -3217,18 +3217,18 @@ def create_app():
 		comment_text = request.form.get("comment_text", "").strip()
 		
 		if not comment_text:
-			flash("Comment cannot be empty.")
+			flash("Comment cannot be empty.", "error")
 			return redirect(safe_referrer(url_for("post_detail", post_id=post_id)))
 			
 		with get_db() as connection:
 			post = connection.execute("SELECT created_by, status FROM posts WHERE id = ?", (post_id,)).fetchone()
 			if not post:
-				flash("Post not found.")
+				flash("Post not found.", "error")
 				return redirect(safe_referrer(url_for("community_feed")))
 				
 			role = session.get("role")
 			if post["status"] != "PUBLISHED" and not (post["created_by"] == user_id or role in ("admin", "moderator")):
-				flash("Unauthorized to comment on this post.")
+				flash("Unauthorized to comment on this post.", "error")
 				return redirect(safe_referrer(url_for("community_feed")))
 				
 			connection.execute(
@@ -3243,7 +3243,7 @@ def create_app():
 			except Exception:
 											pass
 			
-		flash("Comment submitted successfully!")
+		flash("Comment submitted successfully!", "success")
 		return redirect(safe_referrer(url_for("post_detail", post_id=post_id)))
 
 	@app.get("/admin/reports/content-master/download")
@@ -3487,10 +3487,10 @@ def create_app():
 			multiplier = float(multiplier)
 			fixed_points = int(fixed_points)
 		except ValueError:
-			flash("Invalid multiplier or fixed points value.")
+			flash("Invalid multiplier or fixed points value.", "error")
 			return redirect(safe_referrer(url_for("admin_rewards")))
 		if status not in ("active", "inactive") or calc_type not in ("MULTIPLIER", "FIXED"):
-			flash("Invalid status or calculation type.")
+			flash("Invalid status or calculation type.", "error")
 			return redirect(safe_referrer(url_for("admin_rewards")))
 			
 		with get_db() as connection:
@@ -3505,7 +3505,7 @@ def create_app():
 				(session.get("user_id"), f"Updated reward source rules: {name}", "reward_sources")
 			)
 			
-		flash(f"Reward source '{name}' updated successfully.")
+		flash(f"Reward source '{name}' updated successfully.", "success")
 		return redirect(safe_referrer(url_for("admin_rewards")))
 
 	@app.post("/admin/rewards/settle")
@@ -3513,7 +3513,7 @@ def create_app():
 	def admin_settle_rewards():
 		user_id = request.form.get("user_id", type=int)
 		if user_id is None:
-			flash("Select a user.")
+			flash("Select a user.", "error")
 			return redirect(safe_referrer(url_for("admin_rewards")))
 		points = request.form.get("points", 0)
 		remarks = request.form.get("remarks", "Settle points").strip()
@@ -3521,17 +3521,17 @@ def create_app():
 		try:
 			points = int(points)
 		except ValueError:
-			flash("Points must be an integer.")
+			flash("Points must be an integer.", "error")
 			return redirect(safe_referrer(url_for("admin_rewards")))
 			
 		if points <= 0:
-			flash("Settlement points must be greater than zero.")
+			flash("Settlement points must be greater than zero.", "error")
 			return redirect(safe_referrer(url_for("admin_rewards")))
 			
 		with get_db() as connection:
 			wallet = connection.execute("SELECT * FROM user_wallets WHERE user_id = ?", (user_id,)).fetchone()
 			if not wallet or wallet["current_balance"] < points:
-				flash("Insufficient points balance for settlement.")
+				flash("Insufficient points balance for settlement.", "error")
 				return redirect(safe_referrer(url_for("admin_rewards")))
 				
 			balance_before = wallet["current_balance"]
@@ -3555,7 +3555,7 @@ def create_app():
 				(session.get("user_id"), f"Settled {points} points. Settlement ID: {settlement_id}", "user_wallets", user_id)
 			)
 			
-		flash(f"Successfully settled {points} points for user.")
+		flash(f"Successfully settled {points} points for user.", "success")
 		return redirect(safe_referrer(url_for("admin_rewards")))
 
 	@app.post("/admin/rewards/reset")
@@ -3567,18 +3567,18 @@ def create_app():
 			try:
 				user_id = int(user_id)
 			except (TypeError, ValueError):
-				flash("Select a user.")
+				flash("Select a user.", "error")
 				return redirect(safe_referrer(url_for("admin_rewards")))
 		
 		if confirm != "YES":
-			flash("Please confirm the warning checkboxes to execute a reset.")
+			flash("Please confirm the warning checkboxes to execute a reset.", "error")
 			return redirect(safe_referrer(url_for("admin_rewards")))
 			
 		with get_db() as connection:
 			if user_id == "all":
 				active_wallets = connection.execute("SELECT * FROM user_wallets WHERE current_balance > 0").fetchall()
 				if not active_wallets:
-					flash("No active wallets with positive balances to reset.")
+					flash("No active wallets with positive balances to reset.", "warning")
 					return redirect(safe_referrer(url_for("admin_rewards")))
 					
 				for wallet in active_wallets:
@@ -3602,12 +3602,12 @@ def create_app():
 					"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, ?, ?, 0)",
 					(session.get("user_id"), "Executed global rewards reset for all users", "user_wallets")
 				)
-				flash("Successfully executed a global reset of points for all users.")
+				flash("Successfully executed a global reset of points for all users.", "success")
 				
 			else:
 				wallet = connection.execute("SELECT * FROM user_wallets WHERE user_id = ?", (user_id,)).fetchone()
 				if not wallet or wallet["current_balance"] <= 0:
-					flash("User has no points balance to reset.")
+					flash("User has no points balance to reset.", "error")
 					return redirect(safe_referrer(url_for("admin_rewards")))
 					
 				balance = wallet["current_balance"]
@@ -3628,7 +3628,7 @@ def create_app():
 					"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, ?, ?, ?)",
 					(session.get("user_id"), f"Reset user reward wallet to 0 (Deducted {balance} points)", "user_wallets", user_id)
 				)
-				flash(f"Successfully reset reward points to 0 for user.")
+				flash(f"Successfully reset reward points to 0 for user.", "success")
 				
 		return redirect(safe_referrer(url_for("admin_rewards")))
 
@@ -3637,7 +3637,7 @@ def create_app():
 	def admin_adjust_rewards():
 		user_id = request.form.get("user_id", type=int)
 		if user_id is None:
-			flash("Select a user.")
+			flash("Select a user.", "error")
 			return redirect(safe_referrer(url_for("admin_rewards")))
 		points = request.form.get("points", 0)
 		remarks = request.form.get("remarks", "Manual adjustment").strip()
@@ -3645,11 +3645,11 @@ def create_app():
 		try:
 			points = int(points)
 		except ValueError:
-			flash("Adjustment points must be a non-zero integer.")
+			flash("Adjustment points must be a non-zero integer.", "error")
 			return redirect(safe_referrer(url_for("admin_rewards")))
 			
 		if points == 0:
-			flash("Adjustment points cannot be zero.")
+			flash("Adjustment points cannot be zero.", "error")
 			return redirect(safe_referrer(url_for("admin_rewards")))
 			
 		with get_db() as connection:
@@ -3668,7 +3668,7 @@ def create_app():
 				
 			balance_after = balance_before + points
 			if balance_after < 0:
-				flash("Adjustment cannot result in a negative wallet balance.")
+				flash("Adjustment cannot result in a negative wallet balance.", "error")
 				return redirect(safe_referrer(url_for("admin_rewards")))
 				
 			tx_ref = f"ADJUST-{os.urandom(3).hex().upper()}"
@@ -3691,7 +3691,7 @@ def create_app():
 				(session.get("user_id"), f"Manual adjustment: {points:+} points ({remarks})", "user_wallets", user_id)
 			)
 			
-		flash(f"Successfully adjusted user balance by {points:+} points.")
+		flash(f"Successfully adjusted user balance by {points:+} points.", "success")
 		return redirect(safe_referrer(url_for("admin_rewards")))
 
 	@app.get("/admin/reports/user-rewards/download")
@@ -4984,10 +4984,10 @@ def create_app():
 	                    desc = request.form.get("description", "").strip()
 	                    status = request.form.get("status", "Active")
 	                    if not name or not code:
-	                        flash("Department Name and Code are mandatory.")
+	                        flash("Department Name and Code are mandatory.", "error")
 	                    else:
 	                        conn.execute("INSERT INTO departments (department_name, department_code, description, status, created_by) VALUES (?, ?, ?, ?, ?)", (name, code, desc, status, user_id))
-	                        flash("Department created successfully.")
+	                        flash("Department created successfully.", "success")
 	                        
 	                elif action == "edit_department":
 	                    dept_id = request.form.get("record_id")
@@ -4996,16 +4996,16 @@ def create_app():
 	                    desc = request.form.get("description", "").strip()
 	                    status = request.form.get("status", "Active")
 	                    if not name or not code:
-	                        flash("Department Name and Code are mandatory.")
+	                        flash("Department Name and Code are mandatory.", "error")
 	                    else:
 	                        conn.execute("UPDATE departments SET department_name = ?, department_code = ?, description = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (name, code, desc, status, user_id, dept_id))
-	                        flash("Department updated successfully.")
+	                        flash("Department updated successfully.", "success")
 	                        
 	                elif action == "toggle_department":
 	                    dept_id = request.form.get("record_id")
 	                    new_status = request.form.get("status")
 	                    conn.execute("UPDATE departments SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (new_status, user_id, dept_id))
-	                    flash(f"Department marked as {new_status}.")
+	                    flash(f"Department marked as {new_status}.", "success")
 
 	                elif action == "add_location":
 	                    name = request.form.get("location_name", "").strip()
@@ -5017,10 +5017,10 @@ def create_app():
 	                    postal_code = request.form.get("postal_code", "").strip()
 	                    status = request.form.get("status", "Active")
 	                    if not name or not code or not city or not country:
-	                        flash("Location Name, Code, City, and Country are mandatory.")
+	                        flash("Location Name, Code, City, and Country are mandatory.", "error")
 	                    else:
 	                        conn.execute("INSERT INTO locations (location_name, location_code, city, country, address, state, postal_code, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (name, code, city, country, address, state, postal_code, status, user_id))
-	                        flash("Location created successfully.")
+	                        flash("Location created successfully.", "success")
 	                        
 	                elif action == "edit_location":
 	                    loc_id = request.form.get("record_id")
@@ -5033,27 +5033,27 @@ def create_app():
 	                    postal_code = request.form.get("postal_code", "").strip()
 	                    status = request.form.get("status", "Active")
 	                    if not name or not code or not city or not country:
-	                        flash("Location Name, Code, City, and Country are mandatory.")
+	                        flash("Location Name, Code, City, and Country are mandatory.", "error")
 	                    else:
 	                        conn.execute("UPDATE locations SET location_name = ?, location_code = ?, city = ?, country = ?, address = ?, state = ?, postal_code = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (name, code, city, country, address, state, postal_code, status, user_id, loc_id))
-	                        flash("Location updated successfully.")
+	                        flash("Location updated successfully.", "success")
 	                        
 	                elif action == "toggle_location":
 	                    loc_id = request.form.get("record_id")
 	                    new_status = request.form.get("status")
 	                    conn.execute("UPDATE locations SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (new_status, user_id, loc_id))
-	                    flash(f"Location marked as {new_status}.")
+	                    flash(f"Location marked as {new_status}.", "success")
 	                elif action == "add_interest":
 	                    name = request.form.get("interest_name", "").strip()
 	                    if name:
 	                        normalized = " ".join(name.lower().split())
 	                        try:
 	                            conn.execute("INSERT INTO interest_master (interest_name, normalized_name, created_by) VALUES (?, ?, ?)", (name, normalized, user_id))
-	                            flash("Interest added successfully.")
+	                            flash("Interest added successfully.", "success")
 	                        except sqlite3.IntegrityError:
-	                            flash("Interest already exists.")
+	                            flash("Interest already exists.", "error")
 	                    else:
-	                        flash("Interest name is required.")
+	                        flash("Interest name is required.", "error")
 	                elif action == "edit_interest":
 	                    i_id = request.form.get("interest_id")
 	                    name = request.form.get("interest_name", "").strip()
@@ -5061,19 +5061,19 @@ def create_app():
 	                        normalized = " ".join(name.lower().split())
 	                        try:
 	                            conn.execute("UPDATE interest_master SET interest_name = ?, normalized_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (name, normalized, i_id))
-	                            flash("Interest updated successfully.")
+	                            flash("Interest updated successfully.", "success")
 	                        except sqlite3.IntegrityError:
-	                            flash("An interest with that name already exists.")
+	                            flash("An interest with that name already exists.", "error")
 	                    else:
-	                        flash("Interest name is required.")
+	                        flash("Interest name is required.", "error")
 	                elif action == "toggle_interest_status":
 	                    i_id = request.form.get("interest_id")
 	                    new_status = request.form.get("status", "Active")
 	                    conn.execute("UPDATE interest_master SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_status, i_id))
-	                    flash(f"Interest marked as {new_status}.")
+	                    flash(f"Interest marked as {new_status}.", "success")
 	                    
 	            except sqlite3.IntegrityError:
-	                flash("Error: Name or Code must be unique.")
+	                flash("Error: Name or Code must be unique.", "error")
 	                
 	        return redirect(safe_referrer(url_for('master_management')))
 	        

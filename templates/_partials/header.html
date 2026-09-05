@@ -1,0 +1,86 @@
+{% from "_macros.html" import icon, avatar %}
+{% from "_partials/nav.html" import render_nav %}
+{% set eff_role = session.get('role') %}
+{% set real_role = session.get('actual_role') %}
+{% set signed_in = session.get('user_id') %}
+{% set impersonating = session.get('impersonator_id') %}
+{% set unread = unread_notifications_count or 0 %}
+<header class="material-toolbar" role="banner">
+  <div class="mx-auto w-full max-w-6xl px-4 sm:px-6 h-14 flex items-center gap-3">
+    {% if signed_in %}
+    <button type="button" class="btn btn-icon btn-ghost lg:hidden -ml-2" data-dialog-open="drawer" aria-controls="drawer" aria-expanded="false" aria-label="Open navigation">{{ icon("menu", "w-5 h-5") }}</button>
+    {% endif %}
+    <a href="{{ url_for('home') }}" class="flex items-center gap-2 no-underline shrink-0" aria-label="HCG Knowledge Centre home">
+      <span class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-fg text-ground text-xs font-bold tracking-tight">HK</span>
+      <span class="font-semibold tracking-tight hidden sm:inline">HCG Knowledge Centre</span>
+    </a>
+    {% if signed_in %}
+    <nav class="hidden lg:flex items-center gap-1 ml-4" aria-label="Primary">
+      {{ render_nav(eff_role, unread, "bar") }}
+      {% if eff_role in ("admin", "moderator") %}
+      <div class="relative">
+        <button type="button" class="nav-link" data-menu aria-controls="manage-menu" aria-haspopup="menu" aria-expanded="false">{{ icon("bars") }}<span>Manage</span>{{ icon("chevron-down", "w-3.5 h-3.5") }}</button>
+        <div id="manage-menu" class="popover popover-left" role="menu" aria-label="Manage" hidden>{{ render_nav(eff_role, unread, "manage") }}</div>
+      </div>
+      {% endif %}
+    </nav>
+    {% endif %}
+    <div class="ml-auto flex items-center gap-1 sm:gap-2">
+      {% if signed_in and real_role in ("admin", "moderator") and not impersonating %}
+      <a href="{{ url_for('switch_role') }}" class="chip hidden sm:inline-flex" title="Switch between the student view and your {{ real_role }} workspace">
+        {{ icon("switch", "w-3.5 h-3.5") }}<span>{% if eff_role == 'basic user' %}Student view{% else %}{{ real_role|title }} view{% endif %}</span>
+      </a>
+      {% endif %}
+      {% if signed_in and active_release %}
+      <button type="button" class="chip relative" data-dialog-open="release-sheet" data-release-version="{{ active_release.version_number }}" aria-label="What's new in version {{ active_release.version_number }}">
+        <span>v{{ active_release.version_number }}</span>
+        <span class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent" data-release-dot hidden></span>
+      </button>
+      {% endif %}
+      <button type="button" class="btn btn-icon btn-ghost" data-theme-toggle aria-pressed="false" aria-label="Switch theme">
+        <span class="dark:hidden">{{ icon("moon", "w-5 h-5") }}</span><span class="hidden dark:inline">{{ icon("sun", "w-5 h-5") }}</span>
+      </button>
+      {% if signed_in %}
+      <div class="relative">
+        <button type="button" id="notification-btn" class="btn btn-icon btn-ghost relative" data-menu aria-controls="notification-menu" aria-haspopup="true" aria-expanded="false" aria-label="Notifications{% if unread %}, {{ unread }} unread{% endif %}">
+          {{ icon("bell", "w-5 h-5") }}
+          <span id="notification-badge" class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-danger"{% if not unread %} hidden{% endif %}></span>
+        </button>
+        <div id="notification-menu" class="popover popover-right w-80" role="menu" aria-label="Notifications" hidden>
+          <div class="popover-header flex items-center justify-between">
+            <span class="font-semibold text-sm">Notifications</span>
+            <span id="notification-count-text" class="badge badge-info"{% if not unread %} hidden{% endif %}>{{ unread }} new</span>
+          </div>
+          <div id="notification-list" class="max-h-80 overflow-y-auto"></div>
+          <div class="menu-separator"></div>
+          <a href="{{ url_for('notifications_page') }}" class="menu-item" role="menuitem">{{ icon("inbox") }}<span>All notifications</span></a>
+        </div>
+      </div>
+      <div class="relative">
+        <button type="button" id="profile-btn" class="rounded-full" data-menu aria-controls="profile-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu">
+          {{ avatar(session.get('user'), src=(url_for('uploaded_file', filename=session.get('profile_picture')) if session.get('profile_picture') else None)) }}
+        </button>
+        <div id="profile-menu" class="popover popover-right w-64" role="menu" aria-label="Account" hidden>
+          <div class="popover-header">
+            <p class="font-semibold text-sm truncate">{{ session.get('user') }}</p>
+            <p class="caption">{{ eff_role|title }}{% if real_role and real_role != eff_role and not impersonating %} · {{ real_role|title }} account{% endif %}</p>
+          </div>
+          <div class="menu-separator"></div>
+          <a href="{{ url_for('profile') }}" class="menu-item" role="menuitem">{{ icon("user") }}<span>Edit profile</span></a>
+          {% if real_role in ("admin", "moderator") and not impersonating %}
+          <a href="{{ url_for('switch_role') }}" class="menu-item" role="menuitem">{{ icon("switch") }}<span>{% if eff_role == 'basic user' %}Switch to {{ real_role }} view{% else %}Switch to student view{% endif %}</span></a>
+          {% endif %}
+          {% if real_role == "admin" and not impersonating %}
+          <a href="{{ url_for('view_as_page') }}" class="menu-item" role="menuitem">{{ icon("eye") }}<span>View as another user</span></a>
+          {% endif %}
+          {% if impersonating %}
+          <a href="{{ url_for('exit_view') }}" class="menu-item" role="menuitem">{{ icon("logout") }}<span>Exit view-as</span></a>
+          {% endif %}
+          <div class="menu-separator"></div>
+          <a href="{{ url_for('logout') }}" class="menu-item is-danger" role="menuitem">{{ icon("logout") }}<span>Log out</span></a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</header>

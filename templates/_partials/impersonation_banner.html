@@ -1,0 +1,5 @@
+{% from "_macros.html" import icon %}
+<div class="banner banner-warning" role="status">
+  <span class="inline-flex items-center gap-2">{{ icon("eye") }}<span>Viewing as <strong>{{ session.get('user') }}</strong> ({{ session.get('role') }}). Actions you take are recorded against this user.</span></span>
+  <a href="{{ url_for('exit_view') }}" class="btn btn-secondary btn-sm shrink-0">Exit view-as</a>
+</div>

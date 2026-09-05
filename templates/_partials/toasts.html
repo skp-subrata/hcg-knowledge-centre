@@ -1,0 +1,15 @@
+{% from "_macros.html" import icon %}
+<div id="toast-region" class="toast-region" role="status" aria-live="polite">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      {% set kind = category if category in ("success", "error", "warning", "info") else "info" %}
+      <div class="toast" data-kind="{{ kind }}" data-timeout="{{ 8000 if kind == 'error' else 5000 }}"{% if kind == "error" %} role="alert"{% endif %}>
+        <span class="mt-0.5 {% if kind == 'success' %}text-success{% elif kind == 'error' %}text-danger{% elif kind == 'warning' %}text-warning{% else %}text-info{% endif %}">
+          {{ icon("check-circle" if kind == "success" else ("x-circle" if kind == "error" else ("warning" if kind == "warning" else "info"))) }}
+        </span>
+        <div class="toast-body">{{ message }}</div>
+        <button type="button" class="toast-close" aria-label="Dismiss">{{ icon("close", "w-3.5 h-3.5") }}</button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+</div>

@@ -1,0 +1,14 @@
+{% from "_macros.html" import icon %}
+{% from "_partials/nav.html" import render_nav %}
+<dialog id="drawer" class="drawer" aria-labelledby="drawer-title">
+  <div class="flex flex-col h-full">
+    <div class="flex items-center justify-between px-4 h-14 border-b hairline">
+      <span id="drawer-title" class="font-semibold tracking-tight">Navigation</span>
+      <button type="button" class="btn btn-icon btn-ghost btn-sm" data-dialog-close aria-label="Close navigation">{{ icon("close", "w-5 h-5") }}</button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-3">
+      {{ render_nav(session.get('role'), unread_notifications_count or 0, "drawer") }}
+    </div>
+    <div class="px-4 py-3 caption border-t hairline">HCG Knowledge Centre{% if active_release %} · v{{ active_release.version_number }}{% endif %}</div>
+  </div>
+</dialog>

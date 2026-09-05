@@ -1,46 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Staff Workspace | HCG Knowledge Centre
-
-
-<script>
-
-async function addMaster(type, el) {
-    let name = prompt("Enter new " + type.slice(0, -1) + " name:");
-    if (!name) return;
-    
-    // departments/positions/locations live under /api/v1; interests have their own endpoint
-    let url = type === 'interests' ? '/api/interests' : '/api/v1/' + type;
-    let payload = type === 'interests' ? {interest_name: name} : {name: name};
-    let res = await fetch(url, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-    });
-    let data = await res.json();
-    if (res.ok) {
-        // Find all selects matching this type and add the option
-        let classTarget = type === 'departments' ? '.dept-select' : (type === 'positions' ? '.pos-select' : '.int-select');
-        let selects = document.querySelectorAll(classTarget);
-        selects.forEach(select => {
-            let opt = document.createElement('option');
-            opt.value = data.id;
-            opt.textContent = data.name;
-            select.appendChild(opt);
-            // If it was the specific element clicked near, select it
-            if (el && el.parentElement && el.parentElement.nextElementSibling === select) {
-                if (select.multiple) { opt.selected = true; }
-                else { select.value = data.id; }
-            }
-        });
-        alert(data.message || (data.name + ' added.'));
-    } else {
-        alert(data.error);
-    }
-}
-</script>
-
-{% endblock %}
+{% block title %}Staff Workspace | HCG Knowledge Centre{% endblock %}
 
 {% block content %}
 <div class="mb-8">
@@ -1283,4 +1243,43 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+
+async function addMaster(type, el) {
+    let name = prompt("Enter new " + type.slice(0, -1) + " name:");
+    if (!name) return;
+    
+    // departments/positions/locations live under /api/v1; interests have their own endpoint
+    let url = type === 'interests' ? '/api/interests' : '/api/v1/' + type;
+    let payload = type === 'interests' ? {interest_name: name} : {name: name};
+    let res = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    let data = await res.json();
+    if (res.ok) {
+        // Find all selects matching this type and add the option
+        let classTarget = type === 'departments' ? '.dept-select' : (type === 'positions' ? '.pos-select' : '.int-select');
+        let selects = document.querySelectorAll(classTarget);
+        selects.forEach(select => {
+            let opt = document.createElement('option');
+            opt.value = data.id;
+            opt.textContent = data.name;
+            select.appendChild(opt);
+            // If it was the specific element clicked near, select it
+            if (el && el.parentElement && el.parentElement.nextElementSibling === select) {
+                if (select.multiple) { opt.selected = true; }
+                else { select.value = data.id; }
+            }
+        });
+        alert(data.message || (data.name + ' added.'));
+    } else {
+        alert(data.error);
+    }
+}
+</script>
 {% endblock %}
