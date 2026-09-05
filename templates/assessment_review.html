@@ -1,97 +1,45 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, badge, icon %}
 
-{% block title %}Assessment Review | HCG knowledge centre{% endblock %}
+{% block title %}Review your answers · HCG Knowledge Centre{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto glass-panel p-8 md:p-10">
-    <a href="{{ url_for('assessment_result', attempt_id=attempt.id) }}" class="text-slate-900 dark:text-slate-100 font-medium font-bold hover:underline flex items-center gap-2 mb-6">
-        &larr; Back to Result
-    </a>
-
-    <div class="mb-10 pb-6 border-b border-slate-200 dark:border-slate-800">
-        <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50 mb-2">Review Your Answers</h1>
-        <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">
-            {{ attempt.course_name }} <span class="mx-1.5">&middot;</span> {{ attempt.title }}
-        </p>
+<div class="max-w-3xl mx-auto">
+  <header class="page-header">
+    <div class="min-w-0">
+      <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li><a href="{{ url_for('home') }}">Dashboard</a></li><li><a href="{{ url_for('assessment_result', attempt_id=attempt.id) }}">Result</a></li><li><span aria-current="page">Review</span></li></ol></nav>
+      <h1>Review your answers</h1>
+      <p class="text-fg-2 mt-1">{{ attempt.course_name }} · {{ attempt.title }}</p>
     </div>
+  </header>
 
-    <!-- Scrollable Question List -->
-    <div class="space-y-8">
-        {% for q in questions_reviews %}
-        <section class="p-6 rounded-2xl border {% if q.is_correct %}border-green-200 bg-green-50/10 dark:border-green-900/30 dark:bg-green-950/5{% else %}border-red-200 bg-red-50/10 dark:border-red-900/30 dark:bg-red-950/5{% endif %}">
-            
-            <div class="flex items-start justify-between gap-4 mb-4">
-                <h3 class="font-bold text-base text-slate-900 dark:text-slate-100 flex gap-2">
-                    <span>Question {{ loop.index }}:</span>
-                    <span>{{ q.question_text }}</span>
-                </h3>
-                
-                <!-- Correct/Incorrect badge -->
-                <span class="shrink-0 px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 {% if q.is_correct %}bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300{% else %}bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300{% endif %}">
-                    {% if q.is_correct %}
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
-                    ✓ Correct
-                    {% else %}
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    ✗ Incorrect
-                    {% endif %}
-                </span>
-            </div>
+  <ol class="flex flex-col gap-4 m-0 p-0 list-none">
+    {% for q in questions_reviews %}
+    {% set options = {'a': q.option_a, 'b': q.option_b, 'c': q.option_c, 'd': q.option_d} %}
+    <li class="card">
+      <div class="flex items-start justify-between gap-4 mb-4">
+        <h3><span class="text-fg-2 mr-2">{{ loop.index }}.</span>{{ q.question_text }}</h3>
+        {{ badge("Correct" if q.is_correct else "Incorrect", "success" if q.is_correct else "danger") }}
+      </div>
+      <dl class="card-inset grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+        <div><dt class="caption mb-1">Your answer</dt><dd class="font-medium">{% if q.selected_option in options %}{{ options[q.selected_option] }}{% else %}<span class="text-fg-3 italic">None selected</span>{% endif %}</dd></div>
+        <div><dt class="caption mb-1">Correct answer</dt><dd class="font-semibold">{{ options.get(q.correct_option, '') }}</dd></div>
+        <div class="sm:col-span-2 flex justify-between border-t hairline pt-2"><dt class="caption">Marks</dt><dd class="font-medium tabular">{{ q.marks_awarded }} / {{ q.marks }}</dd></div>
+      </dl>
+      {% if q.explanation %}
+      <div class="mt-3 flex gap-2 text-sm"><span class="text-info mt-0.5">{{ icon("info") }}</span><div><p class="caption mb-0.5">Explanation</p><p class="text-fg-2">{{ q.explanation }}</p></div></div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
 
-            <!-- Answers details -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs mt-3 bg-white/40 dark:bg-black/10 p-4 rounded-xl">
-                <div>
-                    <span class="text-slate-400 font-bold block mb-1">Your Answer:</span>
-                    <span class="font-medium text-slate-800 dark:text-slate-200">
-                        {% if q.selected_option == 'a' %}{{ q.option_a }}
-                        {% elif q.selected_option == 'b' %}{{ q.option_b }}
-                        {% elif q.selected_option == 'c' %}{{ q.option_c }}
-                        {% elif q.selected_option == 'd' %}{{ q.option_d }}
-                        {% else %}<span class="text-slate-400 font-normal italic">None Selected</span>{% endif %}
-                    </span>
-                </div>
-                
-                <div>
-                    <span class="text-slate-400 font-bold block mb-1">Correct Answer:</span>
-                    <span class="font-bold text-slate-900 dark:text-slate-50">
-                        {% if q.correct_option == 'a' %}{{ q.option_a }}
-                        {% elif q.correct_option == 'b' %}{{ q.option_b }}
-                        {% elif q.correct_option == 'c' %}{{ q.option_c }}
-                        {% elif q.correct_option == 'd' %}{{ q.option_d }}{% endif %}
-                    </span>
-                </div>
-                
-                <div class="col-span-full border-t border-slate-200/50 dark:border-slate-800/50 pt-2 flex justify-between">
-                    <span class="text-slate-400 font-bold">Marks:</span>
-                    <span class="font-semibold text-slate-800 dark:text-slate-200">{{ q.marks_awarded }} / {{ q.marks }}</span>
-                </div>
-            </div>
-
-            <!-- Explanation section if available -->
-            {% if q.explanation %}
-            <div class="mt-4 p-4 rounded-xl bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100/50 dark:border-indigo-900/30 text-xs">
-                <span class="text-indigo-600 dark:text-indigo-400 font-bold block mb-1">Explanation:</span>
-                <p class="text-slate-600 dark:text-slate-300 leading-relaxed">{{ q.explanation }}</p>
-            </div>
-            {% endif %}
-        </section>
-        {% endfor %}
-    </div>
-
-    <!-- Actions block -->
-    <div class="mt-10 pt-8 border-t border-slate-200 dark:border-slate-800 flex flex-col md:flex-row justify-center items-center gap-4">
-        {% if attempt.result == 'pass' %}
-        <a href="{{ url_for('feedback_form', course_id=attempt.course_id) }}" class="btn-primary w-full md:w-auto px-8 py-3 rounded-full font-bold text-center shadow-lg">
-            Continue to Feedback
-        </a>
-        {% else %}
-        <a href="{{ url_for('course_detail', course_id=attempt.course_id) }}" class="btn-secondary w-full md:w-auto px-8 py-3 rounded-full font-bold text-center">
-            Go Through Course Again
-        </a>
-        <a href="{{ url_for('assessment', assessment_id=attempt.assessment_id) }}" class="btn-primary w-full md:w-auto px-8 py-3 rounded-full font-bold text-center shadow-lg">
-            Try Assessment Again
-        </a>
-        {% endif %}
-    </div>
+  <div class="mt-8 flex flex-wrap justify-end gap-2">
+    {% if attempt.result == 'pass' %}
+      {{ btn("Continue to feedback", "primary", href=url_for('feedback_form', course_id=attempt.course_id), icon_name="arrow-right") }}
+    {% else %}
+      {{ btn("Review the course", "secondary", href=url_for('course_detail', course_id=attempt.course_id)) }}
+      {{ btn("Try again", "primary", href=url_for('assessment', assessment_id=attempt.assessment_id), icon_name="refresh") }}
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

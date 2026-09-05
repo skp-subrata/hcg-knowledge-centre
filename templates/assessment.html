@@ -1,72 +1,55 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, icon, result_hero, empty_state, badge %}
 
-{% block title %}{{ assessment.title }} | HCG knowledge centre{% endblock %}
+{% block title %}{{ assessment.title }} · HCG Knowledge Centre{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto glass-panel p-8 md:p-10">
-    <a href="{{ url_for('home') }}" class="text-slate-900 dark:text-slate-100 font-medium font-bold hover:underline flex items-center gap-2 mb-6">
-        &larr; Dashboard
-    </a>
-    
-    <div class="mb-10 pb-8 border-b border-slate-200 dark:border-slate-800">
-        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-3">{{ assessment.title }}</h1>
-        <p class="text-slate-500 dark:text-slate-400 text-lg font-medium">
-            {{ assessment.course_name }} <span class="mx-2">&middot;</span> <span class="capitalize">{{ assessment.type }}</span> assessment
-        </p>
+<div class="max-w-3xl mx-auto">
+  <header class="page-header">
+    <div class="min-w-0">
+      <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li><a href="{{ url_for('home') }}">Dashboard</a></li><li><a href="{{ url_for('course_detail', course_id=assessment.course_id) }}">{{ assessment.course_name }}</a></li><li><span aria-current="page">Assessment</span></li></ol></nav>
+      <h1>{{ assessment.title }}</h1>
+      <p class="text-fg-2 mt-1">{{ (assessment.type or 'post')|title }} assessment{% if assessment.pass_percentage %} · pass mark {{ assessment.pass_percentage }}%{% endif %}{% if questions %} · {{ questions|length }} question{{ '' if questions|length == 1 else 's' }}{% endif %}</p>
     </div>
+  </header>
 
-    {% if result %}
-    <div class="text-center py-10">
-        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full mb-6 {% if result == 'pass' %}bg-green-100 text-green-600{% else %}bg-red-100 text-red-600{% endif %}">
-            {% if result == 'pass' %}
-            <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-            {% else %}
-            <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            {% endif %}
-        </div>
-        {% if result == 'pass' %}
-        <h2 class="text-3xl font-bold mb-3 text-green-600">Assessment Passed</h2>
-        <p class="text-lg text-slate-600 dark:text-slate-300 mb-6">Congratulations! You have successfully completed the course. We value your feedback. Please share your feedback on this course and submit it to collect your certificate.</p>
-        <div class="flex justify-center">
-            <a href="{{ url_for('feedback_form', course_id=assessment.course_id) }}" class="btn-primary px-6 py-3 rounded-full">Give Feedback &amp; Collect Certificate</a>
-        </div>
-        {% else %}
-        <h2 class="text-3xl font-bold mb-3 text-red-600">Assessment Not Passed</h2>
-        <p class="text-lg text-slate-600 dark:text-slate-300 mb-4">You have not achieved the required pass mark for this course. Please review the course material again and try the assessment for another chance.</p>
-        <p class="text-2xl font-bold text-slate-500 dark:text-slate-400 mb-6">{{ "%.0f"|format(percentage) }}%</p>
-        <div class="flex flex-col sm:flex-row justify-center gap-4">
-            <a href="{{ url_for('course_detail', course_id=assessment.course_id) }}" class="btn-secondary px-6 py-3 rounded-full">Go Through Course Again</a>
-            <a href="{{ url_for('assessment', assessment_id=assessment.id) }}" class="btn-primary px-6 py-3 rounded-full">Try Assessment Again</a>
-        </div>
-        {% endif %}
-    </div>
-    {% elif questions %}
-    <form method="post" class="space-y-10">
-        {% for q in questions %}
-        <section class="p-6 bg-white/40 dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <h3 class="font-bold text-lg mb-4 flex gap-3">
-                <span class="text-slate-900 dark:text-slate-100 font-medium">{{ loop.index }}.</span> 
-                {{ q.question_text }}
-            </h3>
-            <div class="space-y-3 pl-7">
-                {% for key, option in [('a',q.option_a),('b',q.option_b),('c',q.option_c),('d',q.option_d)] %}
-                <label class="flex items-start gap-3 p-3 rounded-xl hover:bg-white/60 dark:hover:bg-white/5 cursor-pointer transition">
-                    <input type="radio" name="q{{ q.id }}" value="{{ key }}" required class="mt-1 w-4 h-4 text-slate-900 dark:text-slate-100 font-medium bg-gray-100 border-gray-300 focus:ring-primary focus:ring-2"> 
-                    <span>{{ option }}</span>
-                </label>
-                {% endfor %}
-            </div>
-        </section>
-        {% endfor %}
-        
-        <div class="pt-6 border-t border-slate-200 dark:border-slate-800 flex justify-end">
-            <button class="btn-primary flex items-center justify-center w-14 h-14 mx-auto rounded-full" title="Submit Assessment"><svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg></button>
-        </div>
-    </form>
+  {% if result %}
+    {% if result == 'pass' %}
+      {% call result_hero(True, "Assessment passed", "Congratulations! Share your feedback on the course to collect your certificate.") %}
+        {{ btn("Give feedback & collect certificate", "primary", href=url_for('feedback_form', course_id=assessment.course_id)) }}
+      {% endcall %}
     {% else %}
-    <div class="text-center py-12 text-slate-500 dark:text-slate-400">
-        <p class="text-lg">No questions have been linked yet.</p>
-    </div>
+      {% call result_hero(False, "Not passed this time", "You scored " ~ ("%.0f"|format(percentage)) ~ "%. Review the material and try again.") %}
+        {{ btn("Review the course", "secondary", href=url_for('course_detail', course_id=assessment.course_id)) }}
+        {{ btn("Try again", "primary", href=url_for('assessment', assessment_id=assessment.id)) }}
+      {% endcall %}
     {% endif %}
+  {% elif questions %}
+  <form method="post" class="question-list flex flex-col gap-4">
+    {% for q in questions %}
+    <fieldset class="card">
+      <legend><span class="text-fg-2 mr-2">{{ loop.index }}.</span>{{ q.question_text }}</legend>
+      <div class="flex flex-col gap-2">
+        {% for key, option in [('a', q.option_a), ('b', q.option_b), ('c', q.option_c), ('d', q.option_d)] %}
+        <label class="choice" for="q{{ q.id }}-{{ key }}">
+          <input type="radio" name="q{{ q.id }}" id="q{{ q.id }}-{{ key }}" value="{{ key }}" required class="mt-1">
+          <span><span class="text-fg-2 uppercase text-xs font-semibold mr-2">{{ key }}</span>{{ option }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    {% endfor %}
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+      <p class="caption">Answers cannot be changed after submitting.</p>
+      {{ btn("Submit assessment", "primary", type="submit", size="lg", icon_name="check") }}
+    </div>
+  </form>
+  {% else %}
+  <div class="card p-0">
+    {% call empty_state("No questions yet", "This assessment has no questions linked to it. Ask your course owner to add some.", "document") %}
+      {{ btn("Back to the course", "secondary", href=url_for('course_detail', course_id=assessment.course_id), size="sm") }}
+    {% endcall %}
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

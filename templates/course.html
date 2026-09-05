@@ -1,223 +1,122 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, icon, status_badge, badge, avatar, empty_state %}
 
-{% block title %}{{ course.name }} | HCG Knowledge Centre{% endblock %}
+{% block title %}{{ course.name }} · HCG Knowledge Centre{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto glass-panel p-8 md:p-10">
-    <a href="{{ url_for('home') }}" class="text-slate-600 dark:text-slate-400 font-medium hover:text-slate-900 dark:hover:text-slate-100 hover:underline flex items-center gap-2 mb-6 text-sm">
-        &larr; Dashboard
-    </a>
-
-    
-
-
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-        <div class="lg:col-span-2">
-<!-- Enhanced Course Summary -->
-    <div class="h-full p-6 md:p-8 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-        <!-- Status Badge -->
-        <div class="absolute top-6 right-6 rounded-full border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
-            {{ progress|replace('_', ' ') or 'NOT STARTED' }}
-        </div>
-        
-        <div class="eyebrow mb-2 flex items-center gap-2">
-            <span>{{ course.category or 'General' }}</span>
-            <span class="text-slate-300 dark:text-slate-600">&bull;</span>
-            <span class="font-medium {% if course.difficulty == 'advanced' %}text-rose-500{% elif course.difficulty == 'intermediate' %}text-amber-500{% else %}text-emerald-500{% endif %}">
-                {{ (course.difficulty or 'beginner')|title }}
-            </span>
-        </div>
-        
-        <h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-3 text-slate-900 dark:text-slate-50 pr-24">{{ course.name }}</h1>
-        <p class="text-base text-slate-600 dark:text-slate-400 mb-8 max-w-3xl">{{ course.description }}</p>
-        
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-6 pt-6 border-t border-slate-100 dark:border-slate-800/60">
-            <!-- Rating -->
-            <div class="flex flex-col">
-                <span class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold mb-1">Rating</span>
-                <div class="flex items-center gap-1.5">
-                    <span class="text-lg font-bold text-amber-500">{{ stats.avg_rating or '0.0' }}</span>
-                    <span class="text-sm text-slate-400">/ 10</span>
-                </div>
-                <span class="text-[10px] text-slate-400 mt-0.5">({{ stats.rating_count or 0 }} reviews)</span>
-            </div>
-            
-            <!-- Duration & Learners -->
-            <div class="flex flex-col">
-                <span class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold mb-1">Details</span>
-                <div class="text-sm text-slate-700 dark:text-slate-300 font-medium">
-                    {{ course.duration_minutes or 60 }} Minutes
-                </div>
-                <span class="text-[10px] text-slate-500 mt-0.5">{{ stats.enrolled_count or 0 }} Learners Enrolled</span>
-            </div>
-            
-            <!-- Creator & Assignment -->
-            <div class="flex flex-col">
-                <span class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold mb-1">Created By</span>
-                <div class="text-sm text-slate-700 dark:text-slate-300 font-medium truncate">
-                    {{ course.creator_name or 'System' }}
-                </div>
-                {% if course.assigned_by %}
-                <span class="text-[10px] text-slate-500 mt-0.5 truncate">Assigned by {{ course.assigned_by }}</span>
-                {% endif %}
-            </div>
-
-            <!-- Dates -->
-            <div class="flex flex-col">
-                <span class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold mb-1">Published</span>
-                <div class="text-sm text-slate-700 dark:text-slate-300 font-medium">
-                    {{ (course.created_at or '')[:10] }}
-                </div>
-                <span class="text-[10px] text-slate-500 mt-0.5">Updated {{ (course.updated_at or '')[:10] }}</span>
-            </div>
-        </div>
+{% set is_learner = role != 'admin' and course.created_by != session.get('user_id') %}
+{% set certified = certification and certification.certification_status == 'CERTIFIED' %}
+<header class="page-header">
+  <div class="min-w-0">
+    <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li><a href="{{ url_for('home') }}">Dashboard</a></li><li><span aria-current="page">{{ course.name }}</span></li></ol></nav>
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+      {{ status_badge(progress or 'not_started') }}
+      {% if course.difficulty %}{{ badge(course.difficulty|title, "info" if course.difficulty == 'intermediate' else ("danger" if course.difficulty == 'advanced' else "neutral")) }}{% endif %}
+      <span class="caption">{{ course.category or 'General' }} · {{ course.content_type }}</span>
     </div>
-        </div>
-        <div class="lg:col-span-1">
+    <h1>{{ course.name }}</h1>
+    {% if course.description %}<p class="text-fg-2 mt-2 max-w-3xl">{{ course.description }}</p>{% endif %}
+  </div>
+  <div class="flex flex-wrap items-center gap-2">
+    {% if certified %}
+      {{ btn("View certificate", "primary", href=url_for('certificate', course_id=course.id), icon_name="award") }}
+    {% elif progress == 'FEEDBACK_PENDING' and is_learner %}
+      {{ btn("Give feedback & collect certificate", "primary", href=url_for('feedback_form', course_id=course.id), icon_name="arrow-right") }}
+    {% elif progress == 'ASSESSMENT_FAILED' and is_learner %}
+      {{ btn("Try the assessment again", "primary", href=(url_for('assessment', assessment_id=assessments[0].id) if assessments else url_for('home')), icon_name="refresh") }}
+    {% elif progress in ['NOT_STARTED', 'IN_PROGRESS', 'ASSESSMENT_PENDING'] and is_learner %}
+      <form method="post" action="{{ url_for('complete_course', course_id=course.id) }}">{{ btn("Continue course", "primary", type="submit", icon_name="play") }}</form>
+    {% endif %}
+  </div>
+</header>
 
-
-    <!-- Learner Feedback Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+  <div class="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-3 content-start">
+    <div class="card-inset stat"><span class="eyebrow">Rating</span><span class="stat-value">{{ stats.avg_rating or '0.0' }}<span class="text-base text-fg-2 font-medium"> / 10</span></span><span class="stat-hint">{{ stats.rating_count or 0 }} review{{ '' if stats.rating_count == 1 else 's' }}</span></div>
+    <div class="card-inset stat"><span class="eyebrow">Duration</span><span class="stat-value">{{ course.duration_minutes or 60 }}<span class="text-base text-fg-2 font-medium"> min</span></span><span class="stat-hint">{{ stats.enrolled_count or 0 }} learner{{ '' if stats.enrolled_count == 1 else 's' }} enrolled</span></div>
+    <div class="card-inset stat"><span class="eyebrow">Created by</span><span class="text-base font-semibold truncate">{{ course.creator_name or 'System' }}</span>{% if course.assigned_by %}<span class="stat-hint truncate">Assigned by {{ course.assigned_by }}</span>{% endif %}</div>
+    <div class="card-inset stat"><span class="eyebrow">Published</span><span class="text-base font-semibold tabular">{{ (course.created_at or '')[:10] or '—' }}</span><span class="stat-hint">Updated {{ (course.updated_at or '')[:10] or '—' }}</span></div>
+  </div>
+  <aside class="lg:col-span-1" aria-labelledby="feedback-title">
+    <h2 id="feedback-title" class="text-base mb-3">Learner feedback</h2>
     {% if feedbacks %}
-    <section class="flex flex-col h-full">
-        <h2 class="text-xl font-bold tracking-tight mb-4 text-slate-900 dark:text-slate-50">Learner Feedback</h2>
-        <div class="glass-panel p-4 flex-1 rounded-xl border border-slate-200 dark:border-slate-800/60">
-            <div class="max-h-[350px] overflow-y-auto pr-2 space-y-4">
-                {% for fb in feedbacks %}
-                <div class="p-5 rounded-lg bg-white/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/50 shadow-sm transition-all hover:bg-white dark:hover:bg-slate-950/80">
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="text-amber-500 text-sm">&#11088;</span>
-                        <span class="text-sm font-bold text-slate-900 dark:text-slate-100">{{ fb.feedback_rating }}/10</span>
-                        <span class="text-slate-300 dark:text-slate-600 px-1">&bull;</span>
-                        <span class="text-xs text-slate-500 dark:text-slate-400">{{ (fb.feedback_submitted_at or '')[:10] }}</span>
-                    </div>
-                    <p class="text-sm text-slate-700 dark:text-slate-300 italic leading-relaxed mb-3">"{{ fb.feedback_comments }}"</p>
-                    <div class="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                        <div class="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 flex items-center justify-center font-bold text-[10px]">{{ fb.reviewer_name[:1]|upper if fb.reviewer_name else '?' }}</div>
-                        &mdash; {{ fb.reviewer_name }}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
+    <ul class="flex flex-col gap-2 m-0 p-0 list-none max-h-80 overflow-y-auto pr-1">
+      {% for fb in feedbacks %}
+      <li class="card-inset">
+        <div class="flex items-center gap-2 caption mb-1">
+          <span class="inline-flex items-center gap-1 font-semibold text-fg">{{ icon("star", "w-3.5 h-3.5 text-warning") }}{{ fb.feedback_rating }}/10</span>
+          <span>·</span><span>{{ (fb.feedback_submitted_at or '')[:10] }}</span>
         </div>
-    </section>
+        <p class="text-sm">{{ fb.feedback_comments }}</p>
+        <p class="caption mt-2 inline-flex items-center gap-1.5">{{ avatar(fb.reviewer_name, size="sm") }}{{ fb.reviewer_name }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="card-inset"><p class="caption">No feedback yet. Learners rate the course when they collect their certificate.</p></div>
     {% endif %}
-        </div>
-    </div>
-    <div class="space-y-8">
-        <section class="border-t border-slate-200 dark:border-slate-800 pt-8">
-            <h2 class="text-2xl font-semibold tracking-tight mb-6 text-slate-900 dark:text-slate-50">Course Material</h2>
-            <div class="mb-6 rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50 select-none" oncontextmenu="return false;">
-                {% if course.content_type == 'PDF' %}
-                <!-- PDF embedding with toolbar disabled to prevent downloading/printing -->
-                <iframe class="w-full h-[600px] bg-white" src="{{ course.content_url }}#toolbar=0&navpanes=0&messages=0" title="{{ course.name }}" oncontextmenu="return false;"></iframe>
-                
-                {% elif course.content_type == 'Video' %}
-                    {% if course.content_url.startswith('/uploads/') %}
-                    <!-- Local video with download controls disabled -->
-                    <video controls controlsList="nodownload" oncontextmenu="return false;" class="w-full max-h-[600px] bg-black" src="{{ course.content_url }}"></video>
-                    {% else %}
-                    <!-- Embedded external video -->
-                    <iframe class="w-full aspect-video bg-black" src="{{ embed_url(course.content_url) }}" title="{{ course.name }}" allowfullscreen oncontextmenu="return false;"></iframe>
-                    {% endif %}
-                    
-                {% elif course.content_type == 'PPT' %}
-                    {% if 'localhost' in request.host or '127.0.0.1' in request.host %}
-                    <!-- Graceful fallback for local development -->
-                    <div class="p-10 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col items-center gap-4 text-center border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl">
-                        <div class="w-16 h-16 rounded-2xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                            <svg class="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        </div>
-                        <div>
-                            <p class="font-semibold text-slate-900 dark:text-slate-50 mb-1">Local Development Mode</p>
-                            <p class="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">You are testing on <strong>localhost</strong>. The Microsoft Office Online Viewer requires a public internet URL to embed presentations. <br><br>Downloads are disabled per your security policy. To see the embedded presentation, test this app on a public server, or use an external public PPT URL.</p>
-                        </div>
-                    </div>
-                    {% else %}
-                    <!-- Public PPT embedded using Office Online viewer -->
-                    <iframe class="w-full h-[600px] bg-white" src="https://view.officeapps.live.com/op/embed.aspx?src={{ (request.host_url.rstrip('/') ~ course.content_url) | urlencode }}" title="{{ course.name }}" oncontextmenu="return false;"></iframe>
-                    {% endif %}
-                {% elif course.content_type == 'URL' %}
-                    {% if 'youtube.com' in course.content_url or 'youtu.be' in course.content_url or 'vimeo.com' in course.content_url %}
-                    <!-- Render external video URL using the video embedder -->
-                    <iframe class="w-full aspect-video bg-black" src="{{ embed_url(course.content_url) }}" title="{{ course.name }}" allowfullscreen oncontextmenu="return false;"></iframe>
-                    {% elif course.content_url.lower().endswith('.pdf') %}
-                    <!-- Render external PDF URL -->
-                    <iframe class="w-full h-[600px] bg-white" src="{{ course.content_url }}#toolbar=0&navpanes=0&messages=0" title="{{ course.name }}" oncontextmenu="return false;"></iframe>
-                    {% else %}
-                    <!-- Embedded external website / webpage viewer -->
-                    <div class="w-full flex flex-col border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm relative">
-                        <div class="bg-slate-50 dark:bg-slate-950 px-4 py-2.5 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 z-10">
-                            <div class="flex items-center gap-2">
-                                <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
-                                <span class="text-xs font-bold text-slate-700 dark:text-slate-300 tracking-wide uppercase">Embedded Webpage</span>
-                            </div>
-                            <a href="{{ course.content_url }}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline flex items-center gap-1.5 transition-colors" title="Open in new tab if the embedded view fails to load">
-                                Open in new tab (Fallback)
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                            </a>
-                        </div>
-                        <div class="relative w-full h-[600px] bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                            <!-- Background loading indicator in case iframe takes time -->
-                            <div class="absolute flex flex-col items-center gap-3 text-slate-400 dark:text-slate-500">
-                                <svg class="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                <span class="text-sm font-medium">Loading external website...</span>
-                            </div>
-                            <iframe class="absolute top-0 left-0 w-full h-full border-0 bg-white" src="{{ url_for('proxy_embed', url=course.content_url) }}" title="{{ course.name }}" sandbox="allow-scripts allow-popups allow-forms"></iframe>
-                        </div>
-                    </div>
-                    {% endif %}
-                {% endif %}
-            </div>
-
-            <div class="flex justify-end gap-3">
-                {% if certification and certification.certification_status == 'CERTIFIED' %}
-                <a href="{{ url_for('certificate', course_id=course.id) }}" class="btn-primary px-5 py-3 rounded-full">View Certificate</a>
-                <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn-secondary px-5 py-3 rounded-full">Review Course</a>
-                {% elif progress == 'FEEDBACK_PENDING' %}
-                {% if role != 'admin' and course.created_by != session.get('user_id') %}
-                <a href="{{ url_for('feedback_form', course_id=course.id) }}" class="btn-primary px-5 py-3 rounded-full">Give Feedback &amp; Collect Certificate</a>
-                {% endif %}
-                {% elif progress == 'ASSESSMENT_FAILED' %}
-                {% if role != 'admin' and course.created_by != session.get('user_id') %}
-                <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn-secondary px-5 py-3 rounded-full">Go Through Course Again</a>
-                <a href="{{ url_for('assessment', assessment_id=assessments[0].id) if assessments else url_for('home') }}" class="btn-primary px-5 py-3 rounded-full">Try Assessment Again</a>
-                {% endif %}
-                {% elif progress in ['NOT_STARTED', 'IN_PROGRESS', 'ASSESSMENT_PENDING'] %}
-                {% if role != 'admin' and course.created_by != session.get('user_id') %}
-                <form method="post" action="{{ url_for('complete_course', course_id=course.id) }}">
-                    <button class="btn-primary px-5 py-3 rounded-full">Continue Course</button>
-                </form>
-                {% endif %}
-                {% endif %}
-            </div>
-        </section>
-    </div>
-
-    {% if assessments %}
-    <section class="mt-12 pt-10 border-t border-slate-200 dark:border-slate-800">
-        <h2 class="text-2xl font-bold tracking-tight mb-6 flex items-center gap-3 text-slate-900 dark:text-slate-50">
-            Assessments
-            {% if progress not in ['NOT_STARTED', 'IN_PROGRESS', 'ASSESSMENT_PENDING', 'FEEDBACK_PENDING', 'CERTIFIED'] %}
-            <span class="text-xs px-2.5 py-0.5 bg-yellow-100/80 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300 rounded-full font-medium border border-yellow-200 dark:border-yellow-800/50">Locked</span>
-            {% endif %}
-        </h2>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {% for assessment in assessments %}
-            <div class="glass-panel p-5 flex justify-between items-center {% if certification and certification.certification_status == 'CERTIFIED' %}opacity-80{% endif %}">
-                <span class="font-medium text-base">{{ assessment.title }}</span>
-                {% if certification and certification.certification_status == 'CERTIFIED' %}
-                <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Hidden</span>
-                {% else %}
-                <a href="{{ url_for('assessment', assessment_id=assessment.id) }}" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-slate-100">
-                    Open
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                </a>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-    </section>
-    {% endif %}
+  </aside>
 </div>
+
+<section aria-labelledby="material-title" class="mb-10">
+  <h2 id="material-title" class="mb-4">Course material</h2>
+  <div class="select-none" oncontextmenu="return false;">
+    {% if course.content_type == 'PDF' %}
+      <div class="media-frame media-frame-tall"><iframe src="{{ course.content_url }}#toolbar=0&navpanes=0&messages=0" title="{{ course.name }}" loading="lazy"></iframe></div>
+    {% elif course.content_type == 'Video' %}
+      {% if course.content_url.startswith('/uploads/') %}
+        <div class="media-frame"><video controls controlsList="nodownload" src="{{ course.content_url }}"></video></div>
+      {% else %}
+        <div class="media-frame"><iframe src="{{ embed_url(course.content_url) }}" title="{{ course.name }}" allowfullscreen loading="lazy"></iframe></div>
+      {% endif %}
+    {% elif course.content_type == 'PPT' %}
+      {% if 'localhost' in request.host or '127.0.0.1' in request.host %}
+        <div class="card p-0">
+          {% call empty_state("Presentation preview needs a public URL", "You are on localhost. The Microsoft Office viewer can only embed presentations that are reachable from the internet.", "document") %}
+            {{ btn("Open the file", "secondary", href=course.content_url, size="sm", icon_name="external", attrs='target="_blank" rel="noopener noreferrer"') }}
+          {% endcall %}
+        </div>
+      {% else %}
+        <div class="media-frame media-frame-tall"><iframe src="https://view.officeapps.live.com/op/embed.aspx?src={{ (request.host_url.rstrip('/') ~ course.content_url) | urlencode }}" title="{{ course.name }}" loading="lazy"></iframe></div>
+      {% endif %}
+    {% elif course.content_type == 'URL' %}
+      {% if 'youtube.com' in course.content_url or 'youtu.be' in course.content_url or 'vimeo.com' in course.content_url %}
+        <div class="media-frame"><iframe src="{{ embed_url(course.content_url) }}" title="{{ course.name }}" allowfullscreen loading="lazy"></iframe></div>
+      {% elif course.content_url.lower().endswith('.pdf') %}
+        <div class="media-frame media-frame-tall"><iframe src="{{ course.content_url }}#toolbar=0&navpanes=0&messages=0" title="{{ course.name }}" loading="lazy"></iframe></div>
+      {% else %}
+        <div class="card p-0 overflow-hidden">
+          <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b hairline bg-surface-2">
+            <span class="inline-flex items-center gap-2 caption">{{ icon("link") }}Embedded webpage</span>
+            <a href="{{ course.content_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-sm font-medium text-accent no-underline hover:underline">Open in a new tab {{ icon("external", "w-3.5 h-3.5") }}</a>
+          </div>
+          <div class="media-frame media-frame-tall rounded-none">
+            <div class="absolute inset-0 flex items-center justify-center caption" aria-hidden="true">Loading the website…</div>
+            <iframe src="{{ url_for('proxy_embed', url=course.content_url) }}" title="{{ course.name }}" sandbox="allow-scripts allow-popups allow-forms allow-popups-to-escape-sandbox" loading="lazy" class="relative"></iframe>
+          </div>
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</section>
+
+{% if assessments %}
+<section aria-labelledby="assessments-title">
+  <div class="flex items-center gap-3 mb-4">
+    <h2 id="assessments-title">Assessments</h2>
+    {% if progress not in ['NOT_STARTED', 'IN_PROGRESS', 'ASSESSMENT_PENDING', 'FEEDBACK_PENDING', 'CERTIFIED'] %}{{ badge("Locked", "warning") }}{% endif %}
+  </div>
+  <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3 m-0 p-0 list-none">
+    {% for assessment in assessments %}
+    <li class="card flex items-center justify-between gap-4 {% if certified %}opacity-70{% endif %}">
+      <div class="min-w-0">
+        <h3 class="truncate">{{ assessment.title }}</h3>
+        <p class="caption mt-1">{% if assessment.type %}{{ assessment.type|title }} assessment{% endif %}{% if assessment.pass_percentage %} · pass mark {{ assessment.pass_percentage }}%{% endif %}{% if assessment.max_attempts %} · {{ assessment.max_attempts }} attempt{{ '' if assessment.max_attempts == 1 else 's' }}{% endif %}</p>
+      </div>
+      {% if certified %}{{ badge("Completed", "success") }}{% else %}{{ btn("Open", "secondary", href=url_for('assessment', assessment_id=assessment.id), size="sm", icon_name="arrow-right") }}{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
 {% endblock %}

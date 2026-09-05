@@ -1,131 +1,66 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, icon %}
 
-{% block title %}Certificate | {{ course.name }}{% endblock %}
+{% block title %}Certificate · {{ course.name }} · HCG Knowledge Centre{% endblock %}
+{% block body_class %}page-certificate{% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto py-4">
-    <div id="certificate-card" class="glass-panel p-8 md:p-12 border-4 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-yellow-50 via-white to-emerald-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 shadow-[0_20px_60px_rgba(251,191,36,0.20)]">
-        <div class="text-center">
-            <div class="inline-flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-4 py-2 text-xs font-bold uppercase tracking-[0.35em] text-amber-800 dark:text-amber-200">Certificate of Completion</div>
-            <div class="mt-8 text-4xl md:text-5xl font-black tracking-tight text-slate-900 dark:text-slate-50">HCG Academy</div>
-            <div class="mt-8 text-xl text-slate-600 dark:text-slate-300">This certificate is proudly presented to</div>
-            <div class="mt-5 text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-50 underline decoration-amber-400 decoration-4 underline-offset-8">{{ user }}</div>
-            <div class="mt-6 text-xl text-slate-600 dark:text-slate-300">for successfully completing</div>
-            <div class="mt-3 text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-50">{{ course.name }}</div>
+{% set tone = {"PLATINUM": "#8e8e93", "GOLD": "#f5a623", "SILVER": "#a1a1a6", "BRONZE": "#c2410c"}.get(certification.badge, "#0071e3") %}
+<div class="max-w-4xl mx-auto">
+  <div id="certificate-card" class="certificate p-8 md:p-14 text-center">
+    <p class="eyebrow">HCG Knowledge Centre</p>
+    <h1 class="mt-3">Certificate of Completion</h1>
+    <p class="text-fg-2 mt-8">This certificate is proudly presented to</p>
+    <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">{{ user }}</h2>
+    <p class="text-fg-2 mt-6">for successfully completing</p>
+    <p class="mt-2 text-2xl font-semibold tracking-tight">{{ course.name }}</p>
 
-            <div class="mt-10 flex items-center justify-center">
-                {% if certification.badge == 'PLATINUM' %}
-                <svg viewBox="0 0 100 100" class="w-28 h-28 drop-shadow-xl" aria-label="Platinum badge">
-                    <circle cx="50" cy="50" r="46" fill="#dfe7ef"/>
-                    <circle cx="50" cy="50" r="38" fill="#f8fafc" stroke="#94a3b8" stroke-width="4"/>
-                    <path d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="#cbd5e1"/>
-                </svg>
-                {% elif certification.badge == 'GOLD' %}
-                <svg viewBox="0 0 100 100" class="w-28 h-28 drop-shadow-xl" aria-label="Gold badge">
-                    <circle cx="50" cy="50" r="46" fill="#fbbf24"/>
-                    <circle cx="50" cy="50" r="38" fill="#fef3c7" stroke="#f59e0b" stroke-width="4"/>
-                    <path d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="#fbbf24"/>
-                </svg>
-                {% elif certification.badge == 'SILVER' %}
-                <svg viewBox="0 0 100 100" class="w-28 h-28 drop-shadow-xl" aria-label="Silver badge">
-                    <circle cx="50" cy="50" r="46" fill="#cbd5e1"/>
-                    <circle cx="50" cy="50" r="38" fill="#f8fafc" stroke="#94a3b8" stroke-width="4"/>
-                    <path d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="#cbd5e1"/>
-                </svg>
-                {% else %}
-                <svg viewBox="0 0 100 100" class="w-28 h-28 drop-shadow-xl" aria-label="Bronze badge">
-                    <circle cx="50" cy="50" r="46" fill="#fdba74"/>
-                    <circle cx="50" cy="50" r="38" fill="#fff7ed" stroke="#c2410c" stroke-width="4"/>
-                    <path d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="#f59e0b"/>
-                </svg>
-                {% endif %}
-            </div>
+    <svg viewBox="0 0 100 100" class="w-28 h-28 mx-auto mt-10" role="img" aria-label="{{ certification.badge|title }} badge">
+      <circle cx="50" cy="50" r="46" fill="{{ tone }}" opacity=".18"/>
+      <circle cx="50" cy="50" r="38" fill="none" stroke="{{ tone }}" stroke-width="4"/>
+      <path d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="{{ tone }}"/>
+    </svg>
+    <p class="mt-3 font-semibold" style="color: {{ tone }}">{{ certification.badge|title }}</p>
 
-            <div class="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 text-left text-base text-slate-700 dark:text-slate-200">
-                <div><span class="font-semibold">Completed On:</span> {{ certification.certificate_generated_at or certification.feedback_submitted_at }}</div>
-                <div><span class="font-semibold">Certificate ID:</span> {{ certification.certificate_id }}</div>
-            </div>
-        </div>
+    <dl class="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-left border-t hairline pt-6">
+      <div><dt class="caption">Completed on</dt><dd class="font-medium tabular">{{ (certification.certificate_generated_at or certification.feedback_submitted_at or '')[:10] }}</dd></div>
+      <div><dt class="caption">Score</dt><dd class="font-medium tabular">{{ certification.assessment_score|round(0)|int if certification.assessment_score is not none else '—' }}%</dd></div>
+      <div><dt class="caption">Certificate ID</dt><dd class="font-medium mono break-all">{{ certification.certificate_id }}</dd></div>
+    </dl>
+  </div>
 
-        <div data-html2canvas-ignore="true" class="mt-12 flex flex-col sm:flex-row justify-center gap-4">
-            <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn-secondary px-6 py-3 rounded-full">Review Course</a>
-            <button id="download-png-btn" class="btn-primary px-6 py-3 rounded-full font-bold shadow-md hover:shadow-lg transition">Download Certificate</button>
-        </div>
-    </div>
+  <div class="mt-6 flex flex-col sm:flex-row justify-center gap-2 no-print" data-html2canvas-ignore="true">
+    {{ btn("Review the course", "secondary", href=url_for('course_detail', course_id=course.id)) }}
+    {{ btn("Download as PNG", "primary", type="button", icon_name="download", attrs='id="download-png-btn"') }}
+  </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-    const downloadBtn = document.getElementById("download-png-btn");
-    if (downloadBtn) {
-        downloadBtn.addEventListener("click", function() {
-            const element = document.getElementById("certificate-card");
-            
-            // Clean filename by replacing problematic characters
-            const cleanName = "{{ course.name }}".replace(/[^a-zA-Z0-9]/g, "_").replace(/__+/g, "_");
-            const filename = `Certificate_${cleanName}.png`;
-            
-            // Temporarily disable dark mode on html element to print clean white bg
-            const htmlElement = document.documentElement;
-            const isDark = htmlElement.classList.contains("dark");
-            if (isDark) {
-                htmlElement.classList.remove("dark");
-            }
-            
-            // Force fixed desktop dimensions and clean styling during capture to avoid portrait/mobile stacking
-            const originalStyle = element.getAttribute("style") || "";
-            element.style.width = "1024px";
-            element.style.maxWidth = "1024px";
-            element.style.color = "#0f172a"; // force slate-900 color for text visibility
-            
-            // Show loading state
-            const originalText = downloadBtn.innerHTML;
-            downloadBtn.innerText = "Generating PNG...";
-            downloadBtn.disabled = true;
-            
-            html2canvas(element, {
-                scale: 2.0, // High quality output resolution
-                useCORS: true,
-                logging: false,
-                windowWidth: 1200, // Force desktop layout evaluation
-                windowHeight: 800
-            }).then(canvas => {
-                // Restore original styling
-                if (isDark) {
-                    htmlElement.classList.add("dark");
-                }
-                element.setAttribute("style", originalStyle);
-                downloadBtn.innerHTML = originalText;
-                downloadBtn.disabled = false;
-                
-                // Convert canvas to PNG download
-                const dataUrl = canvas.toDataURL("image/png");
-                const link = document.createElement("a");
-                link.download = filename;
-                link.href = dataUrl;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }).catch(err => {
-                console.error("PNG generation failed:", err);
-                if (isDark) {
-                    htmlElement.classList.add("dark");
-                }
-                element.setAttribute("style", originalStyle);
-                downloadBtn.innerHTML = originalText;
-                downloadBtn.disabled = false;
-                alert("Failed to download certificate as PNG. Try again.");
-            });
-        });
-        
-        {% if download_mode %}
-        // Automatically start the download if directed from download route
-        setTimeout(() => {
-            downloadBtn.click();
-        }, 1000);
-        {% endif %}
-    }
-});
+  (function () {
+    const button = document.getElementById('download-png-btn');
+    const card = document.getElementById('certificate-card');
+    if (!button || !card) return;
+    const filename = 'Certificate_' + {{ course.name|tojson }}.replace(/[^a-zA-Z0-9]/g, '_').replace(/__+/g, '_') + '.png';
+    button.addEventListener('click', function () {
+      const html = document.documentElement;
+      const wasDark = html.classList.contains('dark');
+      if (wasDark) html.classList.remove('dark');
+      const originalStyle = card.getAttribute('style') || '';
+      card.style.width = '1024px'; card.style.maxWidth = '1024px';
+      const label = button.innerHTML;
+      button.disabled = true; button.innerHTML = '<span>Generating…</span>';
+      const restore = () => { if (wasDark) html.classList.add('dark'); card.setAttribute('style', originalStyle); button.disabled = false; button.innerHTML = label; };
+      html2canvas(card, { scale: 2, useCORS: true, logging: false, windowWidth: 1200, windowHeight: 800 }).then((canvas) => {
+        restore();
+        const link = document.createElement('a');
+        link.download = filename; link.href = canvas.toDataURL('image/png');
+        document.body.appendChild(link); link.click(); link.remove();
+      }).catch(() => { restore(); if (window.HKC) HKC.toast('The certificate could not be rendered. Please try again.', 'error'); });
+    });
+    {% if download_mode %}setTimeout(() => button.click(), 800);{% endif %}
+  })();
 </script>
 {% endblock %}
