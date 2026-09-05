@@ -1,200 +1,122 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, icon, field, select_field, textarea_field, file_field, badge, status_badge, modal, empty_state, avatar %}
 
-{% block title %}Groups | HCG Knowledge Centre{% endblock %}
+{% block title %}Groups · HCG Knowledge Centre{% endblock %}
 
 {% block content %}
-<div class="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-    <div>
-        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-2">Group Management</h1>
-        <p class="text-slate-600 dark:text-slate-400">Organize users into teams and assign courses without changing the core learning flow.</p>
-    </div>
-    {% if role in ['admin', 'moderator'] %}
-    <a href="#create-group" class="btn-primary px-5 py-3 rounded-full">Create Group</a>
-    {% endif %}
-</div>
+{% set is_staff = role in ['admin', 'moderator'] %}
+<header class="page-header">
+  <div>
+    <p class="eyebrow mb-1">Learning &amp; development</p>
+    <h1>Groups</h1>
+    <p class="text-fg-2 mt-1">Organise learners into teams and assign courses to everyone at once.</p>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    {{ btn("CSV template", "secondary", href=url_for('download_group_template'), icon_name="download") }}
+    {% if is_staff %}{{ btn("Create group", "primary", icon_name="plus", attrs='data-dialog-open="group-create"') }}{% endif %}
+  </div>
+</header>
 
-{% if role in ['admin', 'moderator'] %}
-<section id="create-group" class="glass-panel p-6 mb-8">
-    <h2 class="text-2xl font-semibold mb-5 text-slate-900 dark:text-slate-50">Create Group</h2>
-    <form method="post" class="space-y-5">
-        <div class="grid md:grid-cols-2 gap-5">
-            <div>
-                <label class="form-label">Group Name</label>
-                <input name="name" class="form-input" required>
-            </div>
-            <div>
-                <label class="form-label">Group Type</label>
-                <input name="group_type" class="form-input" placeholder="e.g. Training / Sales / Support">
-            </div>
-            <div>
-                <label class="form-label">Group Status</label>
-                <select name="status" class="form-input">
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                </select>
-            </div>
-            <div>
-                <label class="form-label">Created By</label>
-                <input value="{{ user }}" class="form-input" disabled>
-            </div>
-            <div class="md:col-span-2">
-                <label class="form-label">Group Description</label>
-                <textarea name="description" rows="3" class="form-input"></textarea>
-            </div>
-        </div>
-
-        <div class="border-t border-slate-200 dark:border-slate-800 pt-5">
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-50 mb-4">Add Members</h3>
-            <div class="grid lg:grid-cols-2 gap-5">
-                <div class="space-y-3">
-                    <label class="form-label">Search users</label>
-                    <input id="userSearch" type="text" class="form-input" placeholder="Search by name, username or employee ID">
-                    <div class="grid grid-cols-2 gap-3 text-sm">
-                        <select id="roleFilter" class="form-input">
-                            <option value="">All roles</option>
-                            <option value="admin">Admin</option>
-                            <option value="moderator">Moderator</option>
-                            <option value="basic user">Basic User</option>
-                        </select>
-                        <select id="departmentFilter" class="form-input">
-                            <option value="">All departments</option>
-                            {% for dept in master_depts %}
-                            <option value="{{ dept.department_name }}">{{ dept.department_name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <select id="locationFilter" class="form-input">
-                        <option value="">All locations</option>
-                        {% for user in users %}
-                            {% if user.location %}
-                            <option value="{{ user.location }}">{{ user.location }}</option>
-                            {% endif %}
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="space-y-3">
-                    <label class="form-label">Available users</label>
-                    <div class="max-h-64 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/20 dark:bg-black/20 p-2">
-                        {% for user in users %}
-                        <label class="user-option flex items-center justify-between gap-3 rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" data-name="{{ user.full_name|lower }}" data-role="{{ user.role }}" data-department="{{ (user.resolved_department or user.department or '')|lower }}" data-location="{{ user.location|default('')|lower }}">
-                            <span>
-                                <span class="font-medium">{{ user.full_name }}</span>
-                                <span class="text-slate-500 dark:text-slate-400 block">{{ user.role }} · {{ user.resolved_department or user.department or 'N/A' }}</span>
-                            </span>
-                            <input type="checkbox" name="selected_users" value="{{ user.id }}" class="h-4 w-4 rounded border-slate-300">
-                        </label>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="flex justify-end pt-2">
-            <button class="btn-primary px-6 py-3 rounded-full">Create Group</button>
-        </div>
-    </form>
-</section>
+{% if groups %}
+<form method="post" action="{{ url_for('upload_group_members') }}" enctype="multipart/form-data" class="card mb-6" aria-labelledby="bulk-title">
+  <h2 id="bulk-title" class="text-base mb-4">Bulk-add members from a CSV</h2>
+  <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-x-4 items-end">
+    {{ select_field("group_id", "Group", groups, placeholder="Select a group", required=True) }}
+    {{ file_field("members_file", "CSV file", accept=".csv", required=True, hint="Columns: Employee ID, User Name, Email, User Role") }}
+    <div class="field">{{ btn("Upload members", "primary", type="submit", icon_name="upload") }}</div>
+  </div>
+</form>
 {% endif %}
 
-<section class="glass-panel p-6 mb-8">
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
-        <h2 class="text-2xl font-semibold text-slate-900 dark:text-slate-50">Groups</h2>
-        <div class="flex items-center gap-3">
-            <a href="{{ url_for('download_group_template') }}" class="btn-secondary px-4 py-2.5 rounded-full text-sm">Download CSV template</a>
-        </div>
-    </div>
-
-    <form method="post" action="{{ url_for('upload_group_members') }}" enctype="multipart/form-data" class="flex flex-col md:flex-row gap-3 mb-6">
-        <select name="group_id" class="form-input md:w-72" required>
-            <option value="">Select group</option>
-            {% for group in groups %}
-            <option value="{{ group.id }}">{{ group.name }}</option>
-            {% endfor %}
-        </select>
-        <input type="file" name="members_file" accept=".csv" class="form-input md:flex-1" required>
-        <button class="btn-primary px-5 py-3 rounded-full">Bulk Upload Members</button>
-    </form>
-
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {% for group in groups %}
-        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/20 dark:bg-black/20 p-5">
-            <div class="flex items-start justify-between gap-3 mb-3">
-                <div>
-                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-50">{{ group.name }}</h3>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ group.group_type or 'General' }} · {{ group.status|title }}</p>
-                </div>
-                <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">{{ group.member_count or 0 }} members</span>
-            </div>
-            <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">{{ group.description or 'No description provided.' }}</p>
-            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-4">
-                <span>Created by: {{ group.creator_name }}</span>
-                <span>{{ group.course_count or 0 }} courses</span>
-            </div>
-            <a href="{{ url_for('group_detail', group_id=group.id) }}" class="btn-secondary w-full justify-center py-2.5 rounded-full">Open Group</a>
-        </div>
-        {% else %}
-        <div class="md:col-span-3 text-slate-500 dark:text-slate-400 py-8 text-center">No groups available yet.</div>
-        {% endfor %}
-    </div>
+<section aria-labelledby="groups-title">
+  <div class="flex items-end justify-between mb-4"><h2 id="groups-title">All groups</h2><span class="caption">{{ groups|length }}</span></div>
+  {% if groups %}
+  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    {% for group in groups %}
+    <article class="card is-interactive flex flex-col gap-3" aria-labelledby="group-{{ group.id }}">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0"><h3 id="group-{{ group.id }}" class="truncate">{{ group.name }}</h3><p class="caption">{{ group.group_type or 'General' }}</p></div>
+        {{ status_badge(group.status) }}
+      </div>
+      <p class="text-sm text-fg-2 line-clamp-2">{{ group.description or 'No description provided.' }}</p>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 caption">
+        <span class="inline-flex items-center gap-1">{{ icon("users", "w-3.5 h-3.5") }}{{ group.member_count or 0 }} member{{ '' if group.member_count == 1 else 's' }}</span>
+        <span class="inline-flex items-center gap-1">{{ icon("book", "w-3.5 h-3.5") }}{{ group.course_count or 0 }} course{{ '' if group.course_count == 1 else 's' }}</span>
+        <span class="inline-flex items-center gap-1">{{ icon("user", "w-3.5 h-3.5") }}{{ group.creator_name }}</span>
+      </div>
+      <div class="mt-auto pt-2">{{ btn("Open group", "secondary", href=url_for('group_detail', group_id=group.id), size="sm", icon_name="arrow-right") }}</div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card p-0">{% call empty_state("No groups yet", "Create a group to assign courses to a whole team at once.", "users") %}{% if is_staff %}{{ btn("Create group", "secondary", size="sm", attrs='data-dialog-open="group-create"') }}{% endif %}{% endcall %}</div>
+  {% endif %}
 </section>
 
+{% if is_staff %}
+{% call modal("group-create", "Create a group", size="lg", description="Name the group, then pick its first members.") %}
+  <form method="post" class="flex flex-col" id="group-form">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+      {{ field("name", "Group name", required=True, id="group-name") }}
+      {{ field("group_type", "Group type", placeholder="e.g. Training, Sales, Support", id="group-type") }}
+      {{ select_field("status", "Status", [("active", "Active"), ("inactive", "Inactive")], id="group-status") }}
+      <div class="field"><span class="field-label">Created by</span><p class="input flex items-center text-fg-2">{{ user }}</p></div>
+    </div>
+    {{ textarea_field("description", "Description", rows=2, id="group-description") }}
+
+    <fieldset class="border-0 p-0 m-0 mt-2" id="member-picker">
+      <legend class="field-label">Members</legend>
+      <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2 mb-3">
+        <label class="relative block"><span class="sr-only">Search users</span><span class="absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">{{ icon("search") }}</span><input type="search" class="input pl-9" placeholder="Name, username or employee ID" data-picker-search autocomplete="off"></label>
+        <select class="select" data-picker-filter="role" aria-label="Filter by role"><option value="">All roles</option><option value="admin">Admin</option><option value="moderator">Moderator</option><option value="basic user">Basic user</option></select>
+        <select class="select" data-picker-filter="department" aria-label="Filter by department"><option value="">All departments</option>{% for dept in master_depts %}<option value="{{ dept.department_name|lower }}">{{ dept.department_name }}</option>{% endfor %}</select>
+        <select class="select" data-picker-filter="location" aria-label="Filter by location"><option value="">All locations</option>{% for loc in users|map(attribute='location')|reject('none')|unique|sort %}{% if loc %}<option value="{{ loc|lower }}">{{ loc }}</option>{% endif %}{% endfor %}</select>
+      </div>
+      <div class="table-shell max-h-64 overflow-y-auto p-1.5" role="group" aria-label="Available users">
+        {% for u in users %}
+        <label class="user-option choice py-2 justify-between" data-name="{{ (u.full_name ~ ' ' ~ u.username ~ ' ' ~ (u.employee_id or ''))|lower }}" data-role="{{ (u.role or '')|lower }}" data-department="{{ (u.resolved_department or u.department or '')|lower }}" data-location="{{ (u.location or '')|lower }}">
+          <span class="flex items-center gap-3 min-w-0">{{ avatar(u.full_name, size="sm") }}<span class="min-w-0"><span class="block text-sm font-medium truncate">{{ u.full_name }}</span><span class="caption">{{ (u.role or '')|title }} · {{ u.resolved_department or u.department or 'No department' }}</span></span></span>
+          <input type="checkbox" name="selected_users" value="{{ u.id }}" class="mt-0">
+        </label>
+        {% endfor %}
+        <p class="caption text-center py-4" data-picker-empty hidden>No users match these filters.</p>
+      </div>
+      <p class="field-hint"><span data-picker-count>0</span> selected</p>
+    </fieldset>
+
+    <div class="flex justify-end gap-2 pt-6">
+      <button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button>
+      {{ btn("Create group", "primary", type="submit") }}
+    </div>
+  </form>
+{% endcall %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
 <script>
-    const userSearch = document.getElementById('userSearch');
-    const roleFilter = document.getElementById('roleFilter');
-    const departmentFilter = document.getElementById('departmentFilter');
-    const locationFilter = document.getElementById('locationFilter');
-
-    async function loadDepartmentMasterOptions() {
-        if (!departmentFilter) return;
-        try {
-            const res = await fetch('/api/departments');
-            if (!res.ok) return;
-            const depts = await res.json();
-            if (Array.isArray(depts) && depts.length > 0) {
-                const curVal = departmentFilter.value;
-                departmentFilter.innerHTML = '<option value="">All departments</option>';
-                depts.forEach(d => {
-                    const opt = document.createElement('option');
-                    opt.value = d.department_name;
-                    opt.textContent = d.department_name;
-                    departmentFilter.appendChild(opt);
-                });
-                if (curVal) departmentFilter.value = curVal;
-            }
-        } catch(e) {
-            console.error('Error loading departments from API:', e);
-        }
+  (function () {
+    const picker = document.getElementById('member-picker');
+    if (!picker) return;
+    const search = picker.querySelector('[data-picker-search]');
+    const filters = Array.from(picker.querySelectorAll('[data-picker-filter]'));
+    const options = Array.from(picker.querySelectorAll('.user-option'));
+    const empty = picker.querySelector('[data-picker-empty]');
+    const count = picker.querySelector('[data-picker-count]');
+    function apply() {
+      const term = search.value.trim().toLowerCase();
+      const active = Object.fromEntries(filters.map((f) => [f.dataset.pickerFilter, f.value.toLowerCase()]));
+      let visible = 0;
+      options.forEach((option) => {
+        const show = (!term || option.dataset.name.includes(term)) && Object.entries(active).every(([key, value]) => !value || option.dataset[key] === value);
+        option.hidden = !show; if (show) visible += 1;
+      });
+      empty.hidden = visible !== 0;
     }
-
-    function applyUserFilters() {
-        const term = (userSearch?.value || '').trim().toLowerCase();
-        const role = (roleFilter?.value || '').trim().toLowerCase();
-        const department = (departmentFilter?.value || '').trim().toLowerCase();
-        const location = (locationFilter?.value || '').trim().toLowerCase();
-
-        document.querySelectorAll('.user-option').forEach((option) => {
-            const name = (option.dataset.name || '').toLowerCase();
-            const optionRole = (option.dataset.role || '').toLowerCase();
-            const optionDepartment = (option.dataset.department || '').toLowerCase();
-            const optionLocation = (option.dataset.location || '').toLowerCase();
-
-            const matchesText = !term || name.includes(term) || optionRole.includes(term) || optionDepartment.includes(term) || optionLocation.includes(term);
-            const matchesRole = !role || optionRole === role;
-            const matchesDepartment = !department || optionDepartment === department;
-            const matchesLocation = !location || optionLocation === location;
-
-            option.style.display = matchesText && matchesRole && matchesDepartment && matchesLocation ? '' : 'none';
-        });
-    }
-
-    [userSearch, roleFilter, departmentFilter, locationFilter].forEach((element) => {
-        if (element) element.addEventListener('input', applyUserFilters);
-        if (element) element.addEventListener('change', applyUserFilters);
-    });
-
-    document.addEventListener('DOMContentLoaded', () => {
-        loadDepartmentMasterOptions();
-    });
+    search.addEventListener('input', apply);
+    filters.forEach((f) => f.addEventListener('change', apply));
+    picker.addEventListener('change', () => { count.textContent = picker.querySelectorAll('input[type="checkbox"]:checked').length; });
+    apply();
+  })();
 </script>
 {% endblock %}
