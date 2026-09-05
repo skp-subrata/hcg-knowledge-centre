@@ -1568,6 +1568,10 @@ def create_app():
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE status = 'active' ORDER BY name").fetchall()
 			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE status = 'Active' ORDER BY location_name").fetchall()
+			try:
+				releases = connection.execute("SELECT * FROM app_releases ORDER BY id DESC").fetchall()
+			except Exception:
+				releases = []
 			courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (session["user_id"], session["user_id"])).fetchall()
 			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
 			banks = connection.execute("SELECT * FROM question_banks ORDER BY id DESC").fetchall()
@@ -2434,18 +2438,29 @@ def create_app():
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE status = 'active' ORDER BY name").fetchall()
 			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE status = 'Active' ORDER BY location_name").fetchall()
+			try:
+				releases = connection.execute("SELECT * FROM app_releases ORDER BY id DESC").fetchall()
+			except Exception:
+				releases = []
 		return render_template("profile.html", user_data=user_data, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, releases=releases, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.context_processor
 	def inject_notifications():
+		unread = 0
+		releases = []
 		if session.get("user_id"):
 			try:
 				with get_db() as connection:
 					count = connection.execute("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND is_read = 0", (session["user_id"],)).fetchone()["n"]
-					return {"unread_notifications_count": count}
+					unread = count
 			except Exception:
-											pass
-		return {"unread_notifications_count": 0}
+				pass
+		try:
+			with get_db() as connection:
+				releases = connection.execute("SELECT * FROM app_releases ORDER BY id DESC").fetchall()
+		except Exception:
+			pass
+		return {"unread_notifications_count": unread, "releases": releases}
 
 	def create_notification(connection, user_id, message, type_name="system", target_url="#"):
 		connection.execute(
