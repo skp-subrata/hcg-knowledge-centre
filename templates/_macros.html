@@ -255,9 +255,10 @@
       {%- if variant == "learner" and course.assigned_on %}Assigned {{ course.assigned_on.split(' ')[0] }}{% if course.assigned_by %} by {{ course.assigned_by }}{% endif %}
       {%- elif course.course_owner or course.creator_name %}By {{ course.course_owner or course.creator_name }}{% endif -%}
     </span>
-    {% if variant == "manage" and can_edit %}
-      <div class="flex gap-1">
-        <button type="button" class="btn btn-secondary btn-sm" data-course='{{ course|tojson|forceescape }}' data-edit-course>{{ icon("edit") }}<span>Edit</span></button>
+    {% if variant == "manage" %}
+      <div class="flex items-center gap-1">
+        {% if caller %}{{ caller() }}{% endif %}
+        {% if can_edit %}<button type="button" class="btn btn-secondary btn-sm" data-course='{{ dict(course)|tojson|forceescape }}' data-edit-course>{{ icon("edit") }}<span>Edit</span></button>{% endif %}
       </div>
     {% else %}
       {{ btn("Open", "secondary", href=url, size="sm", icon_name="arrow-right") }}
