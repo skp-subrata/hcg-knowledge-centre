@@ -4445,6 +4445,91 @@ def create_app():
 				return {"error": f"Reset operation failed: {str(e)}"}, 500
 		return {"message": "Rewards balance reset to zero successfully."}, 200
 
+	@app.route("/admin/masters", methods=["GET", "POST"])
+	@admin_required
+	def master_management():
+	    if request.method == "POST":
+	        action = request.form.get("action")
+	        user_id = session.get("user_id")
+	        with get_db() as conn:
+	            try:
+	                if action == "add_department":
+	                    name = request.form.get("department_name", "").strip()
+	                    code = request.form.get("department_code", "").strip()
+	                    desc = request.form.get("description", "").strip()
+	                    status = request.form.get("status", "Active")
+	                    if not name or not code:
+	                        flash("Department Name and Code are mandatory.")
+	                    else:
+	                        conn.execute("INSERT INTO departments (department_name, department_code, description, status, created_by) VALUES (?, ?, ?, ?, ?)", (name, code, desc, status, user_id))
+	                        flash("Department created successfully.")
+	                        
+	                elif action == "edit_department":
+	                    dept_id = request.form.get("record_id")
+	                    name = request.form.get("department_name", "").strip()
+	                    code = request.form.get("department_code", "").strip()
+	                    desc = request.form.get("description", "").strip()
+	                    status = request.form.get("status", "Active")
+	                    if not name or not code:
+	                        flash("Department Name and Code are mandatory.")
+	                    else:
+	                        conn.execute("UPDATE departments SET department_name = ?, department_code = ?, description = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (name, code, desc, status, user_id, dept_id))
+	                        flash("Department updated successfully.")
+	                        
+	                elif action == "toggle_department":
+	                    dept_id = request.form.get("record_id")
+	                    new_status = request.form.get("status")
+	                    conn.execute("UPDATE departments SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (new_status, user_id, dept_id))
+	                    flash(f"Department marked as {new_status}.")
+
+	                elif action == "add_location":
+	                    name = request.form.get("location_name", "").strip()
+	                    code = request.form.get("location_code", "").strip()
+	                    city = request.form.get("city", "").strip()
+	                    country = request.form.get("country", "").strip()
+	                    address = request.form.get("address", "").strip()
+	                    state = request.form.get("state", "").strip()
+	                    postal_code = request.form.get("postal_code", "").strip()
+	                    status = request.form.get("status", "Active")
+	                    if not name or not code or not city or not country:
+	                        flash("Location Name, Code, City, and Country are mandatory.")
+	                    else:
+	                        conn.execute("INSERT INTO locations (location_name, location_code, city, country, address, state, postal_code, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (name, code, city, country, address, state, postal_code, status, user_id))
+	                        flash("Location created successfully.")
+	                        
+	                elif action == "edit_location":
+	                    loc_id = request.form.get("record_id")
+	                    name = request.form.get("location_name", "").strip()
+	                    code = request.form.get("location_code", "").strip()
+	                    city = request.form.get("city", "").strip()
+	                    country = request.form.get("country", "").strip()
+	                    address = request.form.get("address", "").strip()
+	                    state = request.form.get("state", "").strip()
+	                    postal_code = request.form.get("postal_code", "").strip()
+	                    status = request.form.get("status", "Active")
+	                    if not name or not code or not city or not country:
+	                        flash("Location Name, Code, City, and Country are mandatory.")
+	                    else:
+	                        conn.execute("UPDATE locations SET location_name = ?, location_code = ?, city = ?, country = ?, address = ?, state = ?, postal_code = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (name, code, city, country, address, state, postal_code, status, user_id, loc_id))
+	                        flash("Location updated successfully.")
+	                        
+	                elif action == "toggle_location":
+	                    loc_id = request.form.get("record_id")
+	                    new_status = request.form.get("status")
+	                    conn.execute("UPDATE locations SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (new_status, user_id, loc_id))
+	                    flash(f"Location marked as {new_status}.")
+	                    
+	            except sqlite3.IntegrityError:
+	                flash("Error: Name or Code must be unique.")
+	                
+	        return redirect(safe_referrer(url_for('master_management')))
+	        
+	    with get_db() as connection:
+	        departments = connection.execute("SELECT * FROM departments ORDER BY department_name").fetchall()
+	        locations = connection.execute("SELECT * FROM locations ORDER BY location_name").fetchall()
+	        
+	    return render_template("master_management.html", departments=[dict(d) for d in departments], locations=[dict(l) for l in locations], user=session.get("user"), role=session.get("role"), profile_picture=session.get("profile_picture"))
+
 	return app
 
 
@@ -4526,90 +4611,6 @@ def api_add_location():
             return {"error": "Location already exists."}, 409
 
 
-@app.route("/admin/masters", methods=["GET", "POST"])
-@admin_required
-def master_management():
-    if request.method == "POST":
-        action = request.form.get("action")
-        user_id = session.get("user_id")
-        with get_db() as conn:
-            try:
-                if action == "add_department":
-                    name = request.form.get("department_name", "").strip()
-                    code = request.form.get("department_code", "").strip()
-                    desc = request.form.get("description", "").strip()
-                    status = request.form.get("status", "Active")
-                    if not name or not code:
-                        flash("Department Name and Code are mandatory.")
-                    else:
-                        conn.execute("INSERT INTO departments (department_name, department_code, description, status, created_by) VALUES (?, ?, ?, ?, ?)", (name, code, desc, status, user_id))
-                        flash("Department created successfully.")
-                        
-                elif action == "edit_department":
-                    dept_id = request.form.get("record_id")
-                    name = request.form.get("department_name", "").strip()
-                    code = request.form.get("department_code", "").strip()
-                    desc = request.form.get("description", "").strip()
-                    status = request.form.get("status", "Active")
-                    if not name or not code:
-                        flash("Department Name and Code are mandatory.")
-                    else:
-                        conn.execute("UPDATE departments SET department_name = ?, department_code = ?, description = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (name, code, desc, status, user_id, dept_id))
-                        flash("Department updated successfully.")
-                        
-                elif action == "toggle_department":
-                    dept_id = request.form.get("record_id")
-                    new_status = request.form.get("status")
-                    conn.execute("UPDATE departments SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (new_status, user_id, dept_id))
-                    flash(f"Department marked as {new_status}.")
-
-                elif action == "add_location":
-                    name = request.form.get("location_name", "").strip()
-                    code = request.form.get("location_code", "").strip()
-                    city = request.form.get("city", "").strip()
-                    country = request.form.get("country", "").strip()
-                    address = request.form.get("address", "").strip()
-                    state = request.form.get("state", "").strip()
-                    postal_code = request.form.get("postal_code", "").strip()
-                    status = request.form.get("status", "Active")
-                    if not name or not code or not city or not country:
-                        flash("Location Name, Code, City, and Country are mandatory.")
-                    else:
-                        conn.execute("INSERT INTO locations (location_name, location_code, city, country, address, state, postal_code, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (name, code, city, country, address, state, postal_code, status, user_id))
-                        flash("Location created successfully.")
-                        
-                elif action == "edit_location":
-                    loc_id = request.form.get("record_id")
-                    name = request.form.get("location_name", "").strip()
-                    code = request.form.get("location_code", "").strip()
-                    city = request.form.get("city", "").strip()
-                    country = request.form.get("country", "").strip()
-                    address = request.form.get("address", "").strip()
-                    state = request.form.get("state", "").strip()
-                    postal_code = request.form.get("postal_code", "").strip()
-                    status = request.form.get("status", "Active")
-                    if not name or not code or not city or not country:
-                        flash("Location Name, Code, City, and Country are mandatory.")
-                    else:
-                        conn.execute("UPDATE locations SET location_name = ?, location_code = ?, city = ?, country = ?, address = ?, state = ?, postal_code = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (name, code, city, country, address, state, postal_code, status, user_id, loc_id))
-                        flash("Location updated successfully.")
-                        
-                elif action == "toggle_location":
-                    loc_id = request.form.get("record_id")
-                    new_status = request.form.get("status")
-                    conn.execute("UPDATE locations SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (new_status, user_id, loc_id))
-                    flash(f"Location marked as {new_status}.")
-                    
-            except sqlite3.IntegrityError:
-                flash("Error: Name or Code must be unique.")
-                
-        return redirect(safe_referrer(url_for('master_management')))
-        
-    with get_db() as connection:
-        departments = connection.execute("SELECT * FROM departments ORDER BY department_name").fetchall()
-        locations = connection.execute("SELECT * FROM locations ORDER BY location_name").fetchall()
-        
-    return render_template("master_management.html", departments=[dict(d) for d in departments], locations=[dict(l) for l in locations], user=session.get("user"), role=session.get("role"), profile_picture=session.get("profile_picture"))
 
 if __name__ == "__main__":
 	app.run(debug=True)

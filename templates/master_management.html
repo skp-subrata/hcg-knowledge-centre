@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block title %}Master Management{% endblock %}
+
+{% block content %}
+<section class="max-w-7xl mx-auto py-10 space-y-6">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Master Management</h1>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex border-b border-slate-200 dark:border-slate-700">
+        <button id="tab-dept" class="px-6 py-3 font-semibold text-sm border-b-2 transition-colors border-indigo-600 text-indigo-600 dark:text-indigo-400" onclick="switchTab('dept')">Department</button>
+        <button id="tab-loc" class="px-6 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors" onclick="switchTab('loc')">Location</button>
+    </div>
+
+    <!-- Department Tab -->
+    <div id="panel-dept" class="space-y-6">
+        <div class="glass-panel p-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-5">
+                <div class="flex gap-4 w-full sm:w-auto">
+                    <input type="text" id="dept-search" class="form-input text-sm w-full sm:w-64" placeholder="Search Department..." oninput="filterTable('dept-table', 'dept-search', 'dept-status-filter')">
+                    <select id="dept-status-filter" class="form-input text-sm w-32" onchange="filterTable('dept-table', 'dept-search', 'dept-status-filter')">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <button onclick="openDeptModal()" class="btn-primary whitespace-nowrap"><svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Add New</button>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm" id="dept-table">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-800 text-slate-500">
+                            <th class="p-3 font-bold uppercase">Department Name</th>
+                            <th class="p-3 font-bold uppercase">Code</th>
+                            <th class="p-3 font-bold uppercase">Status</th>
+                            <th class="p-3 font-bold uppercase">Created Date</th>
+                            <th class="p-3 font-bold uppercase text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        {% for d in departments %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50" data-search="{{ d.department_name|lower }} {{ d.department_code|lower }}" data-status="{{ d.status|lower }}">
+                            <td class="p-3 font-semibold">{{ d.department_name }}</td>
+                            <td class="p-3">{{ d.department_code }}</td>
+                            <td class="p-3">
+                                <span class="px-2 py-0.5 rounded-full text-xs font-semibold {% if d.status == 'Active' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400{% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400{% endif %}">{{ d.status }}</span>
+                            </td>
+                            <td class="p-3">{{ d.created_at[:10] if d.created_at else '-' }}</td>
+                            <td class="p-3 text-right space-x-2">
+                                <button onclick='openDeptModal({{ d|tojson }})' class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">Edit</button>
+                                <span class="text-slate-300 dark:text-slate-700">|</span>
+                                <form method="post" class="inline" onsubmit="return confirm('{% if d.status == 'Active' %}Are you sure you want to deactivate this master? It will no longer be available for new selections.{% else %}Reactivate this master?{% endif %}');">
+                                    <input type="hidden" name="action" value="toggle_department">
+                                    <input type="hidden" name="record_id" value="{{ d.department_id }}">
+                                    <input type="hidden" name="status" value="{% if d.status == 'Active' %}Inactive{% else %}Active{% endif %}">
+                                    <button type="submit" class="font-medium {% if d.status == 'Active' %}text-red-500 hover:text-red-700 dark:hover:text-red-400{% else %}text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400{% endif %}">
+                                        {% if d.status == 'Active' %}Deactivate{% else %}Activate{% endif %}
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="p-4 text-center text-slate-500">No departments found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location Tab -->
+    <div id="panel-loc" class="space-y-6 hidden">
+        <div class="glass-panel p-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-5">
+                <div class="flex gap-4 w-full sm:w-auto">
+                    <input type="text" id="loc-search" class="form-input text-sm w-full sm:w-64" placeholder="Search Location..." oninput="filterTable('loc-table', 'loc-search', 'loc-status-filter')">
+                    <select id="loc-status-filter" class="form-input text-sm w-32" onchange="filterTable('loc-table', 'loc-search', 'loc-status-filter')">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <button onclick="openLocModal()" class="btn-primary whitespace-nowrap"><svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Add New</button>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm" id="loc-table">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-800 text-slate-500">
+                            <th class="p-3 font-bold uppercase">Location Name</th>
+                            <th class="p-3 font-bold uppercase">Code</th>
+                            <th class="p-3 font-bold uppercase">City</th>
+                            <th class="p-3 font-bold uppercase">State</th>
+                            <th class="p-3 font-bold uppercase">Country</th>
+                            <th class="p-3 font-bold uppercase">Status</th>
+                            <th class="p-3 font-bold uppercase text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        {% for l in locations %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50" data-search="{{ l.location_name|lower }} {{ l.location_code|lower }} {{ l.city|lower }} {{ l.country|lower }}" data-status="{{ l.status|lower }}">
+                            <td class="p-3 font-semibold">{{ l.location_name }}</td>
+                            <td class="p-3">{{ l.location_code }}</td>
+                            <td class="p-3">{{ l.city }}</td>
+                            <td class="p-3">{{ l.state or '-' }}</td>
+                            <td class="p-3">{{ l.country }}</td>
+                            <td class="p-3">
+                                <span class="px-2 py-0.5 rounded-full text-xs font-semibold {% if l.status == 'Active' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400{% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400{% endif %}">{{ l.status }}</span>
+                            </td>
+                            <td class="p-3 text-right space-x-2">
+                                <button onclick='openLocModal({{ l|tojson }})' class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">Edit</button>
+                                <span class="text-slate-300 dark:text-slate-700">|</span>
+                                <form method="post" class="inline" onsubmit="return confirm('{% if l.status == 'Active' %}Are you sure you want to deactivate this master? It will no longer be available for new selections.{% else %}Reactivate this master?{% endif %}');">
+                                    <input type="hidden" name="action" value="toggle_location">
+                                    <input type="hidden" name="record_id" value="{{ l.location_id }}">
+                                    <input type="hidden" name="status" value="{% if l.status == 'Active' %}Inactive{% else %}Active{% endif %}">
+                                    <button type="submit" class="font-medium {% if l.status == 'Active' %}text-red-500 hover:text-red-700 dark:hover:text-red-400{% else %}text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400{% endif %}">
+                                        {% if l.status == 'Active' %}Deactivate{% else %}Activate{% endif %}
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="7" class="p-4 text-center text-slate-500">No locations found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Department Modal -->
+<div id="deptModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl relative">
+        <button onclick="document.getElementById('deptModal').classList.add('hidden')" type="button" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-full">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <div class="p-6">
+            <h2 id="deptModalTitle" class="text-xl font-bold text-slate-900 dark:text-white mb-6">Create Department</h2>
+            <form method="post" class="space-y-4">
+                <input type="hidden" name="action" id="deptAction" value="add_department">
+                <input type="hidden" name="record_id" id="deptId">
+                
+                <div>
+                    <label class="form-label">Department Name *</label>
+                    <input type="text" name="department_name" id="deptName" class="form-input" required placeholder="e.g. Operations">
+                </div>
+                <div>
+                    <label class="form-label">Department Code *</label>
+                    <input type="text" name="department_code" id="deptCode" class="form-input" required placeholder="e.g. OPS">
+                </div>
+                <div>
+                    <label class="form-label">Description</label>
+                    <textarea name="description" id="deptDesc" class="form-input h-20" placeholder="Optional description"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Status</label>
+                    <select name="status" id="deptStatus" class="form-input">
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="pt-4 flex gap-3">
+                    <button type="button" onclick="document.getElementById('deptModal').classList.add('hidden')" class="btn-secondary flex-1">Cancel</button>
+                    <button type="submit" class="btn-primary flex-1" id="deptSubmitBtn">Create Department</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Location Modal -->
+<div id="locModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-2xl shadow-2xl relative my-auto">
+        <button onclick="document.getElementById('locModal').classList.add('hidden')" type="button" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-full">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <div class="p-6">
+            <h2 id="locModalTitle" class="text-xl font-bold text-slate-900 dark:text-white mb-6">Create Location</h2>
+            <form method="post" class="space-y-4">
+                <input type="hidden" name="action" id="locAction" value="add_location">
+                <input type="hidden" name="record_id" id="locId">
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="form-label">Location Name *</label>
+                        <input type="text" name="location_name" id="locName" class="form-input" required placeholder="e.g. Bangalore">
+                    </div>
+                    <div>
+                        <label class="form-label">Location Code *</label>
+                        <input type="text" name="location_code" id="locCode" class="form-input" required placeholder="e.g. BLR">
+                    </div>
+                    <div>
+                        <label class="form-label">City *</label>
+                        <input type="text" name="city" id="locCity" class="form-input" required>
+                    </div>
+                    <div>
+                        <label class="form-label">State</label>
+                        <input type="text" name="state" id="locState" class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">Country *</label>
+                        <select name="country" id="locCountry" class="form-input" required>
+                            <option value="India">India</option>
+                            <option value="USA">USA</option>
+                            <option value="UK">UK</option>
+                            <option value="Australia">Australia</option>
+                            <option value="Canada">Canada</option>
+                            <option value="Singapore">Singapore</option>
+                            <option value="Germany">Germany</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">PIN / Postal Code</label>
+                        <input type="text" name="postal_code" id="locPin" class="form-input">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="form-label">Address</label>
+                        <textarea name="address" id="locAddress" class="form-input h-16"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label">Status</label>
+                        <select name="status" id="locStatus" class="form-input">
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="pt-4 flex gap-3 mt-4">
+                    <button type="button" onclick="document.getElementById('locModal').classList.add('hidden')" class="btn-secondary flex-1">Cancel</button>
+                    <button type="submit" class="btn-primary flex-1" id="locSubmitBtn">Create Location</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function switchTab(tab) {
+    document.getElementById('panel-dept').classList.add('hidden');
+    document.getElementById('panel-loc').classList.add('hidden');
+    document.getElementById('tab-dept').className = "px-6 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors";
+    document.getElementById('tab-loc').className = "px-6 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors";
+    
+    document.getElementById('panel-' + tab).classList.remove('hidden');
+    document.getElementById('tab-' + tab).className = "px-6 py-3 font-semibold text-sm border-b-2 transition-colors border-indigo-600 text-indigo-600 dark:text-indigo-400";
+}
+
+function filterTable(tableId, searchId, statusId) {
+    const q = document.getElementById(searchId).value.toLowerCase();
+    const st = document.getElementById(statusId).value.toLowerCase();
+    const rows = document.querySelectorAll(`#${tableId} tbody tr`);
+    rows.forEach(row => {
+        if(row.children.length === 1) return; // skip empty state row
+        const search = row.dataset.search;
+        const status = row.dataset.status;
+        if(search.includes(q) && (st === '' || status === st)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function openDeptModal(dept) {
+    if(dept) {
+        document.getElementById('deptModalTitle').textContent = "Edit Department";
+        document.getElementById('deptSubmitBtn').textContent = "Update Department";
+        document.getElementById('deptAction').value = "edit_department";
+        document.getElementById('deptId').value = dept.department_id || '';
+        document.getElementById('deptName').value = dept.department_name || '';
+        document.getElementById('deptCode').value = dept.department_code || '';
+        document.getElementById('deptDesc').value = dept.description || '';
+        document.getElementById('deptStatus').value = dept.status || 'Active';
+    } else {
+        document.getElementById('deptModalTitle').textContent = "Create Department";
+        document.getElementById('deptSubmitBtn').textContent = "Create Department";
+        document.getElementById('deptAction').value = "add_department";
+        document.getElementById('deptId').value = "";
+        document.getElementById('deptName').value = "";
+        document.getElementById('deptCode').value = "";
+        document.getElementById('deptDesc').value = "";
+        document.getElementById('deptStatus').value = "Active";
+    }
+    document.getElementById('deptModal').classList.remove('hidden');
+}
+
+function openLocModal(loc) {
+    if(loc) {
+        document.getElementById('locModalTitle').textContent = "Edit Location";
+        document.getElementById('locSubmitBtn').textContent = "Update Location";
+        document.getElementById('locAction').value = "edit_location";
+        document.getElementById('locId').value = loc.location_id || '';
+        document.getElementById('locName').value = loc.location_name || '';
+        document.getElementById('locCode').value = loc.location_code || '';
+        document.getElementById('locCity').value = loc.city || '';
+        document.getElementById('locState').value = loc.state || '';
+        document.getElementById('locCountry').value = loc.country || 'India';
+        document.getElementById('locPin').value = loc.postal_code || '';
+        document.getElementById('locAddress').value = loc.address || '';
+        document.getElementById('locStatus').value = loc.status || 'Active';
+    } else {
+        document.getElementById('locModalTitle').textContent = "Create Location";
+        document.getElementById('locSubmitBtn').textContent = "Create Location";
+        document.getElementById('locAction').value = "add_location";
+        document.getElementById('locId').value = "";
+        document.getElementById('locName').value = "";
+        document.getElementById('locCode').value = "";
+        document.getElementById('locCity').value = "";
+        document.getElementById('locState').value = "";
+        document.getElementById('locCountry').value = "India";
+        document.getElementById('locPin').value = "";
+        document.getElementById('locAddress').value = "";
+        document.getElementById('locStatus').value = "Active";
+    }
+    document.getElementById('locModal').classList.remove('hidden');
+}
+</script>
+{% endblock %}
