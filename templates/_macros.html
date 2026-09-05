@@ -251,7 +251,10 @@
     {% if course.rating_count and course.rating_count > 0 %}<span class="inline-flex items-center gap-1">{{ icon("star") }}{{ course.avg_rating }} ({{ course.rating_count }})</span>{% endif %}
   </div>
   <div class="mt-auto flex items-center justify-between gap-2 pt-2">
-    <span class="caption">{% if course.course_owner or course.creator_name %}By {{ course.course_owner or course.creator_name }}{% endif %}</span>
+    <span class="caption truncate">
+      {%- if variant == "learner" and course.assigned_on %}Assigned {{ course.assigned_on.split(' ')[0] }}{% if course.assigned_by %} by {{ course.assigned_by }}{% endif %}
+      {%- elif course.course_owner or course.creator_name %}By {{ course.course_owner or course.creator_name }}{% endif -%}
+    </span>
     {% if variant == "manage" and can_edit %}
       <div class="flex gap-1">
         <button type="button" class="btn btn-secondary btn-sm" data-course='{{ course|tojson|forceescape }}' data-edit-course>{{ icon("edit") }}<span>Edit</span></button>

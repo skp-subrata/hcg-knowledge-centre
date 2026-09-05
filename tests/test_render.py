@@ -16,7 +16,7 @@ PAGE_TEMPLATES = {
 }
 
 # Pages already migrated to the design system: these must have exactly one <h1>, one <main>, and no bare focus:outline-none.
-MIGRATED = set()
+MIGRATED = {"index.html"}
 
 
 def _feedback_pending(client, world, db_path):
