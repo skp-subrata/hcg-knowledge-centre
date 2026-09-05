@@ -1,12 +1,24 @@
+# Python
 .venv/
+venv/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
 
-users.db
+# Local data
+*.db
+*.db-journal
 uploads/
+.secret_key
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Legacy generated files
 gh.exe
 git/
-
-lms.db
 courses_*.html
-test_*.py
