@@ -949,6 +949,17 @@ def create_app():
 	app.config["TEMPLATES_AUTO_RELOAD"] = True
 	app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 	app.jinja_env.globals["embed_url"] = embed_url
+
+	@app.template_filter("fromjson")
+	def fromjson_filter(value):
+		"""Parse a JSON string (release notes store their lists as JSON); anything else becomes []."""
+		import json
+		if not isinstance(value, str):
+			return value or []
+		try:
+			return json.loads(value)
+		except ValueError:
+			return []
 	init_db()
 
 	@app.route("/", methods=["GET", "POST"])
@@ -1438,6 +1449,9 @@ def create_app():
 									(full_name, username, generate_password_hash(password), role, employee_id, email, phone_number, department_id, position_id, location_id, about_me),
 								)
 								new_user_id = cursor.lastrowid
+								for interest_id in interests:
+									if str(interest_id).isdigit():
+										connection.execute("INSERT OR IGNORE INTO user_interest (user_id, interest_id) VALUES (?, ?)", (new_user_id, int(interest_id)))
 
 								flash("User added successfully.")
 					except sqlite3.IntegrityError:
@@ -1502,6 +1516,11 @@ def create_app():
 									"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ? WHERE id = ?",
 									(full_name, username, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, user_id),
 								)
+								if interests:  # replace the interest set only when the form sent one
+									connection.execute("DELETE FROM user_interest WHERE user_id = ?", (user_id,))
+									for interest_id in interests:
+										if str(interest_id).isdigit():
+											connection.execute("INSERT OR IGNORE INTO user_interest (user_id, interest_id) VALUES (?, ?)", (user_id, int(interest_id)))
 								if is_ajax:
 									return jsonify({"success": True, "message": "User updated successfully."})
 								flash("User updated successfully.")
@@ -1677,10 +1696,6 @@ def create_app():
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
 			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY location_name").fetchall()
-			try:
-				releases = connection.execute("SELECT * FROM app_releases ORDER BY id DESC").fetchall()
-			except Exception:
-				releases = []
 			courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (session["user_id"], session["user_id"])).fetchall()
 			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
 			banks = connection.execute("SELECT * FROM question_banks ORDER BY id DESC").fetchall()
@@ -1692,7 +1707,7 @@ def create_app():
 			api_creds = connection.execute("SELECT ac.*, u.username, u.full_name, u.role FROM api_credentials ac JOIN users u ON u.id = ac.user_id ORDER BY ac.id DESC").fetchall()
 			
 			assignable_courses = connection.execute("SELECT id, name FROM courses WHERE LOWER(status) = 'published' ORDER BY name").fetchall()
-		return render_template("admin.html", users=[dict(u) for u in users], courses=courses, assignable_courses=assignable_courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, releases=releases, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+		return render_template("admin.html", users=[dict(u) for u in users], courses=courses, assignable_courses=assignable_courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.route("/assessments/<int:assessment_id>", methods=["GET", "POST"])
 	def assessment(assessment_id):
@@ -1893,15 +1908,6 @@ def create_app():
 			actual_role=session.get("actual_role"),
 			profile_picture=session.get("profile_picture")
 		)
-
-	@app.get("/admin/reports")
-	@admin_required
-	def reports():
-		"""Show a lightweight table-overview report for the LMS."""
-		with get_db() as connection:
-			tables = [row["name"] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").fetchall()]
-			report = [(table, connection.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"]) for table in tables]
-		return render_template("reports.html", report=report, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.get("/proxy/embed")
 	def proxy_embed():
@@ -2207,27 +2213,27 @@ def create_app():
 	@staff_required
 	def delete_record(resource, record_id):
 		"""Delete an approved staff/admin resource and report dependency conflicts."""
-		allowed = {"user": "users", "course": "courses", "module": "modules", "assessment": "assessments"}
+		allowed = {"user": "users", "course": "courses", "assessment": "assessments"}
 		table = allowed.get(resource)
 		if not table or resource == "user" and record_id == session.get("user_id"):
 			flash("This record cannot be deleted.")
-			return redirect(request.referrer or url_for("admin_panel"))
+			return redirect(safe_referrer(url_for("admin_panel")))
 
 		with get_db() as connection:
 			if resource == "course":
 				course = connection.execute("SELECT created_by, status FROM courses WHERE id = ?", (record_id,)).fetchone()
 				if not course:
 					flash("Course not found.")
-					return redirect(request.referrer or url_for("courses_page"))
+					return redirect(safe_referrer(url_for("courses_page")))
 				if session.get("role") != "admin" and course["created_by"] != session.get("user_id"):
 					flash("You can only delete courses you created.")
-					return redirect(request.referrer or url_for("courses_page"))
+					return redirect(safe_referrer(url_for("courses_page")))
 				if (course["status"] or "").lower() != "draft":
 					flash(f"Cannot delete a {course['status']} course. You can only delete draft courses.")
-					return redirect(request.referrer or url_for("courses_page"))
+					return redirect(safe_referrer(url_for("courses_page")))
 			elif resource == "user" and session.get("role") != "admin":
 				flash("You do not have permission to delete users.")
-				return redirect(request.referrer or url_for("admin_panel"))
+				return redirect(safe_referrer(url_for("admin_panel")))
 
 		try:
 			with get_db() as connection:
@@ -2238,7 +2244,7 @@ def create_app():
 					flash("Record not found.")
 		except sqlite3.IntegrityError:
 			flash("This record is still in use and cannot be deleted.")
-		return redirect(request.referrer or url_for("admin_panel"))
+		return redirect(safe_referrer(url_for("admin_panel")))
 
 	@app.get("/assessments/<int:assessment_id>/questions/download")
 	def download_assessment_questions(assessment_id):
@@ -2556,16 +2562,12 @@ def create_app():
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
 			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY location_name").fetchall()
-			try:
-				releases = connection.execute("SELECT * FROM app_releases ORDER BY id DESC").fetchall()
-			except Exception:
-				releases = []
-		return render_template("profile.html", user_data=user_data, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, releases=releases, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+		return render_template("profile.html", user_data=user_data, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.context_processor
 	def inject_notifications():
 		unread = 0
-		releases = []
+		active_release = None
 		if session.get("user_id"):
 			try:
 				with get_db() as connection:
@@ -2575,10 +2577,10 @@ def create_app():
 				pass
 		try:
 			with get_db() as connection:
-				releases = connection.execute("SELECT * FROM app_releases ORDER BY id DESC").fetchall()
+				active_release = connection.execute("SELECT * FROM app_releases WHERE is_active = 1 ORDER BY id DESC LIMIT 1").fetchone()
 		except Exception:
 			pass
-		return {"unread_notifications_count": unread, "releases": releases}
+		return {"unread_notifications_count": unread, "active_release": active_release}
 
 	def create_notification(connection, user_id, message, type_name="system", target_url="#"):
 		connection.execute(

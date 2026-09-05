@@ -69,8 +69,6 @@ def test_moderator_and_admin_pages_render(moderator, admin):
 	assert admin.get("/admin/reports").status_code == 200
 
 
-@pytest.mark.qa("QA-015")
-@pytest.mark.xfail(strict=True, reason="QA-015: /admin/reports is registered twice (admin_reports and reports)")
 def test_no_duplicate_url_rules():
 	seen = {}
 	for rule in app_module.app.url_map.iter_rules():

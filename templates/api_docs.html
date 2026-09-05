@@ -193,13 +193,7 @@
                     "<strong>Inspect Course Details</strong><br>Fetches the syllabus, learning material URLs, and linked assessment tests for a specific course.", 
                     "auth", [{"name": "course_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
 
-                {{ render_api_card("PUT", "/api/v1/courses/{course_id}", 
-                    "<strong>Update Course Details</strong><br>Modifies the metadata of an existing course.<br><br><strong>Use Case:</strong> Changing course name, description, or category.", 
-                    "staff", [{"name": "course_id", "type": "path", "required": True, "placeholder": "1"}], '{\n  "name": "Advanced Cloud Integration",\n  "category": "Architecture"\n}') }}
 
-                {{ render_api_card("DELETE", "/api/v1/courses/{course_id}", 
-                    "<strong>Delete a Course</strong><br>Permanently deletes a course and all associated materials and assessments.", 
-                    "admin", [{"name": "course_id", "type": "path", "required": True, "placeholder": "1"}], None) }}
 
                 {{ render_api_card("POST", "/api/v1/courses/{course_id}/assign", 
                     "<strong>Assign to Student</strong><br>Pushes a course assignment to a student's learning queue and tracks progression.", 

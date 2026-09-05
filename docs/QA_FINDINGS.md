@@ -13,7 +13,7 @@ Severity: **S1** blocker or security, **S2** major (wrong result, data integrity
 | QA-012 | embed proxy | security | S1 | anonymous | `GET /proxy/embed?url=<any>` | login required, http(s) only, course URLs only | 200: fetches any URL (incl. `file://`, private hosts) and strips X-Frame-Options / CSP | `proxy_embed`; `test_route_matrix` xfail | xfail |
 | QA-013 | uploads | security | S1 | anonymous | `GET /uploads/<file>` | login required; non-media as attachment | 200 inline for anyone who knows the name | `uploaded_file`; `test_route_matrix` xfail | xfail |
 | QA-014 | interests API | privacy | S3 | anonymous | `GET /api/users/<id>/interests` | 401 | 200 (enumerable per user id) | `get_user_interests`; `test_route_matrix` xfail | xfail |
-| QA-015 | routing | logic | S3 | staff | `GET /admin/reports` | one handler | registered twice (`admin_reports` staff, `reports` admin); second is dead code | `test_smoke::test_no_duplicate_url_rules` xfail | xfail |
+| QA-015 | routing | logic | S3 | staff | `GET /admin/reports` | one handler | registered twice (`admin_reports` staff, `reports` admin); second is dead code | `test_smoke::test_no_duplicate_url_rules` xfail | fixed (dead reports() route removed; tests/test_smoke.py) |
 | QA-017 | API v1 community | logic | S1 | any API key | `POST /api/v1/posts/<id>/comment {"comment": "x"}` | 201 | 500: inserts column `comment`, real column is `comment_text` | `api_comment_post`; `test_route_matrix` xfail | fixed |
 
 ## Decisions needed (public routes seen by the matrix)
@@ -32,7 +32,7 @@ Route-level smoke cannot see these; each gets a flow test in Phase 2.
 
 | id | area | claim | evidence |
 |---|---|---|---|
-| QA-005 | admin delete | `POST /admin/delete/module/<id>` → 500 (`modules` table never exists) | `delete_record` allow-list |
+| QA-005 | admin delete | `POST /admin/delete/module/<id>` → 500 (`modules` table never exists) | `delete_record` allow-list → **fixed** (phantom 'module' resource removed; tests/test_admin.py) |
 | QA-006 | rewards admin | `POST /admin/rewards/source/update` with an unknown `calculation_type`/`status` → 500 (CHECK constraint, no validation) | `admin_update_reward_source` |
 | QA-007 | rewards admin | adjust/settle with unknown or non-numeric `user_id` → 500 | `admin_adjust_rewards`, `admin_settle_rewards` → **fixed** (tests/test_rewards.py) |
 | QA-008 | assessments | blank `pass_percentage`/`marks` stored as `''` → later `TypeError`/`ValueError` 500 | `add_assessment`, `add_question`, `assessment()` → **fixed** (int_or() for pass %, attempts and marks; option validated; tests/test_assessments.py) |

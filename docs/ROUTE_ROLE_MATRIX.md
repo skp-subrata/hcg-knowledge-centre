@@ -46,7 +46,7 @@ API personas send X-API-Key / X-API-Secret headers only.
 | POST | `/api/users/<int:target_user_id>/interests` | 403 | 403 | 403 | 200 | 200 | - | - | - |
 | DELETE | `/api/users/<int:target_user_id>/interests/<int:interest_id>` | 403 | 403 | 403 | 200 | 200 | - | - | - |
 | GET | `/api/v1/assessments/<int:assessment_id>` | 401 | - | - | - | - | 200 | 200 | 200 |
-| POST | `/api/v1/assessments/<int:assessment_id>/submit` | 401 | - | - | - | - | 201 | 201 | 201 |
+| POST | `/api/v1/assessments/<int:assessment_id>/submit` | 401 | - | - | - | - | 403 | 201 | 201 |
 | GET | `/api/v1/attempts/<int:attempt_id>` | 401 | - | - | - | - | 403 | 200 | 200 |
 | GET | `/api/v1/attempts/<int:attempt_id>/review` | 401 | - | - | - | - | 403 | 200 | 200 |
 | GET | `/api/v1/courses` | 401 | - | - | - | - | 200 | 200 | 200 |
