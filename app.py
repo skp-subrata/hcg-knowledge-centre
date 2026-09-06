@@ -26,6 +26,14 @@ CONTENT_TYPES = ("URL", "PDF", "Video", "PPT")
 QUESTION_COLUMNS = ("course_id", "course_name", "assessment_title", "assessment_type", "question_text", "option_a", "option_b", "option_c", "option_d", "correct_option", "marks", "difficulty", "topic_tag", "explanation")
 
 
+def upload_path(filename):
+	"""Absolute path for a stored upload. Creates the upload folder (and any sub-folder) on first use,
+	so a fresh checkout or an empty persistent disk never fails with FileNotFoundError."""
+	target = Path(UPLOAD_FOLDER) / filename
+	target.parent.mkdir(parents=True, exist_ok=True)
+	return target
+
+
 def get_db():
 	"""Open a row-producing SQLite connection with foreign keys enabled."""
 	DATABASE.parent.mkdir(parents=True, exist_ok=True)
@@ -2612,7 +2620,7 @@ def create_app():
 						flash("Profile picture must be a PNG, JPG, GIF or WebP image.", "error")
 						return redirect(safe_referrer(url_for("profile")))
 					pic_filename = uuid4().hex + ext
-					pic.save(os.path.join(UPLOAD_FOLDER, pic_filename))
+					pic.save(upload_path(pic_filename))
 				connection.execute(
 					"UPDATE users SET full_name = ?, email = ?, phone_number = ?, employee_id = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ?, profile_picture = ? WHERE id = ?",
 					(full_name, email, phone_number, employee_id, department_id, position_id, location_id, about_me, pic_filename, session["user_id"])
@@ -2716,7 +2724,7 @@ def create_app():
 				ext = os.path.splitext(thumbnail_file.filename)[1].lower()
 				if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
 					thumbnail_filename = f"thumb_{uuid4().hex}{ext}"
-					thumbnail_file.save(UPLOAD_FOLDER / thumbnail_filename)
+					thumbnail_file.save(upload_path(thumbnail_filename))
 					
 			with get_db() as connection:
 				cursor = connection.execute(
@@ -2735,7 +2743,7 @@ def create_app():
 						ext = os.path.splitext(file.filename)[1].lower()
 						file_name = secure_filename(file.filename)
 						file_path = f"post_{post_id}_{uuid4().hex[:8]}_{file_name}"
-						file.save(UPLOAD_FOLDER / file_path)
+						file.save(upload_path(file_path))
 						
 						file_size = os.path.getsize(UPLOAD_FOLDER / file_path)
 						file_type = file.mimetype
@@ -2835,7 +2843,7 @@ def create_app():
 					ext = os.path.splitext(thumbnail_file.filename)[1].lower()
 					if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
 						thumbnail_filename = f"thumb_{uuid4().hex}{ext}"
-						thumbnail_file.save(UPLOAD_FOLDER / thumbnail_filename)
+						thumbnail_file.save(upload_path(thumbnail_filename))
 						
 				connection.execute(
 					"""UPDATE posts 
@@ -2862,7 +2870,7 @@ def create_app():
 						ext = os.path.splitext(file.filename)[1].lower()
 						file_name = secure_filename(file.filename)
 						file_path = f"post_{post_id}_{uuid4().hex[:8]}_{file_name}"
-						file.save(UPLOAD_FOLDER / file_path)
+						file.save(upload_path(file_path))
 						
 						file_size = os.path.getsize(UPLOAD_FOLDER / file_path)
 						file_type = file.mimetype
