@@ -1,5 +1,6 @@
 -r requirements.txt
 pytest>=8,<9
 pytest-cov>=5
+requests>=2,<3   # only for tests/test_deploy_ci.py and .github/scripts/deploy_pythonanywhere.py
 # Optional, for qa/browser_qa.py (then run: python -m playwright install chromium)
 playwright>=1.45

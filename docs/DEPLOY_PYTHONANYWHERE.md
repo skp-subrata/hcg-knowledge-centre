@@ -104,6 +104,39 @@ flask --app app init-db     # safe to re-run: only applies new init_scripts, doe
 ```
 Then click **Reload** on the Web tab again.
 
+## Continuous deployment
+
+Pushing to the `staging` branch redeploys automatically via `.github/workflows/deploy-staging.yml`
+— no console, no manual steps, for ordinary code/template/static-asset changes.
+
+**How it works:** the workflow runs `.github/scripts/deploy_pythonanywhere.py`, which uploads
+every git-tracked file through the Files API (never touches anything git ignores — `venv/`,
+`users.db`, `uploads/`, `.secret_key` — since those never appear in `git ls-files`) and then
+reloads the web app. Reloading forces `app.py` to re-import, which re-runs `init_db()` and
+therefore applies any new `init_scripts/*.sql` and the idempotent demo/catalogue seeding — the
+same effect as the "Updating later" steps above, just automatic. A short smoke test
+(`GET /api/v1/releases/active`) confirms the site is actually up before the job reports success.
+
+**One-time setup, needed once:**
+
+1. Get **Admin** or **Maintain** access on the GitHub repo (Actions secrets need it; regular
+   push access is not enough). Ask the repo owner if you don't have it.
+2. Repo → **Settings → Secrets and variables → Actions → New repository secret**, add:
+   - `PYTHONANYWHERE_USERNAME` — the account's username
+   - `PYTHONANYWHERE_API_TOKEN` — its API token (Account → API Token). Prefer a freshly
+     regenerated one over reusing a token that has been shared anywhere else.
+
+**The one thing it can't automate:** installing a *new* pip package needs an executed process,
+and PythonAnywhere's Consoles API refuses to run anything until a human has loaded that
+console's URL in a browser once — a CI runner can never do that. So the script compares the
+local `requirements.txt` against the one already deployed before uploading anything; if they
+differ, the job fails with a message pointing back to the manual "Updating later" steps above.
+Do that once by hand, then push again — every deploy after that (until the next new
+dependency) goes through the automated path.
+
+`python .github/scripts/deploy_pythonanywhere.py --dry-run` runs locally with no network calls
+at all, useful to sanity-check the file list before trusting a real push.
+
 ## Keeping it running
 
 Every 3 months PythonAnywhere emails you; log in, open the **Web** tab, click **"Run until 3
