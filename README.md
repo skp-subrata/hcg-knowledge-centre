@@ -95,7 +95,7 @@ Every login starts in the **student view**, whatever the account's role. Adminis
 
 ```bash
 .venv/bin/python -m pip install -r requirements-dev.txt
-.venv/bin/python -m pytest                       # ~840 tests in about 5 seconds
+.venv/bin/python -m pytest                       # 851 tests in about 5 seconds
 .venv/bin/python -m pytest --cov=app --cov=security --cov=csrf --cov=db_init --cov=storage --cov-report=term-missing
 ```
 

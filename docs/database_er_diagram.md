@@ -501,3 +501,9 @@ The database is created and upgraded automatically when the app starts (or with 
 3. When `LMS_SEED_DEMO=1` (the default), demo accounts, sample users and two demo courses are seeded with `INSERT OR IGNORE`.
 
 Status columns (`departments.status`, `locations.status`, `positions.status`, `interest_master.status`) are compared case-insensitively; the default value is `Active`.
+
+### Constraints added by init scripts
+
+- `006_certificates_unique.sql` removes duplicate `certificates` rows (keeping the earliest per learner and course) and adds a `UNIQUE (student_id, course_id)` index, so re-issuing a certificate reuses the existing `cert_uid`.
+- `003_user_profile_columns.sql` adds `users.department_id`, `users.position_id`, `users.location_id` (foreign keys to the master tables) and `users.about_me`.
+- `schema_migrations(name, applied_at)` records every applied script; `flask init-db` and `run.sh` apply pending ones on start-up.

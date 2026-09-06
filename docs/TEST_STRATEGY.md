@@ -74,8 +74,8 @@ Login always yields `role='basic user'`; staff reach their workspace by **POST `
 | `app.py` | 79 % | ≥ 70 % |
 | `security.py` | 92 % | ≥ 90 % |
 | `csrf.py` | 100 % | ≥ 90 % |
-| `db_init.py` | 72 % | ≥ 90 % |
-| `storage.py` | 43 % | ≥ 90 % |
+| `db_init.py` | 98 % | ≥ 90 % |
+| `storage.py` | 100 % | ≥ 90 % |
 
 Uncovered `app.py` lines are mostly report CSV writers, the Excel import edge paths and the `__main__` block.
 

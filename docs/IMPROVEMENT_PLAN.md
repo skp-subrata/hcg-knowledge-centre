@@ -7,7 +7,7 @@ Where HCG Knowledge Centre stands after the `dev-akash` work, and where it shoul
 `dev-akash` turns a single-developer prototype into something a team can run, test and change safely:
 
 - **Fresh installs work.** Versioned SQL init scripts create every table the code needs; `./run.sh` bootstraps a machine in one command (`tests/test_db_init.py`, `README.md`).
-- **The suite is the safety net.** 840 tests cover every route for eight personas (zero 5xx responses, no anonymous access outside the agreed public list), the learner journey, staff authoring, community, groups, rewards, the API, security and CSRF. It runs in about five seconds.
+- **The suite is the safety net.** 851 tests cover every route for eight personas (zero 5xx responses, no anonymous access outside the agreed public list), the learner journey, staff authoring, community, groups, rewards, the API, security and CSRF. It runs in about five seconds.
 - **Confirmed defects are fixed and pinned.** Thirty findings are logged; twenty-six are fixed with a test each. The remaining four are report-only decisions for the product owner (see *Open decisions*).
 - **The UI is one system.** Twenty-seven templates were rebuilt on a token-based design system (light/dark, reduced motion, keyboard and screen-reader support), verified by a scripted browser pass over 30 pages and 14 interactions.
 
@@ -111,4 +111,4 @@ Effort: **S** < 1 day, **M** 1–3 days, **L** > 3 days.
 - Bootstrap: `run.sh`, `db_init.py`, `init_scripts/000–006`, `flask init-db`, `LMS_*` configuration, README.
 - Fixes: API v1 plumbing and semantics, rewards ledger, assessments and certificates, admin hygiene, authorization, hardening (SSRF, uploads, secret key, cookies), CSRF.
 - Redesign: `static/css/app.css` tokens and components, `static/js/app.js` (`window.HKC`), `templates/_macros.html`, `_partials/`, every page template.
-- Verification: 840 tests, route × role matrix, Playwright browser pass, QA log.
+- Verification: 851 tests, route × role matrix, Playwright browser pass, QA log.

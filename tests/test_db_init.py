@@ -1,6 +1,8 @@
 """Schema creation, init scripts and seeding behave on fresh and existing databases."""
 import sqlite3
 
+import pytest
+
 import app as app_module
 from db_init import INIT_SCRIPTS_DIR, apply_init_scripts
 
@@ -91,3 +93,38 @@ def test_exactly_one_active_release_is_seeded(db):
 	active = db("SELECT version_number FROM app_releases WHERE is_active = 1")
 	assert len(active) == 1
 	assert db("SELECT COUNT(*) AS n FROM app_releases")[0]["n"] >= 2
+
+
+def test_statements_keeps_a_trailing_statement_without_a_semicolon():
+	from db_init import _statements
+
+	statements = [item.strip() for item in _statements("CREATE TABLE a (x);\n-- comment only\nINSERT INTO a VALUES (1)")]
+	assert len(statements) == 2
+	assert statements[0] == "CREATE TABLE a (x);"
+	assert statements[1].endswith("INSERT INTO a VALUES (1)"), "the unterminated tail is still executed"
+
+
+def test_duplicate_add_column_is_skipped_but_other_errors_are_raised(tmp_path):
+	import sqlite3
+
+	from db_init import apply_init_scripts
+
+	scripts = tmp_path / "scripts"; scripts.mkdir()
+	(scripts / "001_base.sql").write_text("CREATE TABLE t (id INTEGER);\nALTER TABLE t ADD COLUMN id INTEGER;\nALTER TABLE t ADD COLUMN extra TEXT;\n")
+	connection = sqlite3.connect(tmp_path / "x.db")
+	assert apply_init_scripts(connection, scripts) == ["001_base.sql"], "the duplicate ADD COLUMN is tolerated"
+	assert [row[1] for row in connection.execute("PRAGMA table_info(t)")] == ["id", "extra"]
+
+	(scripts / "002_broken.sql").write_text("INSERT INTO missing_table VALUES (1);\n")
+	with pytest.raises(RuntimeError, match="002_broken.sql failed"):
+		apply_init_scripts(connection, scripts)
+	assert [name for name, _ in __import__("db_init").applied_scripts(connection)] == ["001_base.sql"], "a failing script is not recorded"
+
+
+def test_cli_main_reports_the_database_and_applied_scripts(db_path, capsys):
+	import db_init
+
+	db_init.main()
+	out = capsys.readouterr().out
+	assert "Database ready" in out and str(db_path) in out
+	assert "000_" in out and "006_" in out
