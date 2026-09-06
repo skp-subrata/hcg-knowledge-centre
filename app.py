@@ -142,7 +142,7 @@ def init_db():
 		""")
 		connection.execute(
 			"INSERT OR IGNORE INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, ?)",
-			("Subratakumar Pradhan", "subratakumar.pradhan", generate_password_hash("admin123"), "admin"),
+			("Subratakumar Pradhan", "subratakumar.pradhan", generate_password_hash(os.getenv("LMS_ADMIN_PASSWORD") or "admin123"), "admin"),
 		)
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS courses (
@@ -481,48 +481,55 @@ def init_db():
 
 def seed_demo_data(connection):
 	"""Insert a small, repeatable dataset for local exploration."""
-	for name, username, role in (("Aarav Moderator", "aarav.moderator", "moderator"), ("Maya Student", "maya.student", "basic user"), ("Rohan Student", "rohan.student", "basic user")):
-		
-		# Migrate users table for profile fields
-		table_info = connection.execute("PRAGMA table_info(users)").fetchall()
-		columns = [col['name'] for col in table_info]
-		if 'email' not in columns:
-			connection.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''")
-			connection.execute("ALTER TABLE users ADD COLUMN phone_number TEXT DEFAULT ''")
-			connection.execute("ALTER TABLE users ADD COLUMN profile_picture TEXT DEFAULT ''")
+	# generate_password_hash uses scrypt, so hashing the ~106 rows below costs several CPU-seconds.
+	# Once they already exist, skip re-hashing them on every restart -- they are all INSERT OR
+	# IGNORE, so the outcome is identical, and this is what actually burns a CPU-metered host's
+	# quota if left unguarded. The course/assessment backfill after this block still runs every
+	# time, since it also has to pick up courses created after the demo data was seeded.
+	demo_users_already_seeded = connection.execute("SELECT 1 FROM users WHERE username = 'sampleuser100'").fetchone() is not None
+	if not demo_users_already_seeded:
+		for name, username, role in (("Aarav Moderator", "aarav.moderator", "moderator"), ("Maya Student", "maya.student", "basic user"), ("Rohan Student", "rohan.student", "basic user")):
+			
+			# Migrate users table for profile fields
+			table_info = connection.execute("PRAGMA table_info(users)").fetchall()
+			columns = [col['name'] for col in table_info]
+			if 'email' not in columns:
+				connection.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''")
+				connection.execute("ALTER TABLE users ADD COLUMN phone_number TEXT DEFAULT ''")
+				connection.execute("ALTER TABLE users ADD COLUMN profile_picture TEXT DEFAULT ''")
 
-		
-		# Migrate courses table for new fields
-		courses_info = connection.execute("PRAGMA table_info(courses)").fetchall()
-		course_cols = [col['name'] for col in courses_info]
-		if 'tags' not in course_cols:
-			connection.execute("ALTER TABLE courses ADD COLUMN tags TEXT DEFAULT ''")
-		if 'duration_minutes' not in course_cols:
-			connection.execute("ALTER TABLE courses ADD COLUMN duration_minutes INTEGER DEFAULT 0")
-		if 'difficulty' not in course_cols:
-			connection.execute("ALTER TABLE courses ADD COLUMN difficulty TEXT DEFAULT 'beginner'")
-		if 'thumbnail_color' not in course_cols:
-			connection.execute("ALTER TABLE courses ADD COLUMN thumbnail_color TEXT DEFAULT '#6366f1'")
+			
+			# Migrate courses table for new fields
+			courses_info = connection.execute("PRAGMA table_info(courses)").fetchall()
+			course_cols = [col['name'] for col in courses_info]
+			if 'tags' not in course_cols:
+				connection.execute("ALTER TABLE courses ADD COLUMN tags TEXT DEFAULT ''")
+			if 'duration_minutes' not in course_cols:
+				connection.execute("ALTER TABLE courses ADD COLUMN duration_minutes INTEGER DEFAULT 0")
+			if 'difficulty' not in course_cols:
+				connection.execute("ALTER TABLE courses ADD COLUMN difficulty TEXT DEFAULT 'beginner'")
+			if 'thumbnail_color' not in course_cols:
+				connection.execute("ALTER TABLE courses ADD COLUMN thumbnail_color TEXT DEFAULT '#6366f1'")
 
-		connection.execute("INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id) VALUES (?, ?, ?, ?, ?)", (name, username, generate_password_hash("learn123"), role, f"EMP-{len(columns) + 1:04d}" if role == "moderator" else f"EMP-{abs(hash(username)) % 9000 + 1000:04d}"))
+			connection.execute("INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id) VALUES (?, ?, ?, ?, ?)", (name, username, generate_password_hash("learn123"), role, f"EMP-{len(columns) + 1:04d}" if role == "moderator" else f"EMP-{abs(hash(username)) % 9000 + 1000:04d}"))
 
-	# Demo accounts documented in README.md (password == username). Local use only.
-	for full_name, username, role in (("Admin", "admin", "admin"), ("Moderator", "mod", "moderator"), ("Student", "student", "basic user")):
-		connection.execute(
-			"INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			(full_name, username, generate_password_hash(os.getenv("LMS_ADMIN_PASSWORD") or "admin" if username == "admin" else username), role, f"EMP-{username.upper()}", "Operations", "Hyderabad", 1),
-		)
+		# Demo accounts documented in README.md (password == username). Local use only.
+		for full_name, username, role in (("Admin", "admin", "admin"), ("Moderator", "mod", "moderator"), ("Student", "student", "basic user")):
+			connection.execute(
+				"INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				(full_name, username, generate_password_hash(os.getenv("LMS_ADMIN_PASSWORD") or "admin" if username == "admin" else username), role, f"EMP-{username.upper()}", "Operations", "Hyderabad", 1),
+			)
 
-	# Create 100 additional sample users with mandatory employee IDs.
-	for idx in range(1, 101):
-		full_name = f"Sample User {idx}"
-		username = f"sampleuser{idx:03d}"
-		employee_id = f"EMP-{idx:04d}"
-		role = "basic user" if idx % 10 != 0 else "moderator"
-		connection.execute(
-			"INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			(full_name, username, generate_password_hash("learn123"), role, employee_id, "Operations", "Hyderabad", 1),
-		)
+		# Create 100 additional sample users with mandatory employee IDs.
+		for idx in range(1, 101):
+			full_name = f"Sample User {idx}"
+			username = f"sampleuser{idx:03d}"
+			employee_id = f"EMP-{idx:04d}"
+			role = "basic user" if idx % 10 != 0 else "moderator"
+			connection.execute(
+				"INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				(full_name, username, generate_password_hash("learn123"), role, employee_id, "Operations", "Hyderabad", 1),
+			)
 	admin = connection.execute("SELECT id FROM users WHERE username = 'subratakumar.pradhan'").fetchone()[0]
 	student = connection.execute("SELECT id FROM users WHERE username = 'maya.student'").fetchone()[0]
 	course_row = connection.execute("SELECT id FROM courses WHERE name = 'Python Foundations'").fetchone()

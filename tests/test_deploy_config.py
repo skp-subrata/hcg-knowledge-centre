@@ -33,15 +33,19 @@ def test_forwarded_proto_is_trusted_when_enabled(monkeypatch, db_path):
 	assert response.headers["Location"].startswith(("https://lms.example.com/", "/")), response.headers["Location"]
 
 
-def test_seeded_admin_takes_the_password_from_the_environment(monkeypatch, db_path):
+def test_seeded_admin_takes_the_password_from_the_environment(monkeypatch, tmp_path):
+	# A fresh database, not the shared seeded one: seed_demo_data() skips its (expensive, scrypt-hashed)
+	# insert loops once the demo dataset already exists, so this has to run against an empty database.
 	monkeypatch.setenv("LMS_ADMIN_PASSWORD", "s3cret-from-render")
-	connection = sqlite3.connect(db_path)
+	fresh = tmp_path / "fresh.db"
+	monkeypatch.setattr(app_module, "DATABASE", fresh)
+	app_module.init_db()
+	connection = sqlite3.connect(fresh)
 	connection.row_factory = sqlite3.Row
-	with connection:
-		connection.execute("DELETE FROM users WHERE username IN ('admin', 'mod')")
-		app_module.seed_demo_data(connection)
-	rows = {r["username"]: r["password_hash"] for r in connection.execute("SELECT username, password_hash FROM users WHERE username IN ('admin', 'mod')")}
+	rows = {r["username"]: r["password_hash"] for r in connection.execute("SELECT username, password_hash FROM users WHERE username IN ('admin', 'mod', 'subratakumar.pradhan')")}
+	connection.close()
 	assert check_password_hash(rows["admin"], "s3cret-from-render") and not check_password_hash(rows["admin"], "admin")
+	assert check_password_hash(rows["subratakumar.pradhan"], "s3cret-from-render"), "the bootstrap admin honours the same variable"
 	assert check_password_hash(rows["mod"], "mod"), "other demo accounts are unchanged"
 
 

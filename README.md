@@ -59,7 +59,7 @@ All settings are environment variables; every one is optional.
 | `LMS_SECRET_KEY` | generated | Flask session secret. When unset, a random key is generated once and stored in `.secret_key` (git-ignored) |
 | `LMS_SECRET_KEY_FILE` | `./.secret_key` | Where the generated key is kept |
 | `LMS_CSRF` | `1` | `1` requires a CSRF token on every session-authenticated POST (forms and fetches). API-key requests are exempt. Set `0` only for local debugging. |
-| `LMS_ADMIN_PASSWORD` | `admin` | Password of the seeded `admin` account (used only when the account is created) |
+| `LMS_ADMIN_PASSWORD` | `admin` | Password given to both seeded admin accounts (`admin` and the bootstrap `subratakumar.pradhan`) — used only when they are first created |
 | `LMS_PROXY_FIX` | `0` | `1` trusts `X-Forwarded-For/Proto/Host` from a reverse proxy (Render, nginx, load balancers) |
 | `LMS_SECURE_COOKIES` | `0` | `1` marks the session cookie `Secure` (HTTPS only) |
 | `PORT` | – | Used when `LMS_PORT` is unset (set automatically by Render and similar hosts) |
@@ -94,7 +94,7 @@ Seeded only when `LMS_SEED_DEMO=1`. For local use only.
 | Administrator | `admin` | `admin` |
 | Moderator | `mod` | `mod` |
 | Student | `student` | `student` |
-| Administrator (bootstrap) | `subratakumar.pradhan` | `admin123` |
+| Administrator (bootstrap) | `subratakumar.pradhan` | `admin123`, or `LMS_ADMIN_PASSWORD` if set |
 | Student with assigned courses | `maya.student` | `learn123` |
 | Sample users | `sampleuser001` … `sampleuser100` | `learn123` |
 
@@ -146,6 +146,7 @@ docs/                  ER diagram, QA findings, route matrix, test strategy, imp
 ## Documentation
 
 - `docs/DEPLOY_RENDER.md` — deploying to Render (or any container host) with `render.yaml`
+- `docs/DEPLOY_PYTHONANYWHERE.md` — deploying to PythonAnywhere's free tier (no card, no code changes)
 - `docs/database_er_diagram.md` — schema and how it is built
 - `docs/TEST_STRATEGY.md` — how the app is tested and how to extend the suite
 - `docs/ROUTE_ROLE_MATRIX.md` — generated route × role matrix

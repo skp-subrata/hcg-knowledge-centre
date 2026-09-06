@@ -128,3 +128,34 @@ def test_cli_main_reports_the_database_and_applied_scripts(db_path, capsys):
 	out = capsys.readouterr().out
 	assert "Database ready" in out and str(db_path) in out
 	assert "000_" in out and "006_" in out
+
+
+def test_demo_seeding_skips_rehashing_once_already_seeded(monkeypatch, tmp_path):
+	"""generate_password_hash uses scrypt; re-hashing ~106 rows on every restart is expensive
+	CPU that buys nothing once the rows already exist (QA: burns a CPU-metered host's daily quota)."""
+	fresh = tmp_path / "fresh.db"
+	monkeypatch.setattr(app_module, "DATABASE", fresh)
+	app_module.init_db()  # first boot: seeds everything
+
+	calls = []
+	real_hash = app_module.generate_password_hash
+	monkeypatch.setattr(app_module, "generate_password_hash", lambda *a, **k: (calls.append(a), real_hash(*a, **k))[1])
+
+	connection = sqlite3.connect(fresh)
+	connection.row_factory = sqlite3.Row
+	try:
+		app_module.seed_demo_data(connection)  # second boot: same database, nothing new to hash
+		assert calls == [], f"re-hashed {len(calls)} passwords on a restart that seeded nothing new"
+
+		# The per-restart course/assessment backfill must still run, so a course created after the
+		# first boot still gets its sample assessment.
+		admin_id = connection.execute("SELECT id FROM users WHERE username = 'subratakumar.pradhan'").fetchone()["id"]
+		new_course_id = connection.execute(
+			"INSERT INTO courses (name, description, category, content_type, content_url, created_by) VALUES ('A Brand New Course', 'd', 'General', 'URL', 'https://example.com', ?)",
+			(admin_id,),
+		).lastrowid
+		app_module.seed_demo_data(connection)
+		assessment = connection.execute("SELECT id FROM assessments WHERE course_id = ?", (new_course_id,)).fetchone()
+		assert assessment is not None, "seed_course_questions must still back-fill new courses on every restart"
+	finally:
+		connection.close()
