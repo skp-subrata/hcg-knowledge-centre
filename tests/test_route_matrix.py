@@ -59,6 +59,7 @@ POLICY = {
 	"assign_group_course": "staff", "upload_group_members": "staff", "download_group_template": "staff",
 	# admin only
 	"download_api_credentials": "admin", "master_management": "admin", "api_docs_playground": "admin", "view_as_page": "admin",
+	"admin_system": "admin",
 	"admin_rewards": "admin", "admin_adjust_rewards": "admin", "admin_reset_rewards": "admin",
 	"admin_settle_rewards": "admin", "admin_update_reward_source": "admin",
 	"add_group_moderator": "admin", "remove_group_moderator": "admin", "toggle_group_moderator": "admin",

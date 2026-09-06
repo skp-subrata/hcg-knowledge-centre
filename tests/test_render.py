@@ -13,11 +13,11 @@ PAGE_TEMPLATES = {
 	"assessment_review.html", "feedback.html", "certificate.html", "community_feed.html", "post_detail.html",
 	"create_post.html", "edit_post.html", "my_posts.html", "approval_queue.html", "groups.html", "group_detail.html",
 	"notifications.html", "profile.html", "rewards.html", "reward_admin.html", "reports.html",
-	"master_management.html", "api_docs.html", "view_as.html",
+	"master_management.html", "api_docs.html", "view_as.html", "admin_system.html",
 }
 
 # Pages already migrated to the design system: these must have exactly one <h1>, one <main>, and no bare focus:outline-none.
-MIGRATED = {"error.html", "index.html", "courses.html", "course.html", "api_docs.html", "admin.html", "group_detail.html", "master_management.html", "reward_admin.html", "reports.html", "groups.html", "profile.html", "notifications.html", "rewards.html", "view_as.html", "community_feed.html", "post_detail.html", "create_post.html", "edit_post.html", "my_posts.html", "approval_queue.html", "assessment.html", "assessment_result.html", "assessment_review.html", "feedback.html", "certificate.html"}
+MIGRATED = {"error.html", "index.html", "courses.html", "course.html", "api_docs.html", "admin.html", "admin_system.html", "group_detail.html", "master_management.html", "reward_admin.html", "reports.html", "groups.html", "profile.html", "notifications.html", "rewards.html", "view_as.html", "community_feed.html", "post_detail.html", "create_post.html", "edit_post.html", "my_posts.html", "approval_queue.html", "assessment.html", "assessment_result.html", "assessment_review.html", "feedback.html", "certificate.html"}
 
 
 def _feedback_pending(client, world, db_path):
@@ -58,6 +58,7 @@ CASES = [
 	("master_management.html", "/admin/masters", "admin", None),
 	("api_docs.html", "/api/v1/docs", "admin", None),
 	("view_as.html", "/view-as", "admin", None),
+	("admin_system.html", "/admin/system", "admin", None),
 ]
 
 RENDERED = set()

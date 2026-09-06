@@ -1,6 +1,8 @@
 import sqlite3
 import os
+import sys
 import csv
+import json
 from io import BytesIO
 from io import StringIO, TextIOWrapper
 from functools import wraps
@@ -12,6 +14,7 @@ from werkzeug.utils import secure_filename
 from uuid import uuid4
 from flask import Flask, flash, g, redirect, render_template, request, send_file, send_from_directory, session, url_for, jsonify
 from openpyxl import Workbook, load_workbook
+import requests
 from storage import save_file
 from db_init import apply_init_scripts, applied_scripts
 from security import attachment_allowed, is_safe_proxy_target, load_or_create_secret_key, sanitize_html, serve_inline
@@ -960,6 +963,7 @@ def issue_certificate(connection, user_id, course_id):
 		"INSERT INTO certificates (student_id, course_id, cert_uid, issued_date, file_url) VALUES (?, ?, ?, DATE('now'), '')",
 		(user_id, course_id, cert_uid),
 	)
+	log_activity(connection, user_id, "course_certified", {"course_id": course_id, "cert_uid": cert_uid})
 	return cert_uid
 
 
@@ -1066,6 +1070,132 @@ def safe_referrer(default_url):
 		return ref
 	return default_url
 
+
+ACTIVITY_LOG_RETENTION_DAYS = 90
+# The free tier has no disk-usage API at all (confirmed against PythonAnywhere's own docs) --
+# this is the one number worth hard-coding, used only to give the used-bytes figure below a
+# ceiling to compare against when we know we're running there (PYTHONANYWHERE_USERNAME is set).
+PYTHONANYWHERE_FREE_DISK_QUOTA_BYTES = 512 * 1024 * 1024
+
+
+def log_activity(connection, user_id, event_type, details=None):
+	"""Record one row in the activity log. Deliberately bounded to meaningful events -- logins,
+	logouts, real page views (see the after_request hook in create_app()), post reviews,
+	assessment submissions and course certifications -- not a full request log. `details` is a
+	small dict, serialised as JSON. Auto-prunes anything older than ACTIVITY_LOG_RETENTION_DAYS
+	on every write so this can't grow without bound against the disk quota."""
+	connection.execute(
+		"INSERT INTO activity_log (user_id, event_type, details) VALUES (?, ?, ?)",
+		(user_id, event_type, json.dumps(details or {})),
+	)
+	connection.execute("DELETE FROM activity_log WHERE created_at < datetime('now', ?)", (f"-{ACTIVITY_LOG_RETENTION_DAYS} days",))
+
+
+def format_bytes(value):
+	"""Human-readable size, e.g. 128.3 MB. None passes through unchanged (a metric that
+	couldn't be read, rather than a real zero)."""
+	if value is None:
+		return None
+	size = float(value)
+	for unit in ("B", "KB", "MB", "GB"):
+		if size < 1024 or unit == "GB":
+			return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} {unit}"
+		size /= 1024
+
+
+def _directory_size_bytes(path):
+	"""Sum of every file under `path`. There is no disk-usage API on PythonAnywhere (or most
+	hosts), so this is the only way to get a real "how much am I actually using" figure --
+	walking the account's home directory captures the venv, the database and uploads/ exactly
+	as they count against the account's quota."""
+	total = 0
+	for root, _dirs, files in os.walk(path):
+		for name in files:
+			try:
+				total += os.path.getsize(os.path.join(root, name))
+			except OSError:
+				continue
+	return total
+
+
+def _worker_memory_bytes():
+	"""Current resident memory of *this* worker process, not an account-wide figure -- no such
+	quota exists to report on the free tier. /proc/self/status gives a true current value on
+	Linux (PythonAnywhere, Render); the resource-module fallback (e.g. local macOS development)
+	reports a peak, not a current value."""
+	try:
+		with open("/proc/self/status") as handle:
+			for line in handle:
+				if line.startswith("VmRSS:"):
+					return int(line.split()[1]) * 1024
+	except OSError:
+		pass
+	try:
+		import resource
+		value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+		return value if sys.platform == "darwin" else value * 1024
+	except Exception:
+		return None
+
+
+def record_system_snapshot(connection):
+	"""Take one snapshot of CPU/disk/memory/health right now and store it. Only called when an
+	admin opens the System health page -- there is no background sampler, so history fills in
+	gradually as the page gets checked, not on a fixed schedule. Every figure degrades to None
+	rather than raising, so a page view never breaks because a metric couldn't be read."""
+	cpu_used = cpu_limit = None
+	username = os.getenv("PYTHONANYWHERE_USERNAME")
+	token = os.getenv("PYTHONANYWHERE_API_TOKEN")
+	if username and token:
+		try:
+			response = requests.get(
+				f"https://www.pythonanywhere.com/api/v0/user/{username}/cpu/",
+				headers={"Authorization": f"Token {token}"}, timeout=5,
+			)
+			if response.ok:
+				data = response.json()
+				cpu_used = data.get("daily_cpu_total_usage_seconds")
+				cpu_limit = data.get("daily_cpu_limit_seconds")
+		except Exception:
+			pass  # this metric is a bonus, never worth breaking the page over
+
+	# Deliberately always the app's own directory, never Path.home(): on PythonAnywhere the
+	# venv, database and uploads all live inside it (a couple of small stray files directly in
+	# the account's home dir are the only thing this misses), and on any other host -- a
+	# developer's own machine very much included -- Path.home() could be an entire unrelated
+	# personal home directory with nothing to do with this app. Bounded and safe beats exact.
+	try:
+		disk_used = _directory_size_bytes(Path(__file__).parent)
+	except OSError:
+		disk_used = None
+	disk_quota = PYTHONANYWHERE_FREE_DISK_QUOTA_BYTES if username else None
+
+	worker_memory = _worker_memory_bytes()
+
+	try:
+		db_size = os.path.getsize(DATABASE)
+	except OSError:
+		db_size = None
+
+	try:
+		connection.execute("SELECT 1").fetchone()
+		healthy = True
+	except sqlite3.Error:
+		healthy = False
+
+	connection.execute(
+		"""INSERT INTO system_metric_snapshots
+			(cpu_used_seconds, cpu_limit_seconds, disk_used_bytes, disk_quota_bytes, worker_memory_bytes, db_size_bytes, healthy)
+			VALUES (?, ?, ?, ?, ?, ?, ?)""",
+		(cpu_used, cpu_limit, disk_used, disk_quota, worker_memory, db_size, 1 if healthy else 0),
+	)
+	return {
+		"cpu_used_seconds": cpu_used, "cpu_limit_seconds": cpu_limit,
+		"disk_used_bytes": disk_used, "disk_quota_bytes": disk_quota,
+		"worker_memory_bytes": worker_memory, "db_size_bytes": db_size, "healthy": healthy,
+	}
+
+
 def create_app():
 	"""Build and configure the Flask application."""
 	app = Flask(__name__)
@@ -1106,6 +1236,7 @@ def create_app():
 	app.jinja_env.globals["embed_url"] = embed_url
 
 	app.jinja_env.filters["sanitize"] = sanitize_html
+	app.jinja_env.filters["format_bytes"] = format_bytes
 
 	@app.template_filter("fromjson")
 	def fromjson_filter(value):
@@ -1130,13 +1261,17 @@ def create_app():
 			if user and user["is_active"] in (None, 1) and check_password_hash(user["password_hash"], password):
 				session.pop("impersonator_id", None)
 				session.update(
-                    user=user["full_name"], 
-                    user_id=user["id"], 
-                    actual_role=user["role"], 
+                    user=user["full_name"],
+                    user_id=user["id"],
+                    actual_role=user["role"],
                     role="basic user", # Always login as basic user
                     profile_picture=user["profile_picture"] if "profile_picture" in user.keys() else ""
                 )
+				with get_db() as connection:
+					log_activity(connection, user["id"], "login_success", {"username": username})
 				return redirect(url_for("home"))
+			with get_db() as connection:
+				log_activity(connection, user["id"] if user else None, "login_failure", {"username": username})
 			flash("Invalid username or password.", "error")
 		with get_db() as connection:
 			user_id = session.get("user_id", 0)
@@ -1574,6 +1709,67 @@ def create_app():
 			profile_picture=session.get("profile_picture")
 		)
 
+	@app.get("/admin/system")
+	@admin_required
+	def admin_system():
+		"""System health (CPU/disk/memory, sampled when this page is opened) and the activity
+		log (logins, page views, and a bounded set of business events -- see log_activity())
+		alongside the existing structured admin-action audit trail (audit_logs)."""
+		with get_db() as connection:
+			snapshot = record_system_snapshot(connection)
+			history = connection.execute(
+				"""SELECT * FROM (SELECT * FROM system_metric_snapshots ORDER BY recorded_at DESC LIMIT 30)
+				   ORDER BY recorded_at ASC"""
+			).fetchall()
+
+			event_counts = connection.execute(
+				"""SELECT event_type, COUNT(*) AS n FROM activity_log
+				   WHERE created_at >= datetime('now', '-1 day') GROUP BY event_type ORDER BY n DESC"""
+			).fetchall()
+			logins_today = connection.execute(
+				"SELECT COUNT(*) AS n FROM activity_log WHERE event_type = 'login_success' AND created_at >= datetime('now', '-1 day')"
+			).fetchone()["n"]
+			active_users_today = connection.execute(
+				"SELECT COUNT(DISTINCT user_id) AS n FROM activity_log WHERE user_id IS NOT NULL AND created_at >= datetime('now', '-1 day')"
+			).fetchone()["n"]
+
+			page = max(1, request.args.get("page", 1, type=int))
+			page_size = 25
+			activity_total = connection.execute("SELECT COUNT(*) AS n FROM activity_log").fetchone()["n"]
+			activity_rows = connection.execute(
+				"""SELECT al.*, u.full_name, u.username FROM activity_log al LEFT JOIN users u ON u.id = al.user_id
+				   ORDER BY al.created_at DESC LIMIT ? OFFSET ?""",
+				(page_size, (page - 1) * page_size),
+			).fetchall()
+
+			recent_admin_actions = connection.execute(
+				"""SELECT al.*, u.full_name FROM audit_logs al LEFT JOIN users u ON u.id = al.user_id
+				   ORDER BY al.created_at DESC LIMIT 20"""
+			).fetchall()
+
+		activity = []
+		for row in activity_rows:
+			entry = dict(row)
+			try:
+				entry["details"] = json.loads(entry["details"]) if entry["details"] else {}
+			except (TypeError, ValueError):
+				entry["details"] = {}
+			activity.append(entry)
+
+		return render_template(
+			"admin_system.html",
+			snapshot=snapshot,
+			history=[dict(row) for row in history],
+			event_counts=[dict(row) for row in event_counts],
+			logins_today=logins_today,
+			active_users_today=active_users_today,
+			activity=activity,
+			activity_total=activity_total,
+			page=page,
+			page_size=page_size,
+			total_pages=max(1, -(-activity_total // page_size)),
+			recent_admin_actions=[dict(row) for row in recent_admin_actions],
+		)
 
 	@app.route("/admin", methods=["GET", "POST"])
 	@staff_required
@@ -1961,6 +2157,7 @@ def create_app():
 				).lastrowid
 				for question_id, selected, correct, marks in answers:
 					connection.execute("INSERT INTO attempt_answers (attempt_id, question_id, selected_option, is_correct, marks_awarded) VALUES (?, ?, ?, ?, ?)", (attempt_id, question_id, selected, correct, marks))
+				log_activity(connection, session["user_id"], "assessment_submitted", {"assessment_id": assessment_id, "result": result, "percentage": round(percentage, 1)})
 				course = connection.execute("SELECT c.name FROM courses c WHERE c.id = ?", (assessment_row["course_id"],)).fetchone()
 				cert_row = get_user_course_record(connection, session["user_id"], assessment_row["course_id"])
 				if cert_row is None:
@@ -2767,6 +2964,20 @@ def create_app():
 			pass
 		return {"unread_notifications_count": unread, "active_release": active_release}
 
+	@app.after_request
+	def log_page_view(response):
+		"""Record a page view for real navigations only: GET requests that render an HTML
+		page. This one check (response.mimetype == "text/html") is what actually excludes
+		every /api/* and AJAX endpoint -- they all return JSON -- without needing a hand-kept
+		exclude list; it also naturally skips static files and redirects that don't render."""
+		try:
+			if request.method == "GET" and response.status_code == 200 and response.mimetype == "text/html":
+				with get_db() as connection:
+					log_activity(connection, session.get("user_id"), "page_view", {"path": request.path})
+		except Exception:
+			pass  # activity logging must never break a real response
+		return response
+
 	def create_notification(connection, user_id, message, type_name="system", target_url="#"):
 		connection.execute(
 			"INSERT INTO notifications (user_id, message, type, target_url) VALUES (?, ?, ?, ?)",
@@ -2842,7 +3053,8 @@ def create_app():
 					(title, description, content_type, category, topic_tag, user_id, status, thumbnail_filename)
 				)
 				post_id = cursor.lastrowid
-				
+				log_activity(connection, user_id, "post_created", {"post_id": post_id, "title": title, "status": status})
+
 				attachments = request.files.getlist("attachments")
 				for file in attachments:
 					if file and file.filename:
@@ -3174,7 +3386,8 @@ def create_app():
 			)
 			
 			create_notification(connection, post["created_by"], notif_message, notif_type, url_for("post_detail", post_id=post_id))
-			
+			log_activity(connection, reviewer_id, "post_reviewed", {"post_id": post_id, "action": audit_action, "title": post["title"]})
+
 		flash(f"Decision '{action}' submitted successfully!", "success")
 		return redirect(safe_referrer(url_for("approval_queue")))
 
@@ -3966,6 +4179,9 @@ def create_app():
 	@app.post("/logout")
 	def logout():
 		"""End the current session."""
+		if session.get("user_id"):
+			with get_db() as connection:
+				log_activity(connection, session["user_id"], "logout")
 		session.clear()
 		return redirect(url_for("home"))
 

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% from "_macros.html" import btn, icon, stat_tile, badge, status_badge, table, tabs, tab_panel, empty_state %}
+
+{% block title %}System & activity · HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <div>
+    <p class="eyebrow mb-1">Management</p>
+    <h1>System &amp; activity</h1>
+    <p class="text-fg-2 mt-1">Infrastructure health and what people are doing in the app.</p>
+  </div>
+</header>
+
+{{ tabs("system", [{"id": "health", "label": "System health"}, {"id": "activity", "label": "Activity log", "count": activity_total}], hash=True) }}
+
+{% call tab_panel("system", "health", active=True) %}
+<div class="card mb-6 flex items-center gap-3">
+  {% if snapshot.healthy %}
+    {{ icon("check-circle", "w-5 h-5 text-success") }}
+    <div><p class="font-semibold">All systems normal</p><p class="caption">The database answered a query just now.</p></div>
+  {% else %}
+    {{ icon("warning", "w-5 h-5 text-danger") }}
+    <div><p class="font-semibold text-danger">Issue detected</p><p class="caption">The database did not respond to a health check just now.</p></div>
+  {% endif %}
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  {% if snapshot.cpu_used_seconds is not none %}
+    {{ stat_tile("CPU today", (snapshot.cpu_used_seconds|round(1))|string ~ " / " ~ (snapshot.cpu_limit_seconds|int)|string ~ "s", "PythonAnywhere daily quota") }}
+  {% else %}
+    {{ stat_tile("CPU today", "—", "Not on PythonAnywhere, or no API token configured") }}
+  {% endif %}
+  {% if snapshot.disk_quota_bytes %}
+    {{ stat_tile("Disk used", snapshot.disk_used_bytes|format_bytes, "of " ~ (snapshot.disk_quota_bytes|format_bytes) ~ " free-tier quota") }}
+  {% else %}
+    {{ stat_tile("Disk used", snapshot.disk_used_bytes|format_bytes or "—", "no fixed quota on this host") }}
+  {% endif %}
+  {{ stat_tile("Worker memory", snapshot.worker_memory_bytes|format_bytes or "—", "this process only, not an account total") }}
+  {{ stat_tile("Database size", snapshot.db_size_bytes|format_bytes or "—", "users.db on disk") }}
+</div>
+
+<p class="caption mb-6">Recorded just now, opening this page. There is no background monitor — history below only has a point for each time someone checked, so it may look sparse at first.</p>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <section class="card" aria-labelledby="cpu-history-title">
+    <h2 id="cpu-history-title" class="text-base mb-4">CPU seconds used (per check)</h2>
+    <div class="relative h-64"><canvas id="cpuHistoryChart" role="img" aria-label="Line chart of CPU seconds used at each recorded check"></canvas></div>
+  </section>
+  <section class="card" aria-labelledby="disk-history-title">
+    <h2 id="disk-history-title" class="text-base mb-4">Disk used, MB (per check)</h2>
+    <div class="relative h-64"><canvas id="diskHistoryChart" role="img" aria-label="Line chart of disk megabytes used at each recorded check"></canvas></div>
+  </section>
+</div>
+{% endcall %}
+
+{% call tab_panel("system", "activity") %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  {{ stat_tile("Logins today", logins_today) }}
+  {{ stat_tile("Active users today", active_users_today) }}
+  {{ stat_tile("Events today", event_counts|sum(attribute="n")) }}
+</div>
+
+{% if event_counts %}
+<div class="flex flex-wrap gap-2 mb-6">
+  {% for row in event_counts %}{{ badge(row.event_type|replace("_", " ")|title ~ ": " ~ row.n, "info") }}{% endfor %}
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+  <section class="card lg:col-span-1" aria-labelledby="admin-actions-title">
+    <h2 id="admin-actions-title" class="text-base mb-4">Recent admin actions</h2>
+    {% if recent_admin_actions %}
+    <ol class="flex flex-col gap-3 m-0 p-0 list-none border-l hairline ml-1 pl-4">
+      {% for log in recent_admin_actions %}
+      <li class="relative text-sm"><span class="absolute -left-[1.3rem] top-1.5 w-2 h-2 rounded-full bg-accent" aria-hidden="true"></span><span class="font-medium">{{ log.full_name or "Deleted user" }}</span> {{ log.action }}d a {{ log.entity_type }}<span class="caption block mt-0.5">{{ log.created_at }}</span></li>
+      {% endfor %}
+    </ol>
+    {% else %}<p class="caption text-center py-6">No admin actions recorded yet.</p>{% endif %}
+  </section>
+
+  <section class="card lg:col-span-2" aria-labelledby="activity-table-title">
+    <div class="flex items-center justify-between mb-4">
+      <h2 id="activity-table-title" class="text-base">Event log</h2>
+      <label class="relative block w-56"><span class="sr-only">Filter this page</span><span class="absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">{{ icon("search") }}</span><input type="search" class="input pl-9" placeholder="Filter this page" data-filter-input autocomplete="off"></label>
+    </div>
+    <div data-filter>
+      {% if activity %}
+      {% call table("activity-table", ["When", "Who", "Event", "Details"], caption="Activity log") %}
+        {% for entry in activity %}
+        <tr data-filter-item data-search="{{ entry.full_name or 'anonymous' }} {{ entry.event_type }}">
+          <td class="caption tabular whitespace-nowrap">{{ entry.created_at }}</td>
+          <td>{{ entry.full_name or "Anonymous" }}{% if entry.username %}<span class="caption block">@{{ entry.username }}</span>{% endif %}</td>
+          <td>{{ badge(entry.event_type|replace("_", " ")|title, "success" if "success" in entry.event_type or entry.event_type in ("post_created", "course_certified") else "danger" if "failure" in entry.event_type else "neutral") }}</td>
+          <td class="caption">
+            {%- if entry.event_type == "page_view" -%}{{ entry.details.path }}
+            {%- elif entry.event_type == "assessment_submitted" -%}{{ entry.details.result }} · {{ entry.details.percentage }}%
+            {%- elif entry.event_type == "post_reviewed" -%}{{ entry.details.action }} · {{ entry.details.title }}
+            {%- elif entry.details -%}{{ entry.details.values()|map("string")|join(" · ") }}
+            {%- else -%}—{%- endif -%}
+          </td>
+        </tr>
+        {% endfor %}
+      {% endcall %}
+      {% else %}
+      {{ empty_state("No activity recorded yet", "Logins, page views and key actions will show up here as people use the app.", icon_name="chart") }}
+      {% endif %}
+      <div data-filter-empty data-empty hidden>{{ empty_state("No activity matches", "Try a different filter.", icon_name="chart") }}</div>
+    </div>
+    {% if total_pages > 1 %}
+    <nav class="flex items-center justify-between gap-3 mt-4" aria-label="Pagination">
+      <span class="caption tabular">Page {{ page }} of {{ total_pages }}</span>
+      <div class="flex gap-2">
+        {% if page > 1 %}{{ btn("Prev", "secondary", size="sm", href=url_for('admin_system') ~ "?page=" ~ (page - 1) ~ "#system-panel-activity") }}{% endif %}
+        {% if page < total_pages %}{{ btn("Next", "secondary", size="sm", href=url_for('admin_system') ~ "?page=" ~ (page + 1) ~ "#system-panel-activity") }}{% endif %}
+      </div>
+    </nav>
+    {% endif %}
+  </section>
+</div>
+{% endcall %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  (function () {
+    const token = (name, alpha) => { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return alpha === undefined ? `rgb(${v})` : `rgb(${v} / ${alpha})`; };
+    const history = {{ history | tojson | safe }};
+    const labels = history.map((row) => (row.recorded_at || "").slice(5, 16));
+    const cpuData = history.map((row) => row.cpu_used_seconds);
+    const diskData = history.map((row) => row.disk_used_bytes != null ? Math.round(row.disk_used_bytes / (1024 * 1024) * 10) / 10 : null);
+    let charts = [];
+    function lineChart(canvasId, data, label) {
+      const text = token('--c-fg-2'), grid = token('--c-line', .08);
+      return new Chart(document.getElementById(canvasId), {
+        type: 'line',
+        data: { labels, datasets: [{ label, data, borderColor: token('--c-accent'), backgroundColor: token('--c-accent', .12), fill: true, tension: .3, pointRadius: 3 }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { color: text }, grid: { color: grid } }, x: { ticks: { color: text, maxRotation: 0 }, grid: { display: false } } }, plugins: { legend: { display: false } } },
+      });
+    }
+    function draw() {
+      charts.forEach((c) => c.destroy()); charts = [];
+      charts.push(lineChart('cpuHistoryChart', cpuData, 'CPU seconds'));
+      charts.push(lineChart('diskHistoryChart', diskData, 'Disk MB'));
+    }
+    if (history.length) draw();
+    document.addEventListener('hkc:themechange', () => requestAnimationFrame(draw));
+  })();
+</script>
+{% endblock %}

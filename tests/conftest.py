@@ -85,13 +85,15 @@ def db(db_path):
 
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
-	"""Tests never reach the network: block urlopen and stub the content-type probe."""
+	"""Tests never reach the network: block urlopen and requests, and stub the content-type probe."""
 	import urllib.request
+	import requests.sessions
 
 	def _blocked(*args, **kwargs):
 		raise RuntimeError("network access is disabled in tests")
 
 	monkeypatch.setattr(urllib.request, "urlopen", _blocked)
+	monkeypatch.setattr(requests.sessions.Session, "request", _blocked)
 	monkeypatch.setattr(app_module, "detect_content_type", lambda value: "URL")
 
 
