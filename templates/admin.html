@@ -1,1285 +1,490 @@
 {% extends "base.html" %}
+{% from "_macros.html" import btn, btn_icon, icon, field, select_field, textarea_field, file_field, badge, status_badge, table, empty_state, modal, sheet_right, page_header %}
 
-{% block title %}Staff Workspace | HCG Knowledge Centre{% endblock %}
+{% block title %}Admin workspace · HCG Knowledge Centre{% endblock %}
+
+{% set is_admin = role == 'admin' %}
+
+{% macro role_badge(r) -%}
+{{ badge(r|title, {"admin": "info", "moderator": "warning"}.get(r, "neutral")) }}
+{%- endmacro %}
+
+{% macro row_select(name, label, rows, id, placeholder="Select…", required=False, master=None, value_key="id", text_key="name") -%}
+<div class="field">
+  <label class="field-label" for="{{ id }}">{{ label }}{% if required %}<span class="req" aria-hidden="true">*</span>{% endif %}</label>
+  <select id="{{ id }}" name="{{ name }}" class="select"{% if required %} required{% endif %}{% if master %} data-master="{{ master }}"{% endif %}>
+    <option value="">{{ placeholder }}</option>
+    {% for r in rows %}<option value="{{ r[value_key] }}">{{ r[text_key] }}</option>{% endfor %}
+  </select>
+</div>
+{%- endmacro %}
 
 {% block content %}
-<div class="mb-8">
-    <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-3">HCG knowledge centre</h1>
-    <p class="text-slate-500 dark:text-slate-400 text-lg">Manage content, assessments, assignments, and users.</p>
-</div>
+{% call page_header("Admin workspace", "Create courses and assessments, assign learning and manage people." if is_admin else "Create courses and assessments for the learners you manage.", eyebrow=("Administrator" if is_admin else "Moderator")) %}
+  {{ btn("Reports", "secondary", href="/admin/reports", icon_name="chart") }}
+  {% if is_admin %}{{ btn("Masters", "secondary", href="/admin/masters", icon_name="bars") }}{{ btn("API docs", "secondary", href="/api/v1/docs", icon_name="code") }}{% endif %}
+{% endcall %}
 
-<div class="flex flex-wrap gap-2 mb-8 bg-slate-100/50 dark:bg-slate-900/30 p-1.5 rounded-2xl border border-slate-200/50 dark:border-slate-800/40 w-fit">
-    <a href="#creation-tools" class="px-4 py-2 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm transition">
-        Creation Tools
-    </a>
-    <a href="#courses-section" class="px-4 py-2 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm transition">
-        Courses List
-    </a>
-    <a href="#users-section" class="px-4 py-2 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm transition">
-        Users Directory
-    </a>
-    {% if role == 'admin' %}
-    <a href="#api-creds-section" class="px-4 py-2 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm transition">
-        API Developer Access
-    </a>
+<nav class="jump-nav mb-8 lg:sticky lg:top-16 z-10" aria-label="Sections">
+  <a href="#create" aria-current="true">Create &amp; assign</a>
+  <a href="#courses">Courses</a>
+  <a href="#assessments">Assessments</a>
+  <a href="#users">People</a>
+  {% if is_admin %}<a href="#api-access">API access</a>{% endif %}
+</nav>
+
+{# ─────────────────────────── Create & assign ─────────────────────────── #}
+<section id="create" class="mb-12 scroll-mt-32" data-jump-section aria-labelledby="create-title">
+  <h2 id="create-title" class="text-xl mb-4">Create &amp; assign</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+
+    <form method="post" enctype="multipart/form-data" class="card flex flex-col gap-3" aria-labelledby="new-course-title">
+      <input type="hidden" name="action" value="add_course">
+      <h3 id="new-course-title" class="text-base flex items-center gap-2">{{ icon("book", "w-4 h-4 text-accent") }}New course</h3>
+      {{ field("course_name", "Course name", required=True, placeholder="e.g. Cloud Native Integrations", id="course-name") }}
+      {{ textarea_field("description", "Description", rows=2, placeholder="What will learners be able to do?", id="course-desc") }}
+      <div class="grid grid-cols-2 gap-3">
+        {{ field("category", "Category", placeholder="e.g. Technology", id="course-category") }}
+        {{ select_field("content_type", "Content type", content_types, id="course-type") }}
+      </div>
+      {{ field("content_url", "Content URL", type="url", placeholder="https://…", hint="For URL and video content.", id="course-url") }}
+      {{ file_field("course_file", "Upload file", accept=".pdf,.ppt,.pptx,.mp4,.mov,.webm", hint="PDF, PPT or video. Optional when a URL is given.", id="course-file") }}
+      <div class="mt-auto pt-1">{{ btn("Create course", "primary", type="submit", icon_name="plus") }}</div>
+    </form>
+
+    <form method="post" class="card flex flex-col gap-3" id="assign-form" aria-labelledby="assign-title">
+      <input type="hidden" name="action" value="assign_course">
+      <h3 id="assign-title" class="text-base flex items-center gap-2">{{ icon("users", "w-4 h-4 text-accent") }}Assign a course</h3>
+      {{ row_select("course_id", "Published course", assignable_courses, "assign-course", placeholder="Select a course", required=True) }}
+      <fieldset class="field">
+        <legend class="field-label">Assign to</legend>
+        <div class="flex gap-5 text-sm">
+          <label class="flex items-center gap-2"><input type="radio" name="assignment_type" value="individual" class="accent-accent" checked> One learner</label>
+          <label class="flex items-center gap-2"><input type="radio" name="assignment_type" value="group" class="accent-accent"> A group</label>
+        </div>
+      </fieldset>
+      <div data-assign-target="individual">{{ row_select("student_id", "Learner", students, "assign-student", placeholder="Select a learner", required=True, text_key="full_name") }}</div>
+      <div data-assign-target="group" hidden>{{ row_select("group_id", "Group", groups, "assign-group", placeholder="Select a group") }}</div>
+      <p class="caption">Assigned learners are notified and the course appears on their dashboard.</p>
+      <div class="mt-auto pt-1">{{ btn("Assign course", "primary", type="submit", icon_name="check") }}</div>
+    </form>
+
+    <form method="post" class="card flex flex-col gap-3" aria-labelledby="new-assessment-title">
+      <input type="hidden" name="action" value="add_assessment">
+      <h3 id="new-assessment-title" class="text-base flex items-center gap-2">{{ icon("clipboard-check", "w-4 h-4 text-accent") }}New assessment</h3>
+      {{ row_select("course_id", "Course", courses, "assessment-course", placeholder="Select a course", required=True) }}
+      {{ field("assessment_title", "Title", required=True, placeholder="e.g. Final knowledge check", id="assessment-title") }}
+      <div class="grid grid-cols-3 gap-3">
+        {{ select_field("assessment_type", "Type", [("pre", "Pre"), ("post", "Post")], selected="post", id="assessment-type") }}
+        {{ field("pass_percentage", "Pass %", type="number", value="60", attrs='min="0" max="100" inputmode="numeric"', id="assessment-pass") }}
+        {{ field("max_attempts", "Attempts", type="number", value="1", attrs='min="1" inputmode="numeric"', id="assessment-attempts") }}
+      </div>
+      <p class="caption">Only passing a post-assessment certifies the learner and pays the certification reward.</p>
+      <div class="mt-auto pt-1">{{ btn("Create assessment", "primary", type="submit", icon_name="plus") }}</div>
+    </form>
+
+    <form method="post" class="card flex flex-col gap-3" aria-labelledby="new-question-title">
+      <input type="hidden" name="action" value="add_question">
+      <h3 id="new-question-title" class="text-base flex items-center gap-2">{{ icon("info", "w-4 h-4 text-accent") }}Add a question</h3>
+      {{ row_select("assessment_id", "Assessment", assessments, "question-assessment", placeholder="Select an assessment", required=True, text_key="title") }}
+      {{ textarea_field("question_text", "Question", rows=2, required=True, id="question-text") }}
+      <div class="grid grid-cols-2 gap-3">
+        {{ field("option_a", "Option A", required=True, id="question-a") }}
+        {{ field("option_b", "Option B", required=True, id="question-b") }}
+        {{ field("option_c", "Option C", required=True, id="question-c") }}
+        {{ field("option_d", "Option D", required=True, id="question-d") }}
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        {{ select_field("correct_option", "Correct option", [("A", "A"), ("B", "B"), ("C", "C"), ("D", "D")], id="question-correct") }}
+        {{ field("marks", "Marks", type="number", value="1", attrs='min="1" inputmode="numeric"', id="question-marks") }}
+      </div>
+      <div class="mt-auto pt-1">{{ btn("Add question", "primary", type="submit", icon_name="plus") }}</div>
+    </form>
+
+    <form method="post" enctype="multipart/form-data" class="card flex flex-col gap-3" aria-labelledby="import-title">
+      <input type="hidden" name="action" value="import_questions">
+      <h3 id="import-title" class="text-base flex items-center gap-2">{{ icon("upload", "w-4 h-4 text-accent") }}Import questions</h3>
+      <p class="text-sm text-fg-2">Bulk-load questions from a workbook. Rows for assessments you do not manage are rejected.</p>
+      {{ file_field("question_file", "Question file", accept=".xlsx,.csv", required=True, hint="Excel or CSV in the template layout.", id="question-file") }}
+      <a href="{{ url_for('download_question_template') }}" class="text-sm font-medium text-accent inline-flex items-center gap-1.5">{{ icon("download", "w-4 h-4") }}Download the template</a>
+      <div class="mt-auto pt-1">{{ btn("Import", "primary", type="submit", icon_name="upload") }}</div>
+    </form>
+
+    {% if is_admin %}
+    <form method="post" class="card flex flex-col gap-3" aria-labelledby="new-user-title">
+      <input type="hidden" name="action" value="add_user">
+      <h3 id="new-user-title" class="text-base flex items-center gap-2">{{ icon("user", "w-4 h-4 text-accent") }}Add a user</h3>
+      <div class="grid grid-cols-2 gap-3">
+        {{ field("full_name", "Full name", required=True, id="user-name", autocomplete="off") }}
+        {{ field("username", "Username", required=True, id="user-username", autocomplete="off", hint="Stored lower-case.") }}
+        {{ field("employee_id", "Employee ID", required=True, id="user-emp") }}
+        {{ field("email", "Email", type="email", required=True, id="user-email", autocomplete="off") }}
+        {{ field("phone_number", "Phone", type="tel", required=True, id="user-phone") }}
+        {{ field("password", "Password", type="password", required=True, id="user-password", autocomplete="new-password", hint="At least 6 characters.") }}
+      </div>
+      {{ select_field("role", "Role", roles, id="user-role") }}
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {{ row_select("department_id", "Department", master_depts, "user-dept", placeholder="—", master="departments") }}
+        {{ row_select("position_id", "Position", master_positions, "user-pos", placeholder="—", master="positions") }}
+        {{ row_select("location_id", "Location", master_locations, "user-loc", placeholder="—", master="locations") }}
+      </div>
+      <div class="flex flex-wrap gap-1 -mt-1">
+        <button type="button" class="btn btn-ghost btn-sm" data-add-master="departments" data-add-label="department">{{ icon("plus", "w-3.5 h-3.5") }}Department</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-add-master="positions" data-add-label="position">{{ icon("plus", "w-3.5 h-3.5") }}Position</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-add-master="locations" data-add-label="location">{{ icon("plus", "w-3.5 h-3.5") }}Location</button>
+      </div>
+      <div class="mt-auto pt-1">{{ btn("Create user", "primary", type="submit", icon_name="plus") }}</div>
+    </form>
     {% endif %}
-    <a href="/admin/reports" class="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 hover:shadow-sm transition border border-indigo-100 dark:border-indigo-800/50">
-        Reporting & Analytics
-    </a>
-</div>
-
-<section class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-12" id="creation-tools">
-    <!-- Create Course -->
-    <form class="glass-panel p-6 flex flex-col" method="post" enctype="multipart/form-data">
-        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Create course</h2>
-        <input type="hidden" name="action" value="add_course">
-        
-        <div class="space-y-4 flex-grow">
-            <div>
-                <label class="form-label">Course name</label>
-                <input name="course_name" class="form-input" required>
-            </div>
-            <div>
-                <label class="form-label">Description</label>
-                <input name="description" class="form-input">
-            </div>
-            <div>
-                <label class="form-label">Category</label>
-                <input name="category" class="form-input" placeholder="General">
-            </div>
-            <div>
-                <label class="form-label">Content type</label>
-                <select name="content_type" class="form-input">
-                    {% for item in content_types %}
-                    <option>{{ item }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label class="form-label">Content URL or file</label>
-                <input name="content_url" type="url" class="form-input mb-2" placeholder="https://...">
-                <input name="course_file" type="file" class="form-input text-sm" accept=".pdf,.mp4,.webm,.mov,.avi,.mkv,.ppt,.pptx">
-            </div>
-        </div>
-        
-        <button class="btn-primary w-full mt-6 flex justify-center py-3.5" title="Create Course"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg></button>
-    </form>
-
-    <div class="space-y-6 flex flex-col">
-        <!-- Assign Course -->
-        <form class="glass-panel p-6" method="post">
-            <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Assign course</h2>
-            <input type="hidden" name="action" value="assign_course">
-            <div class="space-y-4">
-                <div>
-                    <label class="form-label">Course</label>
-                    <select name="course_id" class="form-input" required>
-                        <option value="" disabled selected>Select a Course</option>
-                        {% for item in assignable_courses %}
-                        <option value="{{ item.id }}">#{{ item.id }} - {{ item.name }}</option>
-                        {% else %}
-                        <option disabled>No eligible courses</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-    <label class="form-label">Assign To</label>
-    <div class="flex items-center gap-4 mb-2">
-        <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="radio" name="assignment_type" value="individual" checked onchange="document.getElementById('student_select').style.display='block'; document.getElementById('group_select').style.display='none'; document.getElementById('student_id_input').required=true; document.getElementById('group_id_input').required=false;"> Individual</label>
-        <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="radio" name="assignment_type" value="group" onchange="document.getElementById('student_select').style.display='none'; document.getElementById('group_select').style.display='block'; document.getElementById('student_id_input').required=false; document.getElementById('group_id_input').required=true;"> Group</label>
-    </div>
-</div>
-<div id="student_select">
-    <label class="form-label">Student</label>
-    <select name="student_id" id="student_id_input" class="form-input" required>
-        {% for item in students %}
-        <option value="{{ item.id }}">{{ item.full_name }}</option>
-        {% else %}
-        <option disabled>No students</option>
-        {% endfor %}
-    </select>
-</div>
-<div id="group_select" style="display: none;">
-    <label class="form-label">Group</label>
-    <select name="group_id" id="group_id_input" class="form-input">
-        <option value="" disabled selected>Select Group</option>
-        {% for item in groups %}
-        <option value="{{ item.id }}">{{ item.name }}</option>
-        {% else %}
-        <option disabled>No groups</option>
-        {% endfor %}
-    </select>
-</div>
-            </div>
-            <button class="btn-primary w-full mt-6 flex justify-center py-3.5" title="Assign Course"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg></button>
-        </form>
-    </div>
-</section>
-<!-- Additional Forms Section -->
-<section class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
-    <!-- Add Assessment -->
-    <form class="glass-panel p-6" method="post">
-        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Create Assessment</h2>
-        <input type="hidden" name="action" value="add_assessment">
-        <div class="space-y-4">
-            <div>
-                <label class="form-label">Course</label>
-                <select name="course_id" class="form-input">
-                    {% for item in courses %}
-                    <option value="{{ item.id }}">{{ item.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label class="form-label">Title</label>
-                <input name="assessment_title" class="form-input" required>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="form-label">Type</label>
-                    <select name="assessment_type" class="form-input">
-                        <option value="pre">Pre-assessment</option>
-                        <option value="post">Post-assessment</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">Pass %</label>
-                    <input name="pass_percentage" type="number" min="1" max="100" value="60" class="form-input">
-                </div>
-            </div>
-        </div>
-        <button class="btn-primary w-full mt-6 flex justify-center py-3.5" title="Create Assessment"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg></button>
-    </form>
-
-    
-    <!-- Manual Question Add -->
-    <form class="glass-panel p-6 flex flex-col" method="post">
-        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Add Question</h2>
-        <input type="hidden" name="action" value="add_question">
-        <div class="space-y-4 flex-grow">
-            <div>
-                <label class="form-label">Assessment</label>
-                <select name="assessment_id" class="form-input" required>
-                    {% for item in assessments %}
-                    <option value="{{ item.id }}">{{ item.title }} ({{ item.course_name }})</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label class="form-label">Question Text</label>
-                <input name="question_text" class="form-input" required>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div><label class="form-label text-xs">Option A</label><input name="option_a" class="form-input" required></div>
-                <div><label class="form-label text-xs">Option B</label><input name="option_b" class="form-input" required></div>
-                <div><label class="form-label text-xs">Option C</label><input name="option_c" class="form-input" required></div>
-                <div><label class="form-label text-xs">Option D</label><input name="option_d" class="form-input" required></div>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="form-label">Correct</label>
-                    <select name="correct_option" class="form-input" required>
-                        <option value="a">A</option><option value="b">B</option>
-                        <option value="c">C</option><option value="d">D</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">Marks</label>
-                    <input name="marks" type="number" value="1" min="1" class="form-input">
-                </div>
-            </div>
-        </div>
-        <button class="btn-primary w-full mt-6 flex justify-center py-3.5" title="Add Question"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg></button>
-    </form>
-
-    <!-- Excel Question Import -->
-    <form class="glass-panel p-6" method="post" enctype="multipart/form-data">
-        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Import questions</h2>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Use course ID to connect every question to its assessment.</p>
-        <input type="hidden" name="action" value="import_questions">
-        <a href="{{ url_for('download_question_template') }}" class="text-slate-900 dark:text-slate-100 font-medium font-semibold hover:underline">Download Excel template</a>
-        <div class="mt-5"><label class="form-label">Completed .xlsx file</label><input name="question_file" type="file" accept=".xlsx" class="form-input" required></div>
-        <button class="btn-primary w-full mt-6 flex justify-center py-3.5" title="Upload Questions"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg></button>
-    </form>
-
-    {% if role == 'admin' %}
-    <!-- Add User -->
-    <form class="glass-panel p-6" method="post">
-        <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 mb-5 border-b border-slate-200 dark:border-slate-800 pb-3">Add User</h2>
-        <input type="hidden" name="action" value="add_user">
-        <div class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="form-label">Full name *</label>
-                    <input name="full_name" class="form-input" required>
-                </div>
-                <div>
-                    <label class="form-label">Username *</label>
-                    <input name="username" class="form-input" required>
-                </div>
-                <div>
-                    <label class="form-label">Employee ID *</label>
-                    <input name="employee_id" class="form-input" required>
-                </div>
-                <div>
-                    <label class="form-label">Email ID *</label>
-                    <input name="email" type="email" class="form-input" required>
-                </div>
-                <div>
-                    <label class="form-label">Phone Number *</label>
-                    <input name="phone_number" type="tel" class="form-input" required>
-                </div>
-                <div>
-                    <label class="form-label">Password *</label>
-                    <input name="password" type="password" minlength="6" class="form-input" required>
-                </div>
-                <div>
-                    <label class="form-label">Role / Permission *</label>
-                    <select name="role" class="form-input">
-                        {% for item in roles %}
-                        <option value="{{ item }}">{{ item|title }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label flex justify-between">Department <a href="#" onclick="addMaster('departments', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Department]</a></label>
-                    <select name="department_id" class="form-input dept-select">
-                        <option value="">[ Select Department ▼ ]</option>
-                        {% for d in master_depts %}
-                        <option value="{{ d.id }}">{{ d.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label flex justify-between">Position <a href="#" onclick="addMaster('positions', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Position]</a></label>
-                    <select name="position_id" class="form-input pos-select">
-                        <option value="">[ Select Position ▼ ]</option>
-                        {% for p in master_positions %}
-                        <option value="{{ p.id }}">{{ p.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label flex justify-between">Location * <a href="#" onclick="addMaster('locations', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Location]</a></label>
-                    <select name="location_id" class="form-input loc-select" required>
-                        <option value="">[ Select Location ▼ ]</option>
-                        {% for l in master_locations %}
-                        <option value="{{ l.id }}">{{ l.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-            </div>
-        </div>
-        <button class="btn-primary w-full mt-6 flex justify-center py-3.5" title="Add User"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg> Add User</button>
-    </form>
-
-    {% endif %}
+  </div>
 </section>
 
-<!-- Tables Section -->
-<div class="space-y-8">
-
-    <!-- ═══ COURSES TABLE ═══ -->
-    <section class="glass-panel p-6 overflow-hidden" id="courses-section">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-            <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">Courses</h2>
-            <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-                <!-- Search -->
-                <div class="relative">
-                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
-                    <input id="courseSearch" type="text" placeholder="Search name, category…" class="form-input pl-9 h-9 text-sm w-full sm:w-56" oninput="filterTable('courses-tbody','courseSearch',['courseFilterBtns'])">
-                </div>
-                <!-- Filter chips -->
-                <div class="flex gap-1.5 flex-wrap" id="courseFilterBtns">
-                    <button class="adm-chip active" data-col="4" data-val="">All</button>
-                    <button class="adm-chip" data-col="4" data-val="published">Published</button>
-                    <button class="adm-chip" data-col="4" data-val="draft">Draft</button>
-                    <button class="adm-chip" data-col="3" data-val="URL">URL</button>
-                    <button class="adm-chip" data-col="3" data-val="Video">Video</button>
-                    <button class="adm-chip" data-col="3" data-val="PDF">PDF</button>
-                    <button class="adm-chip" data-col="3" data-val="PPT">PPT</button>
-                </div>
-            </div>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-800">
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">ID</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Course Name</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Category</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Type</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Status</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="courses-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
-                    {% for item in courses %}
-                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition course-row"
-                        data-search="{{ item.id }} {{ item.name|lower }} {{ (item.category or 'general')|lower }} {{ item.content_type|lower }} {{ (item.status or 'published')|lower }}">
-                        <td class="p-3 font-bold text-slate-500 font-medium">#{{ item.id }}</td>
-                        <td class="p-3 font-semibold">{{ item.name }}</td>
-                        <td class="p-3 text-slate-500 dark:text-slate-400">{{ item.category or 'General' }}</td>
-                        <td class="p-3">
-                            <span class="px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 text-[10px] font-bold uppercase tracking-wider">{{ item.content_type }}</span>
-                        </td>
-                        <td class="p-3">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
-                                {% if item.status == 'draft' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
-                                {% else %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% endif %}">
-                                {{ item.status or 'published' }}
-                            </span>
-                        </td>
-                        <td class="p-3 w-[20%] text-right space-y-1">
-                            <form method="post" action="{{ url_for('delete_record', resource='course', record_id=item.id) }}" onsubmit="return confirm('Delete this course?')" class="inline">
-                                <button type="submit" class="text-xs text-red-500 font-semibold hover:underline">Delete</button>
-                            </form>
-                            <form method="post" class="flex gap-1 justify-end flex-wrap mt-1">
-                                <input type="hidden" name="action" value="update_course">
-                                <input type="hidden" name="record_id" value="{{ item.id }}">
-                                <input name="name" value="{{ item.name }}" class="form-input h-8 w-32 text-xs" required>
-                                <input name="category" value="{{ item.category or 'General' }}" class="form-input h-8 w-24 text-xs">
-                                <select name="status" class="form-input h-8 w-24 text-xs">
-                                    <option {% if item.status == 'published' %}selected{% endif %}>published</option>
-                                    <option {% if item.status == 'draft' %}selected{% endif %}>draft</option>
-                                </select>
-                                <button type="submit" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2">Update</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="6" class="p-8 text-center text-slate-400 text-sm">No courses yet.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <p id="courses-empty" class="hidden text-center text-slate-400 text-sm py-6">No courses match your search or filter.</p>
-        <div id="courses-pagination" class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500"></div>
-    </section>
-
-    <!-- ═══ USERS TABLE ═══ -->
-    <section class="glass-panel p-6 overflow-hidden" id="users-section">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-            <h2 id="users" class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50 pt-8 -mt-8">Users</h2>
-            <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-                <div class="relative">
-                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
-                    <input id="userSearch" type="text" placeholder="Search name, username…" class="form-input pl-9 h-9 text-sm w-full sm:w-56">
-                </div>
-                <div class="flex gap-1.5 flex-wrap" id="userFilterBtns">
-                    <button class="adm-chip active" data-col="3" data-val="">All Roles</button>
-                    <button class="adm-chip" data-col="3" data-val="admin">Admin</button>
-                    <button class="adm-chip" data-col="3" data-val="moderator">Moderator</button>
-                    <button class="adm-chip" data-col="3" data-val="basic">Student</button>
-                </div>
-            </div>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-800">
-                        <th class="p-3 w-[20%] font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Name</th>
-                        <th class="p-3 w-[20%] font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Username</th>
-                        <th class="p-3 w-[25%] font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Course IDs</th>
-                        <th class="p-3 w-[15%] font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Role</th>
-                        <th class="p-3 w-[20%] font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="users-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
-                    {% for item in users %}
-                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition user-row">
-                        <td class="p-3 w-[20%] font-semibold">{{ item.full_name }}</td>
-                          <td class="p-3 w-[20%] text-slate-500 dark:text-slate-400 text-sm">{{ item.username }}</td>
-                          <td class="p-3 w-[25%] text-slate-500 dark:text-slate-400 text-sm">{{ item.course_ids or '-' }}</td>
-                        <td class="p-3 w-[15%]">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
-                                {% if item.role == 'admin' %}bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400
-                                {% elif item.role == 'moderator' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
-                                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}">
-                                {{ item.role }}
-                            </span>
-                        </td>
-                        <td class="p-3 w-[20%] text-right space-y-1">
-                            {% if role == 'admin' %}
-                            <div class="flex gap-2 justify-end">
-                                <form method="post" action="{{ url_for('view_as', user_id=item.id) }}" class="inline">
-                                    <button type="submit" class="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline">Preview as</button>
-                                </form>
-                                <form method="post" action="{{ url_for('delete_record', resource='user', record_id=item.id) }}" class="inline" onsubmit="return confirm('Delete this user?')">
-                                    <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Delete</button>
-                                </form>
-                            </div>
-                            <button type="button" onclick='openEditUserModal({{ item|tojson }})' class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-block mt-1">Edit User Data</button>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <p id="users-empty" class="hidden text-center text-slate-400 text-sm py-6">No users match your search or filter.</p>
-        <div id="users-pagination" class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500"></div>
-    </section>
-
-    <!-- ═══ API CREDENTIALS TABLE ═══ -->
-    {% if role == 'admin' %}
-    <section class="glass-panel p-6 overflow-hidden" id="api-creds-section">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 border-b border-slate-200 dark:border-slate-800 pb-4">
-            <div>
-                <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">API Developer Access</h2>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Manage developers' API credentials, view doc site and launch playground.</p>
-            </div>
-            <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-                <div class="relative">
-                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
-                    <input id="apiCredSearch" type="text" placeholder="Search API key, user…" class="form-input pl-9 h-9 text-sm w-full sm:w-56">
-                </div>
-                <a href="/api/v1/docs" class="btn-secondary text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 font-semibold">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-                    API Docs & Playground
-                </a>
-            </div>
-        </div>
-
-        <!-- Generate Creds Form -->
-        <form class="flex flex-col sm:flex-row gap-4 items-end mb-8 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800" method="post">
-            <input type="hidden" name="action" value="generate_api_creds">
-            <div class="flex-grow max-w-sm">
-                <label class="form-label">Select User for API Key</label>
-                <select name="target_user_id" class="form-input text-sm" required>
-                    {% for item in users %}
-                    <option value="{{ item.id }}">{{ item.full_name }} ({{ item.username }} - {{ item.role|title }})</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="btn-primary px-5 py-2.5 rounded-xl font-bold text-xs shadow-md">
-                Generate API Key & Secret
-            </button>
-        </form>
-
-        <!-- Credentials List Table -->
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-800">
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">User</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Role</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">API Key</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">API Secret</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Status</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="api-creds-tbody" class="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
-                    {% for item in api_creds %}
-                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
-                        <td class="p-3 font-semibold">
-                            <span class="block text-slate-900 dark:text-slate-50">{{ item.full_name }}</span>
-                            <span class="text-xs text-slate-400 font-medium">@{{ item.username }}</span>
-                        </td>
-                        <td class="p-3">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
-                                {% if item.role == 'admin' %}bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400
-                                {% elif item.role == 'moderator' %}bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400
-                                {% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}">
-                                {{ item.role|title }}
-                            </span>
-                        </td>
-                        <td class="p-3">
-                            <div class="flex items-center gap-2 group">
-                                <span class="font-mono text-xs text-slate-700 dark:text-slate-300">{{ item.api_key }}</span>
-                                <button type="button" onclick="navigator.clipboard.writeText('{{ item.api_key }}'); this.innerHTML='<svg class=\'w-3.5 h-3.5 text-green-500\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'><path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M5 13l4 4L19 7\'></path></svg>'; setTimeout(() => { this.innerHTML='<svg class=\'w-3.5 h-3.5\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'><path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z\'></path></svg>' }, 2000);" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition opacity-0 group-hover:opacity-100 focus:opacity-100" title="Copy API Key">
-                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                                </button>
-                            </div>
-                        </td>
-                        <td class="p-3">
-                            {% if item.status == 'active' %}
-                            <div class="flex items-center gap-2 group">
-                                <span class="font-mono text-xs text-slate-700 dark:text-slate-300" id="secret-{{ item.id }}" data-secret="{{ item.api_secret }}">••••••••••••••••</span>
-                                
-                                <!-- Eye Toggle Button -->
-                                <button type="button" onclick="const el=document.getElementById('secret-{{ item.id }}'); if(el.innerText==='••••••••••••••••'){el.innerText=el.dataset.secret;}else{el.innerText='••••••••••••••••';}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition opacity-0 group-hover:opacity-100 focus:opacity-100" title="Toggle Visibility">
-                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                </button>
-                                
-                                <!-- Copy Button -->
-                                <button type="button" onclick="navigator.clipboard.writeText('{{ item.api_secret }}'); this.innerHTML='<svg class=\'w-3.5 h-3.5 text-green-500\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'><path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M5 13l4 4L19 7\'></path></svg>'; setTimeout(() => { this.innerHTML='<svg class=\'w-3.5 h-3.5\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'><path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z\'></path></svg>' }, 2000);" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition opacity-0 group-hover:opacity-100 focus:opacity-100" title="Copy API Secret">
-                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                                </button>
-                            </div>
-                            {% else %}
-                            <span class="font-mono text-xs text-slate-400 line-through">{{ item.api_secret[:8] }}...</span>
-                            {% endif %}
-                        </td>
-                        <td class="p-3">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
-                                {% if item.status == 'active' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400
-                                {% else %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% endif %}">
-                                {{ item.status }}
-                            </span>
-                        </td>
-                        <td class="p-3 text-right space-x-2">
-                            {% if item.status == 'active' %}
-                            <a href="/admin/api-credentials/{{ item.user_id }}/download" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">Download JSON</a>
-                            <form class="inline" method="post" onsubmit="return confirm('Revoke credentials for @{{ item.username }}?')">
-                                <input type="hidden" name="action" value="revoke_api_creds">
-                                <input type="hidden" name="target_user_id" value="{{ item.user_id }}">
-                                <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Revoke</button>
-                            </form>
-                            {% else %}
-                            <span class="text-xs text-slate-400 italic">Revoked</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="6" class="p-8 text-center text-slate-400 text-sm">No API keys generated yet.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <p id="api-creds-empty" class="hidden text-center text-slate-400 text-sm py-6">No API credentials match your search.</p>
-        <div id="api-creds-pagination" class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500"></div>
-    </section>
-    {% endif %}
-
-    <!-- ═══ ASSESSMENTS TABLE ═══ -->
-    <section class="glass-panel p-6 overflow-hidden" id="assessments-section">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-            <h2 class="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">Assessments</h2>
-            <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-                <div class="relative">
-                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
-                    <input id="assessSearch" type="text" placeholder="Search title, course…" class="form-input pl-9 h-9 text-sm w-full sm:w-56">
-                </div>
-                <div class="flex gap-1.5 flex-wrap" id="assessFilterBtns">
-                    <button class="adm-chip active" data-col="3" data-val="">All Types</button>
-                    <button class="adm-chip" data-col="3" data-val="pre">Pre-assessment</button>
-                    <button class="adm-chip" data-col="3" data-val="post">Post-assessment</button>
-                </div>
-            </div>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-800">
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">ID</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Assessment Title</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Course</th>
-                        <th class="p-3 font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Type</th>
-                        <th class="p-3 text-right font-bold text-slate-500 dark:text-slate-400 uppercase text-xs tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="assess-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
-                    {% for item in assessments %}
-                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition assess-row">
-                        <td class="p-3 font-bold text-slate-500 font-medium">#{{ item.id }}</td>
-                        <td class="p-3 font-semibold">{{ item.title }}</td>
-                        <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">{{ item.course_name }}</td>
-                        <td class="p-3">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
-                                {% if item.type == 'pre' %}bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400
-                                {% else %}bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400{% endif %}">
-                                {{ 'Pre' if item.type == 'pre' else 'Post' }}
-                            </span>
-                        </td>
-                        <td class="p-3 w-[20%] text-right space-y-1">
-                            <div class="flex gap-2 justify-end">
-                                <a href="{{ url_for('download_assessment_questions', assessment_id=item.id) }}" class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:underline">CSV</a>
-                                <form class="inline" method="post" action="{{ url_for('delete_record', resource='assessment', record_id=item.id) }}" onsubmit="return confirm('Delete this assessment?')">
-                                    <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Delete</button>
-                                </form>
-                            </div>
-                            <form class="mt-1 flex gap-1 justify-end flex-wrap" method="post">
-                                <input type="hidden" name="action" value="update_assessment">
-                                <input type="hidden" name="record_id" value="{{ item.id }}">
-                                <input type="hidden" name="type" value="{{ item.type }}">
-                                <input type="hidden" name="max_attempts" value="{{ item.max_attempts }}">
-                                <input class="form-input h-8 w-36 text-xs" name="title" value="{{ item.title }}" required>
-                                <input class="form-input h-8 w-20 text-xs" name="pass_percentage" type="number" value="{{ item.pass_percentage }}" min="1" max="100" title="Pass %">
-                                <button class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2" type="submit">Update</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="5" class="p-8 text-center text-slate-400 text-sm">No assessments yet.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <p id="assess-empty" class="hidden text-center text-slate-400 text-sm py-6">No assessments match your search or filter.</p>
-        <div id="assess-pagination" class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500"></div>
-    </section>
-</div>
-
-<style>
-.adm-chip {
-    padding: 0.25rem 0.75rem;
-    border-radius: 999px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    border: 1.5px solid #e2e8f0;
-    color: #64748b;
-    cursor: pointer;
-    transition: all .15s;
-    white-space: nowrap;
-}
-.dark .adm-chip { border-color: #334155; color: #94a3b8; }
-.adm-chip:hover { border-color: #818cf8; color: #6366f1; }
-.adm-chip.active { background: #6366f1; border-color: #6366f1; color: #fff; }
-</style>
-
-<script>
-const currentUserRole = "{{ role }}";
-
-const activeState = {
-    users: { page: 1, search: '', role: '' },
-    courses: { page: 1, search: '', status: '' },
-    'api-creds': { page: 1, search: '' },
-    assessments: { page: 1, search: '', type: '' }
-};
-
-let debounceTimers = {};
-
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-function renderPagination(containerId, pagination, onPageChangeName) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    const { page, pageSize, totalRecords, totalPages } = pagination;
-    if (totalRecords === 0) {
-        container.innerHTML = '';
-        return;
-    }
-
-    const startRec = (page - 1) * pageSize + 1;
-    const endRec = Math.min(page * pageSize, totalRecords);
-
-    let btnHtml = '';
-
-    // Prev Button
-    const prevDisabled = page <= 1;
-    btnHtml += `<button type="button" onclick="${onPageChangeName}(${page - 1})" class="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-800 ${prevDisabled ? 'opacity-40 cursor-not-allowed text-slate-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'}" ${prevDisabled ? 'disabled' : ''}>Previous</button>`;
-
-    // Page Numbers
-    const pagesToShow = [];
-    for (let p = 1; p <= totalPages; p++) {
-        if (p === 1 || p === totalPages || (p >= page - 2 && p <= page + 2)) {
-            pagesToShow.push(p);
-        } else if (pagesToShow[pagesToShow.length - 1] !== '...') {
-            pagesToShow.push('...');
-        }
-    }
-
-    pagesToShow.forEach(p => {
-        if (p === '...') {
-            btnHtml += `<span class="px-2 py-1 text-xs text-slate-400 font-medium">...</span>`;
-        } else {
-            const isActive = p === page;
-            btnHtml += `<button type="button" onclick="${onPageChangeName}(${p})" class="px-2.5 py-1 text-xs font-semibold rounded-lg ${isActive ? 'bg-indigo-600 text-white shadow-sm' : 'border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">${p}</button>`;
-        }
-    });
-
-    // Next Button
-    const nextDisabled = page >= totalPages;
-    btnHtml += `<button type="button" onclick="${onPageChangeName}(${page + 1})" class="px-2.5 py-1 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-800 ${nextDisabled ? 'opacity-40 cursor-not-allowed text-slate-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'}" ${nextDisabled ? 'disabled' : ''}>Next</button>`;
-
-    container.innerHTML = `
-        <div class="text-xs text-slate-500 font-medium">
-            Showing <span class="font-bold text-slate-700 dark:text-slate-300">${startRec}–${endRec}</span> of <span class="font-bold text-slate-700 dark:text-slate-300">${totalRecords}</span>
-        </div>
-        <div class="flex gap-1 items-center flex-wrap">${btnHtml}</div>
-    `;
-}
-
-window.usersMap = {};
-
-// ── USERS TABLE ──
-async function fetchUsers(page = 1) {
-    activeState.users.page = page;
-    const { search, role } = activeState.users;
-    const tbody = document.getElementById('users-tbody');
-    const emptyMsg = document.getElementById('users-empty');
-    if (!tbody) return;
-
-    const url = `/api/admin/users?page=${page}&pageSize=15&search=${encodeURIComponent(search)}&role=${encodeURIComponent(role)}`;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return;
-        const resData = await res.json();
-        const data = resData.data || [];
-        const pagination = resData.pagination || { page: 1, pageSize: 15, totalRecords: 0, totalPages: 1 };
-
-        if (data.length === 0) {
-            tbody.innerHTML = '';
-            if (emptyMsg) emptyMsg.classList.remove('hidden');
-        } else {
-            if (emptyMsg) emptyMsg.classList.add('hidden');
-            data.forEach(u => { window.usersMap[u.id] = u; });
-            tbody.innerHTML = data.map(item => `
-                <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition user-row">
-                    <td class="p-3 w-[20%] font-semibold">${escapeHtml(item.full_name)}</td>
-                    <td class="p-3 w-[20%] text-slate-500 dark:text-slate-400 text-sm">${escapeHtml(item.username)}</td>
-                    <td class="p-3 w-[25%] text-slate-500 dark:text-slate-400 text-sm">${escapeHtml(item.course_ids || '-')}</td>
-                    <td class="p-3 w-[15%]">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            item.role === 'admin' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' :
-                            item.role === 'moderator' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                            'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-                        }">${escapeHtml(item.role)}</span>
-                    </td>
-                    <td class="p-3 w-[20%] text-right space-y-1">
-                        ${currentUserRole === 'admin' ? `
-                        <div class="flex gap-2 justify-end">
-                            <form method="post" action="/admin/view-as/${item.id}" class="inline">
-                                <button type="submit" class="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline">Preview as</button>
-                            </form>
-                            <form method="post" action="/admin/delete/user/${item.id}" class="inline" onsubmit="return confirm('Delete this user?')">
-                                <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Delete</button>
-                            </form>
-                        </div>
-                        <button type="button" onclick="openEditUserModalById(${item.id})" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-block mt-1">Edit User Data</button>
-                        ` : ''}
-                    </td>
-                </tr>
-            `).join('');
-        }
-        renderPagination('users-pagination', pagination, 'fetchUsers');
-    } catch(e) { console.error('Error fetching users:', e); }
-}
-
-// ── COURSES TABLE ──
-async function fetchCourses(page = 1) {
-    activeState.courses.page = page;
-    const { search, status } = activeState.courses;
-    const tbody = document.getElementById('courses-tbody');
-    const emptyMsg = document.getElementById('courses-empty');
-    if (!tbody) return;
-
-    const url = `/api/admin/courses?page=${page}&pageSize=15&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return;
-        const resData = await res.json();
-        const data = resData.data || [];
-        const pagination = resData.pagination || { page: 1, pageSize: 15, totalRecords: 0, totalPages: 1 };
-
-        if (data.length === 0) {
-            tbody.innerHTML = '';
-            if (emptyMsg) emptyMsg.classList.remove('hidden');
-        } else {
-            if (emptyMsg) emptyMsg.classList.add('hidden');
-            tbody.innerHTML = data.map(item => `
-                <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition course-row">
-                    <td class="p-3 font-bold text-slate-500 font-medium">#${item.id}</td>
-                    <td class="p-3 font-semibold">${escapeHtml(item.name)}</td>
-                    <td class="p-3 text-slate-500 dark:text-slate-400">${escapeHtml(item.category || 'General')}</td>
-                    <td class="p-3">
-                        <span class="px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 text-[10px] font-bold uppercase tracking-wider">${escapeHtml(item.content_type || 'URL')}</span>
-                    </td>
-                    <td class="p-3">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            item.status === 'draft' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-                            'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                        }">${escapeHtml(item.status || 'published')}</span>
-                    </td>
-                    <td class="p-3 w-[20%] text-right space-y-1">
-                        <form method="post" action="/admin/delete/course/${item.id}" onsubmit="return confirm('Delete this course?')" class="inline">
-                            <button type="submit" class="text-xs text-red-500 font-semibold hover:underline">Delete</button>
-                        </form>
-                        <form method="post" class="flex gap-1 justify-end flex-wrap mt-1">
-                            <input type="hidden" name="action" value="update_course">
-                            <input type="hidden" name="record_id" value="${item.id}">
-                            <input name="name" value="${escapeHtml(item.name)}" class="form-input h-8 w-32 text-xs" required>
-                            <input name="category" value="${escapeHtml(item.category || 'General')}" class="form-input h-8 w-24 text-xs">
-                            <select name="status" class="form-input h-8 w-24 text-xs">
-                                <option value="published" ${item.status === 'published' || !item.status ? 'selected' : ''}>published</option>
-                                <option value="draft" ${item.status === 'draft' ? 'selected' : ''}>draft</option>
-                            </select>
-                            <button type="submit" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2">Update</button>
-                        </form>
-                    </td>
-                </tr>
-            `).join('');
-        }
-        renderPagination('courses-pagination', pagination, 'fetchCourses');
-    } catch(e) { console.error('Error fetching courses:', e); }
-}
-
-// ── API CREDENTIALS TABLE ──
-async function fetchApiCreds(page = 1) {
-    activeState['api-creds'].page = page;
-    const { search } = activeState['api-creds'];
-    const tbody = document.getElementById('api-creds-tbody');
-    const emptyMsg = document.getElementById('api-creds-empty');
-    if (!tbody) return;
-
-    const url = `/api/admin/api-credentials?page=${page}&pageSize=15&search=${encodeURIComponent(search)}`;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return;
-        const resData = await res.json();
-        const data = resData.data || [];
-        const pagination = resData.pagination || { page: 1, pageSize: 15, totalRecords: 0, totalPages: 1 };
-
-        if (data.length === 0) {
-            tbody.innerHTML = '';
-            if (emptyMsg) emptyMsg.classList.remove('hidden');
-        } else {
-            if (emptyMsg) emptyMsg.classList.add('hidden');
-            tbody.innerHTML = data.map(item => `
-                <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
-                    <td class="p-3 font-semibold">
-                        <span class="block text-slate-900 dark:text-slate-50">${escapeHtml(item.full_name)}</span>
-                        <span class="text-xs text-slate-400 font-medium">@${escapeHtml(item.username)}</span>
-                    </td>
-                    <td class="p-3">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            item.role === 'admin' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' :
-                            item.role === 'moderator' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' :
-                            'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                        }">${escapeHtml(item.role ? item.role.charAt(0).toUpperCase() + item.role.slice(1) : '')}</span>
-                    </td>
-                    <td class="p-3">
-                        <div class="flex items-center gap-2 group">
-                            <span class="font-mono text-xs text-slate-700 dark:text-slate-300">${escapeHtml(item.api_key)}</span>
-                            <button type="button" onclick="navigator.clipboard.writeText('${escapeHtml(item.api_key)}'); this.innerHTML='<svg class=\\'w-3.5 h-3.5 text-green-500\\' fill=\\'none\\' viewBox=\\'0 0 24 24\\' stroke=\\'currentColor\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M5 13l4 4L19 7\\'></path></svg>'; setTimeout(() => { this.innerHTML='<svg class=\\'w-3.5 h-3.5\\' fill=\\'none\\' viewBox=\\'0 0 24 24\\' stroke=\\'currentColor\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z\\'></path></svg>' }, 2000);" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition opacity-0 group-hover:opacity-100 focus:opacity-100" title="Copy API Key">
-                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                            </button>
-                        </div>
-                    </td>
-                    <td class="p-3">
-                        ${item.status === 'active' ? `
-                        <div class="flex items-center gap-2 group">
-                            <span class="font-mono text-xs text-slate-700 dark:text-slate-300" id="secret-${item.id}" data-secret="${escapeHtml(item.api_secret)}">••••••••••••••••</span>
-                            <button type="button" onclick="const el=document.getElementById('secret-${item.id}'); if(el.innerText==='••••••••••••••••'){el.innerText=el.dataset.secret;}else{el.innerText='••••••••••••••••';}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition opacity-0 group-hover:opacity-100 focus:opacity-100" title="Toggle Visibility">
-                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                            </button>
-                            <button type="button" onclick="navigator.clipboard.writeText('${escapeHtml(item.api_secret)}'); this.innerHTML='<svg class=\\'w-3.5 h-3.5 text-green-500\\' fill=\\'none\\' viewBox=\\'0 0 24 24\\' stroke=\\'currentColor\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M5 13l4 4L19 7\\'></path></svg>'; setTimeout(() => { this.innerHTML='<svg class=\\'w-3.5 h-3.5\\' fill=\\'none\\' viewBox=\\'0 0 24 24\\' stroke=\\'currentColor\\'><path stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\' stroke-width=\\'2\\' d=\\'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z\\'></path></svg>' }, 2000);" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition opacity-0 group-hover:opacity-100 focus:opacity-100" title="Copy API Secret">
-                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                            </button>
-                        </div>
-                        ` : `
-                        <span class="font-mono text-xs text-slate-400 line-through">${escapeHtml(item.api_secret ? item.api_secret.substring(0, 8) : '')}...</span>
-                        `}
-                    </td>
-                    <td class="p-3">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            item.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                            'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                        }">${escapeHtml(item.status)}</span>
-                    </td>
-                    <td class="p-3 text-right space-x-2">
-                        ${item.status === 'active' ? `
-                        <a href="/admin/api-credentials/${item.user_id}/download" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">Download JSON</a>
-                        <form class="inline" method="post" onsubmit="return confirm('Revoke credentials for @${escapeHtml(item.username)}?')">
-                            <input type="hidden" name="action" value="revoke_api_creds">
-                            <input type="hidden" name="target_user_id" value="${item.user_id}">
-                            <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Revoke</button>
-                        </form>
-                        ` : `
-                        <span class="text-xs text-slate-400 italic">Revoked</span>
-                        `}
-                    </td>
-                </tr>
-            `).join('');
-        }
-        renderPagination('api-creds-pagination', pagination, 'fetchApiCreds');
-    } catch(e) { console.error('Error fetching API creds:', e); }
-}
-
-// ── ASSESSMENTS TABLE ──
-async function fetchAssessments(page = 1) {
-    activeState.assessments.page = page;
-    const { search, type } = activeState.assessments;
-    const tbody = document.getElementById('assess-tbody');
-    const emptyMsg = document.getElementById('assess-empty');
-    if (!tbody) return;
-
-    const url = `/api/admin/assessments?page=${page}&pageSize=15&search=${encodeURIComponent(search)}&type=${encodeURIComponent(type)}`;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return;
-        const resData = await res.json();
-        const data = resData.data || [];
-        const pagination = resData.pagination || { page: 1, pageSize: 15, totalRecords: 0, totalPages: 1 };
-
-        if (data.length === 0) {
-            tbody.innerHTML = '';
-            if (emptyMsg) emptyMsg.classList.remove('hidden');
-        } else {
-            if (emptyMsg) emptyMsg.classList.add('hidden');
-            tbody.innerHTML = data.map(item => `
-                <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition assess-row">
-                    <td class="p-3 font-bold text-slate-500 font-medium">#${item.id}</td>
-                    <td class="p-3 font-semibold">${escapeHtml(item.title)}</td>
-                    <td class="p-3 text-slate-500 dark:text-slate-400 text-sm">${escapeHtml(item.course_name || '')}</td>
-                    <td class="p-3">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            item.type === 'pre' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
-                            'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-                        }">${item.type === 'pre' ? 'Pre' : 'Post'}</span>
-                    </td>
-                    <td class="p-3 w-[20%] text-right space-y-1">
-                        <div class="flex gap-2 justify-end">
-                            <a href="/assessments/${item.id}/questions/download" class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:underline">CSV</a>
-                            <form class="inline" method="post" action="/admin/delete/assessment/${item.id}" onsubmit="return confirm('Delete this assessment?')">
-                                <button type="submit" class="text-xs font-semibold text-red-500 hover:underline">Delete</button>
-                            </form>
-                        </div>
-                        <form class="mt-1 flex gap-1 justify-end flex-wrap" method="post">
-                            <input type="hidden" name="action" value="update_assessment">
-                            <input type="hidden" name="record_id" value="${item.id}">
-                            <input type="hidden" name="type" value="${escapeHtml(item.type)}">
-                            <input type="hidden" name="max_attempts" value="${item.max_attempts || 1}">
-                            <input class="form-input h-8 w-36 text-xs" name="title" value="${escapeHtml(item.title)}" required>
-                            <input class="form-input h-8 w-20 text-xs" name="pass_percentage" type="number" value="${item.pass_percentage || 80}" min="1" max="100" title="Pass %">
-                            <button class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2" type="submit">Update</button>
-                        </form>
-                    </td>
-                </tr>
-            `).join('');
-        }
-        renderPagination('assess-pagination', pagination, 'fetchAssessments');
-    } catch(e) { console.error('Error fetching assessments:', e); }
-}
-
-function openEditUserModalById(id) {
-    const user = window.usersMap[id];
-    if (user) {
-        openEditUserModal(user);
-    }
-}
-
-// ── DEBOUNCED SEARCH & CHIP EVENT LISTENERS ──
-function setupTableListeners() {
-    const searchInputs = [
-        { id: 'userSearch', table: 'users', fetcher: fetchUsers },
-        { id: 'courseSearch', table: 'courses', fetcher: fetchCourses },
-        { id: 'apiCredSearch', table: 'api-creds', fetcher: fetchApiCreds },
-        { id: 'assessSearch', table: 'assessments', fetcher: fetchAssessments }
-    ];
-
-    searchInputs.forEach(({ id, table, fetcher }) => {
-        const input = document.getElementById(id);
-        if (!input) return;
-        input.addEventListener('input', (e) => {
-            clearTimeout(debounceTimers[table]);
-            debounceTimers[table] = setTimeout(() => {
-                activeState[table].search = e.target.value.trim();
-                fetcher(1);
-            }, 300);
-        });
-    });
-
-    // Chip click handler for Users
-    document.querySelectorAll('#userFilterBtns .adm-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            document.querySelectorAll('#userFilterBtns .adm-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            activeState.users.role = chip.dataset.val || '';
-            fetchUsers(1);
-        });
-    });
-
-    // Chip click handler for Courses
-    document.querySelectorAll('#courseFilterBtns .adm-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            document.querySelectorAll('#courseFilterBtns .adm-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            const val = chip.dataset.val || '';
-            if (val === 'published' || val === 'draft') {
-                activeState.courses.status = val;
-            } else {
-                activeState.courses.status = '';
-                activeState.courses.search = val;
-                const searchEl = document.getElementById('courseSearch');
-                if (searchEl) searchEl.value = val;
-            }
-            fetchCourses(1);
-        });
-    });
-
-    // Chip click handler for Assessments
-    document.querySelectorAll('#assessFilterBtns .adm-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            document.querySelectorAll('#assessFilterBtns .adm-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            activeState.assessments.type = chip.dataset.val || '';
-            fetchAssessments(1);
-        });
-    });
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    setupTableListeners();
-    fetchUsers(1);
-    fetchCourses(1);
-    fetchApiCreds(1);
-    fetchAssessments(1);
-});
-</script>
-
-<!-- Edit User Modal -->
-<div id="editUserModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
-    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full shadow-2xl relative my-auto">
-        <button onclick="closeEditUserModal()" type="button" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-full">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-        </button>
-        <div class="p-6">
-            <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-6">Edit User Data</h2>
-            <!-- Inline error message -->
-            <div id="editUserError" class="hidden mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm font-medium"></div>
-            <!-- Inline success message -->
-            <div id="editUserSuccess" class="hidden mb-4 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm font-medium"></div>
-            <form id="editUserForm" novalidate>
-                <input type="hidden" name="action" value="update_user">
-                <input type="hidden" name="record_id" id="edit_record_id">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="form-label">Full name *</label>
-                        <input name="full_name" id="edit_full_name" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Username *</label>
-                        <input name="username" id="edit_username" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Employee ID *</label>
-                        <input name="employee_id" id="edit_employee_id" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Email ID *</label>
-                        <input name="email" id="edit_email" type="email" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Phone Number *</label>
-                        <input name="phone_number" id="edit_phone_number" type="tel" class="form-input" required>
-                    </div>
-                    <div>
-                        <label class="form-label">Role / Permission *</label>
-                        <select name="role" id="edit_role" class="form-input">
-                            {% for option in roles %}<option value="{{ option }}">{{ option|title }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label flex justify-between">Department <a href="#" onclick="addMaster('departments', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Department]</a></label>
-                        <select name="department_id" id="edit_department_id" class="form-input dept-select">
-                            <option value="">[ Select Department - ]</option>
-                            {% for d in master_depts %}
-                            <option value="{{ d.id }}">{{ d.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label flex justify-between">Position <a href="#" onclick="addMaster('positions', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Position]</a></label>
-                        <select name="position_id" id="edit_position_id" class="form-input pos-select">
-                            <option value="">[ Select Position - ]</option>
-                            {% for p in master_positions %}
-                            <option value="{{ p.id }}">{{ p.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label class="form-label flex justify-between">Location <a href="#" onclick="addMaster('locations', this)" class="text-indigo-500 hover:underline text-[10px]">[+ Add Location]</a></label>
-                        <select name="location_id" id="edit_location_id" class="form-input loc-select">
-                            <option value="">[ Select Location - ]</option>
-                            {% for l in master_locations %}
-                            <option value="{{ l.id }}">{{ l.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <button type="submit" id="editUserSubmitBtn" class="btn-primary w-full mt-6">Save Changes</button>
-            </form>
-        </div>
+{# ─────────────────────────── Courses ─────────────────────────── #}
+<section id="courses" class="mb-12 scroll-mt-32" data-jump-section aria-labelledby="courses-title" data-admin-table="courses"{% if not is_admin %} data-filter{% endif %}>
+  <div class="flex flex-col md:flex-row md:items-end justify-between gap-3 mb-3">
+    <div><h2 id="courses-title" class="text-xl">Courses</h2><p class="caption mt-0.5" data-count>{{ courses|length }} course{{ '' if courses|length == 1 else 's' }}</p></div>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="flex gap-1" role="group" aria-label="Filter by status">
+        <button type="button" class="chip" aria-pressed="true" data-filter-chip data-filter-key="status" data-filter-value="all">All</button>
+        <button type="button" class="chip" aria-pressed="false" data-filter-chip data-filter-key="status" data-filter-value="published">Published</button>
+        <button type="button" class="chip" aria-pressed="false" data-filter-chip data-filter-key="status" data-filter-value="draft">Draft</button>
+      </div>
+      <label class="sr-only" for="courses-search">Search courses</label>
+      <input id="courses-search" type="search" class="input w-full md:w-64" placeholder="Search courses" data-filter-input autocomplete="off">
     </div>
-</div>
+  </div>
+  {% call table("courses-table", ["Course", "Category", "Type", "Status", {"label": "Actions", "align": "right"}], caption="Courses") %}
+    {% for item in courses %}
+    <tr data-filter-item data-status="{{ (item.status or 'published')|lower }}">
+      <td><div class="font-medium">{{ item.name }}</div><div class="caption">by {{ item.creator }}</div></td>
+      <td>{{ item.category or '—' }}</td>
+      <td>{{ badge(item.content_type or '—', "neutral") }}</td>
+      <td>{{ status_badge((item.status or 'published')|lower) }}</td>
+      <td class="num"><div class="flex justify-end gap-1">
+        <button type="button" class="btn btn-icon btn-ghost btn-sm" data-course-edit data-course='{{ dict(item)|tojson|forceescape }}' aria-label="Edit {{ item.name }}">{{ icon("edit", "w-4 h-4") }}</button>
+        <form method="post" action="{{ url_for('delete_record', resource='course', record_id=item.id) }}" data-confirm="Delete “{{ item.name }}” and all of its assignments and assessments?" data-confirm-title="Delete course" data-confirm-label="Delete" data-confirm-danger><button type="submit" class="btn btn-icon btn-ghost btn-sm text-danger" aria-label="Delete {{ item.name }}">{{ icon("trash", "w-4 h-4") }}</button></form>
+      </div></td>
+    </tr>
+    {% endfor %}
+  {% endcall %}
+  <div data-filter-empty data-empty hidden>{{ empty_state("No courses match", "Try another search or clear the status filter.", icon_name="book") }}</div>
+  <div class="mt-3" data-pagination></div>
+</section>
 
-<script>
-function openEditUserModal(user) {
-    const setVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.value = (val !== undefined && val !== null) ? val : '';
-    };
-    setVal('edit_record_id', user.id);
-    setVal('edit_full_name', user.full_name);
-    setVal('edit_username', user.username);
-    setVal('edit_employee_id', user.employee_id);
-    setVal('edit_email', user.email);
-    setVal('edit_phone_number', user.phone_number);
-    setVal('edit_role', user.role || 'basic user');
-    setVal('edit_department_id', user.department_id);
-    setVal('edit_position_id', user.position_id);
-    setVal('edit_location_id', user.location_id);
+{# ─────────────────────────── Assessments ─────────────────────────── #}
+<section id="assessments" class="mb-12 scroll-mt-32" data-jump-section aria-labelledby="assessments-title" data-admin-table="assessments"{% if not is_admin %} data-filter{% endif %}>
+  <div class="flex flex-col md:flex-row md:items-end justify-between gap-3 mb-3">
+    <div><h2 id="assessments-title" class="text-xl">Assessments</h2><p class="caption mt-0.5" data-count>{{ assessments|length }} assessment{{ '' if assessments|length == 1 else 's' }}</p></div>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="flex gap-1" role="group" aria-label="Filter by type">
+        <button type="button" class="chip" aria-pressed="true" data-filter-chip data-filter-key="type" data-filter-value="all">All</button>
+        <button type="button" class="chip" aria-pressed="false" data-filter-chip data-filter-key="type" data-filter-value="pre">Pre</button>
+        <button type="button" class="chip" aria-pressed="false" data-filter-chip data-filter-key="type" data-filter-value="post">Post</button>
+      </div>
+      <label class="sr-only" for="assessments-search">Search assessments</label>
+      <input id="assessments-search" type="search" class="input w-full md:w-64" placeholder="Search assessments" data-filter-input autocomplete="off">
+    </div>
+  </div>
+  {% call table("assessments-table", ["Assessment", "Course", "Type", {"label": "Pass %", "align": "right"}, {"label": "Attempts", "align": "right"}, {"label": "Actions", "align": "right"}], caption="Assessments") %}
+    {% for item in assessments %}
+    <tr data-filter-item data-type="{{ item.type }}">
+      <td class="font-medium">{{ item.title }}</td>
+      <td>{{ item.course_name }}</td>
+      <td>{{ badge("Pre" if item.type == "pre" else "Post", "warning" if item.type == "pre" else "info") }}</td>
+      <td class="num tabular">{{ item.pass_percentage }}%</td>
+      <td class="num tabular">{{ item.max_attempts or 1 }}</td>
+      <td class="num"><div class="flex justify-end gap-1">
+        <a href="/assessments/{{ item.id }}/questions/download" class="btn btn-icon btn-ghost btn-sm" aria-label="Download questions for {{ item.title }}">{{ icon("download", "w-4 h-4") }}</a>
+        <button type="button" class="btn btn-icon btn-ghost btn-sm" data-assessment-edit data-assessment='{{ dict(item)|tojson|forceescape }}' aria-label="Edit {{ item.title }}">{{ icon("edit", "w-4 h-4") }}</button>
+        <form method="post" action="{{ url_for('delete_record', resource='assessment', record_id=item.id) }}" data-confirm="Delete “{{ item.title }}” and its questions and attempts?" data-confirm-title="Delete assessment" data-confirm-label="Delete" data-confirm-danger><button type="submit" class="btn btn-icon btn-ghost btn-sm text-danger" aria-label="Delete {{ item.title }}">{{ icon("trash", "w-4 h-4") }}</button></form>
+      </div></td>
+    </tr>
+    {% endfor %}
+  {% endcall %}
+  <div data-filter-empty data-empty hidden>{{ empty_state("No assessments match", "Try another search or clear the type filter.", icon_name="clipboard-check") }}</div>
+  <div class="mt-3" data-pagination></div>
+</section>
 
-    // Clear any previous error/success messages
-    const errEl = document.getElementById('editUserError');
-    const okEl  = document.getElementById('editUserSuccess');
-    if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
-    if (okEl)  { okEl.textContent  = ''; okEl.classList.add('hidden'); }
+{# ─────────────────────────── People ─────────────────────────── #}
+<section id="users" class="mb-12 scroll-mt-32" data-jump-section aria-labelledby="users-title" data-admin-table="users"{% if not is_admin %} data-filter{% endif %}>
+  <div class="flex flex-col md:flex-row md:items-end justify-between gap-3 mb-3">
+    <div><h2 id="users-title" class="text-xl">People</h2><p class="caption mt-0.5" data-count>{{ users|length }} user{{ '' if users|length == 1 else 's' }}</p></div>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="flex gap-1" role="group" aria-label="Filter by role">
+        <button type="button" class="chip" aria-pressed="true" data-filter-chip data-filter-key="role" data-filter-value="all">All</button>
+        <button type="button" class="chip" aria-pressed="false" data-filter-chip data-filter-key="role" data-filter-value="admin">Admins</button>
+        <button type="button" class="chip" aria-pressed="false" data-filter-chip data-filter-key="role" data-filter-value="moderator">Moderators</button>
+        <button type="button" class="chip" aria-pressed="false" data-filter-chip data-filter-key="role" data-filter-value="basic user">Learners</button>
+      </div>
+      <label class="sr-only" for="users-search">Search people</label>
+      <input id="users-search" type="search" class="input w-full md:w-64" placeholder="Search by name, username, email or ID" data-filter-input autocomplete="off">
+    </div>
+  </div>
+  {% call table("users-table", ["User", "Employee ID", "Email", "Role", {"label": "Courses", "align": "right"}] + ([{"label": "Actions", "align": "right"}] if is_admin else []), caption="People") %}
+    {% for item in users %}
+    <tr data-filter-item data-role="{{ item.role }}" data-search="{{ item.full_name }} {{ item.username }} {{ item.email or '' }} {{ item.employee_id or '' }}">
+      <td><div class="font-medium">{{ item.full_name }}</div><div class="caption mono">@{{ item.username }}</div></td>
+      <td class="tabular">{{ item.employee_id or '—' }}</td>
+      <td class="text-fg-2">{{ item.email or '—' }}</td>
+      <td>{{ role_badge(item.role) }}</td>
+      <td class="num tabular">{{ (item.course_ids|string).split(',')|length if item.course_ids else 0 }}</td>
+      {% if is_admin %}
+      <td class="num"><div class="flex justify-end gap-1">
+        <form method="post" action="{{ url_for('view_as', user_id=item.id) }}"><button type="submit" class="btn btn-icon btn-ghost btn-sm" aria-label="Preview as {{ item.full_name }}">{{ icon("eye", "w-4 h-4") }}</button></form>
+        <button type="button" class="btn btn-icon btn-ghost btn-sm" data-user-edit data-user='{{ item|tojson|forceescape }}' aria-label="Edit {{ item.full_name }}">{{ icon("edit", "w-4 h-4") }}</button>
+        <form method="post" action="{{ url_for('delete_record', resource='user', record_id=item.id) }}" data-confirm="Delete {{ item.full_name }}? Their assignments, attempts and wallet are removed." data-confirm-title="Delete user" data-confirm-label="Delete" data-confirm-danger><button type="submit" class="btn btn-icon btn-ghost btn-sm text-danger" aria-label="Delete {{ item.full_name }}">{{ icon("trash", "w-4 h-4") }}</button></form>
+      </div></td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  {% endcall %}
+  <div data-filter-empty data-empty hidden>{{ empty_state("No people match", "Try another search or clear the role filter.", icon_name="users") }}</div>
+  <div class="mt-3" data-pagination></div>
+</section>
 
-    const modal = document.getElementById('editUserModal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        modal.style.display = 'flex';
-    }
-}
+{# ─────────────────────────── API access (admin) ─────────────────────────── #}
+{% if is_admin %}
+<section id="api-access" class="mb-12 scroll-mt-32" data-jump-section aria-labelledby="api-title" data-admin-table="api-creds">
+  <div class="flex flex-col md:flex-row md:items-end justify-between gap-3 mb-3">
+    <div><h2 id="api-title" class="text-xl">API access</h2><p class="caption mt-0.5">Keys inherit the user's role. Generating a new pair revokes the previous one.</p></div>
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="sr-only" for="api-search">Search API credentials</label>
+      <input id="api-search" type="search" class="input w-full md:w-56" placeholder="Search by user" data-filter-input autocomplete="off">
+    </div>
+  </div>
+  <form method="post" class="card flex flex-col sm:flex-row sm:items-end gap-3 mb-3">
+    <input type="hidden" name="action" value="generate_api_creds">
+    <div class="flex-1">{{ row_select("target_user_id", "Generate keys for", users, "api-user", placeholder="Select a user", required=True, text_key="full_name") }}</div>
+    {{ btn("Generate key pair", "primary", type="submit", icon_name="key") }}
+  </form>
+  {% call table("api-creds-table", ["User", "Role", "Key", "Secret", "Status", {"label": "Actions", "align": "right"}], caption="API credentials") %}
+    {% for item in api_creds %}
+    <tr data-filter-item data-search="{{ item.full_name }} {{ item.username }}">
+      <td><div class="font-medium">{{ item.full_name }}</div><div class="caption mono">@{{ item.username }}</div></td>
+      <td>{{ role_badge(item.role) }}</td>
+      <td><span class="inline-flex items-center gap-1"><code class="mono text-xs">{{ item.api_key[:12] }}…</code><button type="button" class="btn btn-icon btn-ghost btn-sm" data-copy="{{ item.api_key }}" aria-label="Copy API key">{{ icon("copy", "w-3.5 h-3.5") }}</button></span></td>
+      <td>{% if item.status == 'active' %}<span class="inline-flex items-center gap-1"><code class="mono text-xs" data-secret="{{ item.api_secret }}">••••••••••••</code><button type="button" class="btn btn-icon btn-ghost btn-sm" data-reveal aria-label="Reveal secret" aria-pressed="false">{{ icon("eye", "w-3.5 h-3.5") }}</button><button type="button" class="btn btn-icon btn-ghost btn-sm" data-copy="{{ item.api_secret }}" aria-label="Copy API secret">{{ icon("copy", "w-3.5 h-3.5") }}</button></span>{% else %}<span class="caption">Revoked</span>{% endif %}</td>
+      <td>{{ status_badge(item.status) }}</td>
+      <td class="num"><div class="flex justify-end gap-1">
+        {% if item.status == 'active' %}
+        <a href="/admin/api-credentials/{{ item.user_id }}/download" class="btn btn-icon btn-ghost btn-sm" aria-label="Download credentials for {{ item.full_name }}">{{ icon("download", "w-4 h-4") }}</a>
+        <form method="post" data-confirm="Revoke API access for {{ item.full_name }}? Integrations using this key stop working immediately." data-confirm-title="Revoke key" data-confirm-label="Revoke" data-confirm-danger><input type="hidden" name="action" value="revoke_api_creds"><input type="hidden" name="target_user_id" value="{{ item.user_id }}"><button type="submit" class="btn btn-sm btn-ghost text-danger">Revoke</button></form>
+        {% endif %}
+      </div></td>
+    </tr>
+    {% endfor %}
+  {% endcall %}
+  <div data-empty hidden>{{ empty_state("No API credentials yet", "Generate a key pair above to let an integration call the API.", icon_name="key") }}</div>
+  <div class="mt-3" data-pagination></div>
+</section>
+{% endif %}
 
-function openEditUserModalById(id) {
-    const user = window.usersMap[id];
-    if (user) {
-        openEditUserModal(user);
-    }
-}
+{# ─────────────────────────── Sheets & modals ─────────────────────────── #}
+{% call sheet_right("course-edit", "Edit course", description="Rename, recategorise or publish. Content is edited from the course catalogue.") %}
+  <form method="post" class="flex flex-col gap-3" id="course-edit-form">
+    <input type="hidden" name="action" value="update_course"><input type="hidden" name="record_id" id="course-edit-id">
+    {{ field("name", "Course name", required=True, id="course-edit-name") }}
+    {{ field("category", "Category", id="course-edit-category") }}
+    {{ select_field("status", "Status", [("published", "Published"), ("draft", "Draft")], id="course-edit-status") }}
+    <div class="flex justify-end gap-2 pt-2">{{ btn("Cancel", "secondary", attrs="data-dialog-close") }}{{ btn("Save changes", "primary", type="submit") }}</div>
+  </form>
+{% endcall %}
 
-function closeEditUserModal() {
-    const modal = document.getElementById('editUserModal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.style.display = 'none';
-    }
-}
+{% call sheet_right("assessment-edit", "Edit assessment") %}
+  <form method="post" class="flex flex-col gap-3" id="assessment-edit-form">
+    <input type="hidden" name="action" value="update_assessment"><input type="hidden" name="record_id" id="assessment-edit-id">
+    {{ field("title", "Title", required=True, id="assessment-edit-title") }}
+    {{ select_field("type", "Type", [("pre", "Pre"), ("post", "Post")], id="assessment-edit-type") }}
+    <div class="grid grid-cols-2 gap-3">
+      {{ field("pass_percentage", "Pass %", type="number", attrs='min="0" max="100" inputmode="numeric"', id="assessment-edit-pass") }}
+      {{ field("max_attempts", "Max attempts", type="number", attrs='min="1" inputmode="numeric"', id="assessment-edit-attempts") }}
+    </div>
+    <div class="flex justify-end gap-2 pt-2">{{ btn("Cancel", "secondary", attrs="data-dialog-close") }}{{ btn("Save changes", "primary", type="submit") }}</div>
+  </form>
+{% endcall %}
 
-function showEditUserError(msg) {
-    const errEl = document.getElementById('editUserError');
-    const okEl  = document.getElementById('editUserSuccess');
-    if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
-    if (okEl)  { okEl.classList.add('hidden'); }
-    console.error('[EditUser] Error:', msg);
-}
-
-function showEditUserSuccess(msg) {
-    const errEl = document.getElementById('editUserError');
-    const okEl  = document.getElementById('editUserSuccess');
-    if (errEl) { errEl.classList.add('hidden'); }
-    if (okEl)  { okEl.textContent = msg; okEl.classList.remove('hidden'); }
-}
-
-// Intercept the Edit User form and submit via AJAX
-document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('editUserForm');
-    if (!form) return;
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        // --- Client-side mandatory validation ---
-        const fields = [
-            { id: 'edit_full_name',    label: 'Full Name' },
-            { id: 'edit_username',     label: 'Username' },
-            { id: 'edit_employee_id',  label: 'Employee ID' },
-            { id: 'edit_email',        label: 'Email ID' },
-            { id: 'edit_phone_number', label: 'Phone Number' },
-        ];
-        const missing = fields.filter(f => {
-            const el = document.getElementById(f.id);
-            return !el || !el.value.trim();
-        }).map(f => f.label);
-
-        if (missing.length > 0) {
-            showEditUserError('Please fill in the required fields: ' + missing.join(', '));
-            return;
-        }
-
-        // --- Email format validation ---
-        const emailEl = document.getElementById('edit_email');
-        if (emailEl && emailEl.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value)) {
-            showEditUserError('Please enter a valid email address.');
-            return;
-        }
-
-        // --- Disable button & show loading state ---
-        const btn = document.getElementById('editUserSubmitBtn');
-        const origText = btn ? btn.textContent : 'Save Changes';
-        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-
-        try {
-            const formData = new FormData(form);
-            const res = await fetch('/admin', {
-                method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                body: formData,
-                credentials: 'same-origin',
-            });
-
-            let data = {};
-            const contentType = res.headers.get('Content-Type') || '';
-            if (contentType.includes('application/json')) {
-                data = await res.json();
-            }
-
-            if (res.ok && data.success) {
-                showEditUserSuccess(data.message || 'User updated successfully.');
-                // Refresh the users table without full page reload
-                if (typeof fetchUsers === 'function') {
-                    const currentPage = (window.activeState && window.activeState.users)
-                        ? window.activeState.users.page : 1;
-                    fetchUsers(currentPage);
-                }
-                // Close modal after a short delay so user sees the success message
-                setTimeout(() => closeEditUserModal(), 1200);
-            } else {
-                const errMsg = data.error || 'Unable to update user. Please check the required fields and try again.';
-                showEditUserError(errMsg);
-            }
-        } catch (err) {
-            console.error('[EditUser] Network error:', err);
-            showEditUserError('A network error occurred. Please check your connection and try again.');
-        } finally {
-            if (btn) { btn.disabled = false; btn.textContent = origText; }
-        }
-    });
-});
-</script>
-
+{% if is_admin %}
+{% call modal("user-edit", "Edit user", size="lg") %}
+  <form method="post" class="flex flex-col gap-3" id="editUserForm" novalidate>
+    <input type="hidden" name="action" value="update_user"><input type="hidden" name="record_id" id="edit_record_id">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {{ field("full_name", "Full name", required=True, id="edit_full_name") }}
+      {{ field("username", "Username", required=True, id="edit_username") }}
+      {{ field("employee_id", "Employee ID", required=True, id="edit_employee_id") }}
+      {{ field("email", "Email", type="email", required=True, id="edit_email") }}
+      {{ field("phone_number", "Phone", type="tel", required=True, id="edit_phone_number") }}
+      {{ select_field("role", "Role", roles, id="edit_role") }}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {{ row_select("department_id", "Department", master_depts, "edit_department_id", placeholder="—", master="departments") }}
+      {{ row_select("position_id", "Position", master_positions, "edit_position_id", placeholder="—", master="positions") }}
+      {{ row_select("location_id", "Location", master_locations, "edit_location_id", placeholder="—", master="locations") }}
+    </div>
+    <p id="editUserError" class="field-error" role="alert" hidden></p>
+    <div class="flex justify-end gap-2 pt-2">{{ btn("Cancel", "secondary", attrs="data-dialog-close") }}<button type="submit" class="btn btn-primary" id="editUserSubmitBtn">Save changes</button></div>
+  </form>
+{% endcall %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
+  (function () {
+    const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+    const esc = HKC.escapeHtml;
+    const attr = (obj) => esc(JSON.stringify(obj));
+    const tone = (s) => ({ published: 'success', active: 'success', post: 'info', pre: 'warning', draft: 'warning', inactive: 'danger' })[String(s || '').toLowerCase()] || 'neutral';
+    const badge = (text, kind) => `<span class="badge badge-${kind}">${esc(text)}</span>`;
+    const roleBadge = (r) => badge(String(r || '').replace(/\b\w/g, (c) => c.toUpperCase()), { admin: 'info', moderator: 'warning' }[r] || 'neutral');
+    const iconBtn = (name, label, extra = '', cls = '') => `<button type="button" class="btn btn-icon btn-ghost btn-sm ${cls}" ${extra} aria-label="${esc(label)}">${HKC_ICONS[name]}</button>`;
+    const HKC_ICONS = {
+      edit: document.querySelector('[data-course-edit] svg, [data-assessment-edit] svg, [data-user-edit] svg')?.outerHTML || '✎',
+      trash: document.querySelector('form[data-confirm-danger] .text-danger svg')?.outerHTML || '✕',
+      eye: document.querySelector('[aria-label^="Preview as"] svg, [data-reveal] svg')?.outerHTML || '👁',
+      download: document.querySelector('a[aria-label^="Download"] svg')?.outerHTML || '↓',
+      copy: document.querySelector('[data-copy] svg')?.outerHTML || '⧉',
+    };
+    const confirmForm = (action, hidden, message, title, label) => `<form method="post" action="${esc(action)}" data-confirm="${esc(message)}" data-confirm-title="${esc(title)}" data-confirm-label="${esc(label)}" data-confirm-danger>${hidden}`;
 
-async function addMaster(type, el) {
-    let name = prompt("Enter new " + type.slice(0, -1) + " name:");
-    if (!name) return;
-    
-    // departments/positions/locations live under /api/v1; interests have their own endpoint
-    let url = type === 'interests' ? '/api/interests' : '/api/v1/' + type;
-    let payload = type === 'interests' ? {interest_name: name} : {name: name};
-    let res = await fetch(url, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-    });
-    let data = await res.json();
-    if (res.ok) {
-        // Find all selects matching this type and add the option
-        let classTarget = type === 'departments' ? '.dept-select' : (type === 'positions' ? '.pos-select' : '.int-select');
-        let selects = document.querySelectorAll(classTarget);
-        selects.forEach(select => {
-            let opt = document.createElement('option');
-            opt.value = data.id;
-            opt.textContent = data.name;
-            select.appendChild(opt);
-            // If it was the specific element clicked near, select it
-            if (el && el.parentElement && el.parentElement.nextElementSibling === select) {
-                if (select.multiple) { opt.selected = true; }
-                else { select.value = data.id; }
-            }
+    // ---------------------------------------------------------------- jump navigation (scroll spy)
+    const jumpLinks = Array.from(document.querySelectorAll('.jump-nav a'));
+    if ('IntersectionObserver' in window) {
+      const spy = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          jumpLinks.forEach((a) => a.toggleAttribute('aria-current', a.getAttribute('href') === '#' + entry.target.id) || a.setAttribute('aria-current', a.getAttribute('href') === '#' + entry.target.id ? 'true' : 'false'));
+          jumpLinks.forEach((a) => { if (a.getAttribute('aria-current') !== 'true') a.removeAttribute('aria-current'); });
         });
-        alert(data.message || (data.name + ' added.'));
-    } else {
-        alert(data.error);
+      }, { rootMargin: '-35% 0px -55% 0px' });
+      document.querySelectorAll('[data-jump-section]').forEach((s) => spy.observe(s));
     }
-}
+
+    // ---------------------------------------------------------------- assignment target toggle
+    const assignForm = document.getElementById('assign-form');
+    if (assignForm) {
+      const sync = () => {
+        const mode = assignForm.querySelector('input[name="assignment_type"]:checked').value;
+        assignForm.querySelectorAll('[data-assign-target]').forEach((wrap) => {
+          const on = wrap.dataset.assignTarget === mode;
+          wrap.hidden = !on;
+          const select = wrap.querySelector('select');
+          select.required = on; select.disabled = !on;
+        });
+      };
+      assignForm.querySelectorAll('input[name="assignment_type"]').forEach((r) => r.addEventListener('change', sync));
+      sync();
+    }
+
+    // ---------------------------------------------------------------- quick-add masters
+    document.querySelectorAll('[data-add-master]').forEach((button) => button.addEventListener('click', async () => {
+      const type = button.dataset.addMaster, label = button.dataset.addLabel;
+      const name = await HKC.prompt({ title: `New ${label}`, message: `Add a ${label} to the master list. It becomes available everywhere immediately.`, label: 'Name', placeholder: `e.g. ${label === 'department' ? 'Customer Success' : label === 'position' ? 'Principal Engineer' : 'Pune'}` });
+      if (!name) return;
+      const { ok, data } = await HKC.fetchJSON(`/api/v1/${type}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ name }) });
+      if (!ok) { HKC.toast(data.error || `Could not add the ${label}.`, 'error'); return; }
+      const item = data.data || data;
+      const id = item.id ?? item.department_id ?? item.location_id ?? item.position_id;
+      const text = item.name ?? item.department_name ?? item.location_name ?? name;
+      document.querySelectorAll(`select[data-master="${type}"]`).forEach((select) => {
+        const option = new Option(text, id, false, select.closest('form')?.querySelector('[data-add-master]') === button);
+        select.add(option);
+      });
+      HKC.toast(`${text} added to ${type}.`, 'success');
+    }));
+
+    // ---------------------------------------------------------------- edit sheets (course / assessment / user)
+    const setVal = (id, value) => { const el = document.getElementById(id); if (el) el.value = value ?? ''; };
+    document.addEventListener('click', (event) => {
+      const courseBtn = event.target.closest('[data-course-edit]');
+      if (courseBtn) {
+        const c = JSON.parse(courseBtn.dataset.course);
+        setVal('course-edit-id', c.id); setVal('course-edit-name', c.name); setVal('course-edit-category', c.category); setVal('course-edit-status', String(c.status || 'published').toLowerCase());
+        HKC.dialog.open(document.getElementById('course-edit'), courseBtn); return;
+      }
+      const assessmentBtn = event.target.closest('[data-assessment-edit]');
+      if (assessmentBtn) {
+        const a = JSON.parse(assessmentBtn.dataset.assessment);
+        setVal('assessment-edit-id', a.id); setVal('assessment-edit-title', a.title); setVal('assessment-edit-type', a.type); setVal('assessment-edit-pass', a.pass_percentage); setVal('assessment-edit-attempts', a.max_attempts || 1);
+        HKC.dialog.open(document.getElementById('assessment-edit'), assessmentBtn); return;
+      }
+      const userBtn = event.target.closest('[data-user-edit]');
+      if (userBtn) {
+        const u = JSON.parse(userBtn.dataset.user);
+        ['record_id:id', 'full_name', 'username', 'employee_id', 'email', 'phone_number', 'role', 'department_id', 'position_id', 'location_id'].forEach((spec) => { const [field, key] = spec.split(':'); setVal('edit_' + field, u[key || field]); });
+        const err = document.getElementById('editUserError'); err.hidden = true; err.textContent = '';
+        HKC.dialog.open(document.getElementById('user-edit'), userBtn); return;
+      }
+      const copy = event.target.closest('[data-copy]');
+      if (copy) { navigator.clipboard?.writeText(copy.dataset.copy).then(() => HKC.toast('Copied to clipboard.', 'success'), () => HKC.toast('Copy failed.', 'error')); return; }
+      const reveal = event.target.closest('[data-reveal]');
+      if (reveal) {
+        const code = reveal.parentElement.querySelector('[data-secret]');
+        const on = reveal.getAttribute('aria-pressed') !== 'true';
+        reveal.setAttribute('aria-pressed', String(on)); reveal.setAttribute('aria-label', on ? 'Hide secret' : 'Reveal secret');
+        code.textContent = on ? code.dataset.secret : '••••••••••••';
+      }
+    });
+
+    // ---------------------------------------------------------------- edit user: AJAX submit with inline errors
+    const editForm = document.getElementById('editUserForm');
+    if (editForm) editForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const error = document.getElementById('editUserError');
+      const show = (msg) => { error.textContent = msg; error.hidden = false; };
+      const missing = [['edit_full_name', 'full name'], ['edit_username', 'username'], ['edit_employee_id', 'employee ID'], ['edit_email', 'email'], ['edit_phone_number', 'phone number']].filter(([id]) => !document.getElementById(id).value.trim()).map(([, label]) => label);
+      if (missing.length) { show('Please fill in: ' + missing.join(', ') + '.'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('edit_email').value)) { show('Please enter a valid email address.'); return; }
+      const submit = document.getElementById('editUserSubmitBtn'); submit.disabled = true;
+      try {
+        const res = await fetch('/admin', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: new FormData(editForm), credentials: 'same-origin' });
+        const data = (res.headers.get('Content-Type') || '').includes('application/json') ? await res.json() : {};
+        if (res.ok && data.success) {
+          HKC.toast(data.message || 'User updated.', 'success');
+          HKC.dialog.close(document.getElementById('user-edit'));
+          if (IS_ADMIN) loaders.users(state.users.page); else window.location.reload();
+        } else show(data.error || 'Unable to update the user. Check the required fields and try again.');
+      } catch (err) { show('A network error occurred. Check your connection and try again.'); }
+      finally { submit.disabled = false; }
+    });
+
+    // ---------------------------------------------------------------- server-side tables (admin only): search, filters, pagination
+    if (!IS_ADMIN) return;
+    const state = { users: { page: 1, search: '', role: '' }, courses: { page: 1, search: '', status: '' }, 'api-creds': { page: 1, search: '' }, assessments: { page: 1, search: '', type: '' } };
+    const rows = {
+      users: (u) => `<tr><td><div class="font-medium">${esc(u.full_name)}</div><div class="caption mono">@${esc(u.username)}</div></td><td class="tabular">${esc(u.employee_id || '—')}</td><td class="text-fg-2">${esc(u.email || '—')}</td><td>${roleBadge(u.role)}</td><td class="num tabular">${u.course_ids ? String(u.course_ids).split(',').length : 0}</td><td class="num"><div class="flex justify-end gap-1"><form method="post" action="/admin/view-as/${u.id}">${iconBtn('eye', `Preview as ${u.full_name}`, 'type="submit"').replace('type="button" ', '')}</form>${iconBtn('edit', `Edit ${u.full_name}`, `data-user-edit data-user='${attr(u)}'`)}${confirmForm(`/admin/delete/user/${u.id}`, '', `Delete ${u.full_name}? Their assignments, attempts and wallet are removed.`, 'Delete user', 'Delete')}${iconBtn('trash', `Delete ${u.full_name}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,
+      courses: (c) => `<tr><td><div class="font-medium">${esc(c.name)}</div>${c.creator ? `<div class="caption">by ${esc(c.creator)}</div>` : ''}</td><td>${esc(c.category || '—')}</td><td>${badge(c.content_type || '—', 'neutral')}</td><td>${badge(String(c.status || 'published').toLowerCase(), tone(c.status || 'published'))}</td><td class="num"><div class="flex justify-end gap-1">${iconBtn('edit', `Edit ${c.name}`, `data-course-edit data-course='${attr(c)}'`)}${confirmForm(`/admin/delete/course/${c.id}`, '', `Delete “${c.name}” and all of its assignments and assessments?`, 'Delete course', 'Delete')}${iconBtn('trash', `Delete ${c.name}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,
+      'api-creds': (k) => `<tr><td><div class="font-medium">${esc(k.full_name)}</div><div class="caption mono">@${esc(k.username)}</div></td><td>${roleBadge(k.role)}</td><td><span class="inline-flex items-center gap-1"><code class="mono text-xs">${esc(String(k.api_key).slice(0, 12))}…</code>${iconBtn('copy', 'Copy API key', `data-copy="${esc(k.api_key)}"`)}</span></td><td>${k.status === 'active' ? `<span class="inline-flex items-center gap-1"><code class="mono text-xs" data-secret="${esc(k.api_secret)}">••••••••••••</code>${iconBtn('eye', 'Reveal secret', 'data-reveal aria-pressed="false"')}${iconBtn('copy', 'Copy API secret', `data-copy="${esc(k.api_secret)}"`)}</span>` : '<span class="caption">Revoked</span>'}</td><td>${badge(k.status, tone(k.status))}</td><td class="num"><div class="flex justify-end gap-1">${k.status === 'active' ? `<a href="/admin/api-credentials/${k.user_id}/download" class="btn btn-icon btn-ghost btn-sm" aria-label="Download credentials for ${esc(k.full_name)}">${HKC_ICONS.download}</a>${confirmForm('', `<input type="hidden" name="action" value="revoke_api_creds"><input type="hidden" name="target_user_id" value="${k.user_id}">`, `Revoke API access for ${k.full_name}? Integrations using this key stop working immediately.`, 'Revoke key', 'Revoke').replace(' action=""', '')}<button type="submit" class="btn btn-sm btn-ghost text-danger">Revoke</button></form>` : ''}</div></td></tr>`,
+      assessments: (a) => `<tr><td class="font-medium">${esc(a.title)}</td><td>${esc(a.course_name)}</td><td>${badge(a.type === 'pre' ? 'Pre' : 'Post', tone(a.type))}</td><td class="num tabular">${esc(a.pass_percentage)}%</td><td class="num tabular">${esc(a.max_attempts || 1)}</td><td class="num"><div class="flex justify-end gap-1"><a href="/assessments/${a.id}/questions/download" class="btn btn-icon btn-ghost btn-sm" aria-label="Download questions for ${esc(a.title)}">${HKC_ICONS.download}</a>${iconBtn('edit', `Edit ${a.title}`, `data-assessment-edit data-assessment='${attr(a)}'`)}${confirmForm(`/admin/delete/assessment/${a.id}`, '', `Delete “${a.title}” and its questions and attempts?`, 'Delete assessment', 'Delete')}${iconBtn('trash', `Delete ${a.title}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,
+    };
+    const endpoints = { users: '/api/admin/users', courses: '/api/admin/courses', 'api-creds': '/api/admin/api-credentials', assessments: '/api/admin/assessments' };
+    const filterKey = { users: 'role', courses: 'status', assessments: 'type' };
+    const loaders = {};
+    Object.keys(endpoints).forEach((key) => {
+      const section = document.querySelector(`[data-admin-table="${key}"]`);
+      if (!section) return;
+      const tbody = section.querySelector('tbody'), count = section.querySelector('[data-count]'), empty = section.querySelector('[data-empty]'), pager = section.querySelector('[data-pagination]'), shell = section.querySelector('.table-shell');
+      loaders[key] = async (page = 1) => {
+        const s = state[key]; s.page = page;
+        const params = new URLSearchParams({ page, pageSize: 15, search: s.search });
+        if (filterKey[key]) params.set(filterKey[key], s[filterKey[key]] || '');
+        const { ok, data } = await HKC.fetchJSON(`${endpoints[key]}?${params}`);
+        if (!ok) return;
+        const items = data.data || [], pagination = data.pagination || { page: 1, totalPages: 1, totalRecords: items.length };
+        tbody.innerHTML = items.map(rows[key]).join('');
+        shell.hidden = items.length === 0; if (empty) empty.hidden = items.length !== 0;
+        if (count) count.textContent = `${pagination.totalRecords} ${pagination.totalRecords === 1 ? 'record' : 'records'}`;
+        if (pagination.totalPages > 1) HKC.pagination(pager, pagination, loaders[key]); else pager.innerHTML = '';
+      };
+      let timer;
+      section.querySelector('[data-filter-input]')?.addEventListener('input', (event) => { clearTimeout(timer); timer = setTimeout(() => { state[key].search = event.target.value.trim(); loaders[key](1); }, 250); });
+      section.querySelectorAll('[data-filter-chip]').forEach((chip) => chip.addEventListener('click', () => {
+        section.querySelectorAll('[data-filter-chip]').forEach((c) => c.setAttribute('aria-pressed', 'false'));
+        chip.setAttribute('aria-pressed', 'true');
+        state[key][filterKey[key]] = chip.dataset.filterValue === 'all' ? '' : chip.dataset.filterValue;
+        loaders[key](1);
+      }));
+      loaders[key](1);
+    });
+  })();
 </script>
 {% endblock %}

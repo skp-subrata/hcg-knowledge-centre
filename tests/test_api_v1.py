@@ -1,4 +1,6 @@
 """API v1 with header authentication only - no browser session involved."""
+import re
+
 import pytest
 
 
@@ -57,12 +59,19 @@ def test_api_interests_post_requires_login(anon, student, world):
 
 
 def test_admin_page_add_master_targets_real_endpoints():
-	"""admin.html's addMaster() must call /api/interests for interests; /api/v1/interests does not exist."""
+	"""The admin page's quick-add buttons must post to master endpoints that exist (the old page hit /api/v1/interests, a 404)."""
 	from pathlib import Path
 
 	html = Path(__file__).resolve().parents[1].joinpath("templates", "admin.html").read_text(encoding="utf-8")
 	assert "/api/v1/interests" not in html
-	assert "'/api/interests'" in html and "interest_name" in html
+	assert "`/api/v1/${type}`" in html
+	types = set(re.findall(r'data-add-master="([a-z]+)"', html))
+	assert types == {"departments", "positions", "locations"}
+	import app as app_module
+
+	rules = {rule.rule for rule in app_module.app.url_map.iter_rules() if "POST" in rule.methods}
+	for kind in types:
+		assert f"/api/v1/{kind}" in rules
 
 
 # ---------------------------------------------------------------------------

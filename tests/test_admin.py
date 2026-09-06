@@ -48,12 +48,13 @@ def test_update_user_persists_interests(admin, world, db):
 def test_admin_assessments_csv_link_targets_a_real_route():
 	html = (ROOT / "templates" / "admin.html").read_text(encoding="utf-8")
 	assert "download-questions" not in html
-	assert "/assessments/${item.id}/questions/download" in html
+	assert re.search(r"/assessments/\$\{[a-z]+\.id\}/questions/download", html), "JS rows must link to the questions download route"
+	assert "/assessments/{{ item.id }}/questions/download" in html, "server-rendered rows must link to the questions download route"
 
 
 def test_api_docs_only_lists_endpoints_that_exist():
 	html = (ROOT / "templates" / "api_docs.html").read_text(encoding="utf-8")
-	documented = re.findall(r'render_api_card\("(GET|POST|PUT|DELETE)",\s*"([^"]+)"', html)
+	documented = re.findall(r'(?:render_)?api_card\("(GET|POST|PUT|DELETE)",\s*"([^"]+)"', html)
 	assert documented
 	rules = [(m, r.rule) for r in app_module.app.url_map.iter_rules() for m in r.methods]
 	for method, path in documented:

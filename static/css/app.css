@@ -304,6 +304,10 @@ body[data-modal-open] #app { transform: scale(.985); }
 @keyframes slide-out-left { from { transform: none; } to { transform: translateX(-100%); } }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 @keyframes toast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-8px); } }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+.code-block { padding: 1rem; border-radius: var(--r-sm); background: rgb(17 17 20); color: rgb(229 229 234); font-family: var(--font-mono); font-size: .75rem; line-height: 1.5; overflow-x: auto; white-space: pre; }
+.dark .code-block { background: rgb(0 0 0 / .45); }
 html.theme-transition, html.theme-transition *, html.theme-transition *::before, html.theme-transition *::after { transition: background-color 300ms var(--ease-out), color 300ms var(--ease-out), border-color 300ms var(--ease-out), fill 300ms var(--ease-out) !important; }
 
 /* ---------------------------------------------------------------- accessibility preferences */
@@ -352,3 +356,9 @@ html[data-contrast="more"] .badge { border: 1px solid currentColor; }
 .question-list fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .question-list legend { float: left; width: 100%; padding: 0; margin-bottom: 1rem; font-weight: 600; }
 .question-list legend + * { clear: both; }
+
+/* Admin workspace jump navigation (scroll-spied) */
+.jump-nav { display: flex; gap: .25rem; overflow-x: auto; padding: .25rem; border-radius: var(--r-md); background: rgb(var(--c-surface-2)); scrollbar-width: none; }
+.jump-nav a { flex: none; padding: .375rem .75rem; border-radius: var(--r-sm); font-size: .8125rem; font-weight: 500; color: rgb(var(--c-fg-2)); text-decoration: none; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.jump-nav a:hover { color: rgb(var(--c-fg)); }
+.jump-nav a[aria-current="true"] { background: rgb(var(--c-surface)); color: rgb(var(--c-fg)); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
