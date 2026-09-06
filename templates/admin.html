@@ -293,7 +293,7 @@
 {% call sheet_right("assessment-edit", "Edit assessment") %}
   <form method="post" class="flex flex-col gap-3" id="assessment-edit-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="update_assessment"><input type="hidden" name="record_id" id="assessment-edit-id">
-    {{ field("title", "Title", required=True, id="assessment-edit-title") }}
+    {{ field("title", "Title", required=True, id="assessment-edit-name") }}
     {{ select_field("type", "Type", [("pre", "Pre"), ("post", "Post")], id="assessment-edit-type") }}
     <div class="grid grid-cols-2 gap-3">
       {{ field("pass_percentage", "Pass %", type="number", attrs='min="0" max="100" inputmode="numeric"', id="assessment-edit-pass") }}
@@ -404,7 +404,7 @@
       const assessmentBtn = event.target.closest('[data-assessment-edit]');
       if (assessmentBtn) {
         const a = JSON.parse(assessmentBtn.dataset.assessment);
-        setVal('assessment-edit-id', a.id); setVal('assessment-edit-title', a.title); setVal('assessment-edit-type', a.type); setVal('assessment-edit-pass', a.pass_percentage); setVal('assessment-edit-attempts', a.max_attempts || 1);
+        setVal('assessment-edit-id', a.id); setVal('assessment-edit-name', a.title); setVal('assessment-edit-type', a.type); setVal('assessment-edit-pass', a.pass_percentage); setVal('assessment-edit-attempts', a.max_attempts || 1);
         HKC.dialog.open(document.getElementById('assessment-edit'), assessmentBtn); return;
       }
       const userBtn = event.target.closest('[data-user-edit]');

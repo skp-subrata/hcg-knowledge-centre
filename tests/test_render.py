@@ -8,6 +8,7 @@ import app as app_module
 from tests.helpers import make_assessment
 
 PAGE_TEMPLATES = {
+	"error.html",
 	"index.html", "admin.html", "courses.html", "course.html", "assessment.html", "assessment_result.html",
 	"assessment_review.html", "feedback.html", "certificate.html", "community_feed.html", "post_detail.html",
 	"create_post.html", "edit_post.html", "my_posts.html", "approval_queue.html", "groups.html", "group_detail.html",
@@ -16,7 +17,7 @@ PAGE_TEMPLATES = {
 }
 
 # Pages already migrated to the design system: these must have exactly one <h1>, one <main>, and no bare focus:outline-none.
-MIGRATED = {"index.html", "courses.html", "course.html", "api_docs.html", "admin.html", "group_detail.html", "master_management.html", "reward_admin.html", "reports.html", "groups.html", "profile.html", "notifications.html", "rewards.html", "view_as.html", "community_feed.html", "post_detail.html", "create_post.html", "edit_post.html", "my_posts.html", "approval_queue.html", "assessment.html", "assessment_result.html", "assessment_review.html", "feedback.html", "certificate.html"}
+MIGRATED = {"error.html", "index.html", "courses.html", "course.html", "api_docs.html", "admin.html", "group_detail.html", "master_management.html", "reward_admin.html", "reports.html", "groups.html", "profile.html", "notifications.html", "rewards.html", "view_as.html", "community_feed.html", "post_detail.html", "create_post.html", "edit_post.html", "my_posts.html", "approval_queue.html", "assessment.html", "assessment_result.html", "assessment_review.html", "feedback.html", "certificate.html"}
 
 
 def _feedback_pending(client, world, db_path):
@@ -107,6 +108,33 @@ def test_page_renders_on_the_new_base(template, url, persona, prepare, world, db
 		assert len(re.findall(r"<h1[\s>]", html)) == 1, "exactly one <h1> per page"
 		assert html.count("<main") == 1, "exactly one <main> landmark"
 		assert "focus:outline-none" not in html, "focus rings must not be removed"
+
+
+@pytest.mark.parametrize("persona,url,code", [("anon", "/this-page-does-not-exist", 404), ("student", "/this-page-does-not-exist", 404), ("admin", "/logout", 405)])
+def test_error_page_renders_on_the_new_base(persona, url, code, make_client):
+	"""Browsers get the branded error page on the shared layout; the status code is preserved."""
+	client = _client_for(persona, make_client)
+	rendered = []
+	receiver = lambda sender, template, context, **extra: rendered.append(template.name)
+	template_rendered.connect(receiver, app_module.app)
+	try:
+		response = client.get(url)
+	finally:
+		template_rendered.disconnect(receiver, app_module.app)
+	assert response.status_code == code
+	assert "error.html" in rendered
+	RENDERED.update(rendered)
+	html = response.get_data(as_text=True)
+	assert html.count("<h1") == 1 and html.count("<main") == 1
+	assert "focus:outline-none" not in html and "{{" not in html
+	assert str(code) in html and 'id="toast-region"' in html
+
+
+@pytest.mark.parametrize("path,headers", [("/api/v1/does-not-exist", {}), ("/does-not-exist", {"X-Requested-With": "XMLHttpRequest"})])
+def test_api_and_ajax_callers_get_json_errors(path, headers, anon):
+	response = anon.get(path, headers=headers)
+	assert response.status_code == 404 and response.is_json
+	assert response.get_json()["status"] == 404
 
 
 def test_all_page_templates_were_rendered_by_the_cases():

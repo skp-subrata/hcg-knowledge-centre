@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_macros.html" import btn, icon %}
+
+{% block title %}{{ code }} · {{ title }} · HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<section class="min-h-[60vh] flex items-center justify-center">
+  <div class="card max-w-lg w-full text-center py-12 px-8">
+    <p class="eyebrow mb-3">Error {{ code }}</p>
+    <h1 class="mb-2">{{ title }}</h1>
+    <p class="text-fg-2 mb-8">{{ message }}</p>
+    <div class="flex flex-wrap justify-center gap-2">
+      {{ btn("Go to dashboard", "primary", href=url_for('home'), icon_name="home") }}
+      {{ btn("Go back", "secondary", attrs='onclick="history.back()"' if false else 'data-history-back') }}
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>document.querySelector('[data-history-back]')?.addEventListener('click', () => history.back());</script>
+{% endblock %}

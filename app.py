@@ -959,6 +959,27 @@ def create_app():
 	app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 	app.config["CSRF_ENABLED"] = os.getenv("LMS_CSRF", "1") == "1"
 	init_csrf(app)
+
+	ERROR_PAGES = {
+		403: ("Access denied", "You don't have permission to view this page."),
+		404: ("Page not found", "The page you're looking for doesn't exist or has moved."),
+		405: ("Action not allowed", "That request isn't allowed here. Use the buttons and links on the page."),
+		413: ("File too large", "That upload is bigger than the 100 MB limit. Compress it or share a link instead."),
+		500: ("Something went wrong", "An unexpected error occurred. Please try again; if it keeps happening, tell an administrator."),
+	}
+
+	@app.errorhandler(403)
+	@app.errorhandler(404)
+	@app.errorhandler(405)
+	@app.errorhandler(413)
+	@app.errorhandler(500)
+	def render_error_page(error):
+		"""Branded error pages for browsers, JSON for API and AJAX callers."""
+		code = getattr(error, "code", 500) or 500
+		title, message = ERROR_PAGES.get(code, ERROR_PAGES[500])
+		if request.path.startswith("/api/") or request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+			return jsonify({"error": title, "message": message, "status": code}), code
+		return render_template("error.html", code=code, title=title, message=message), code
 	app.jinja_env.globals["embed_url"] = embed_url
 
 	app.jinja_env.filters["sanitize"] = sanitize_html

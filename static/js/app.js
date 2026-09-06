@@ -299,6 +299,27 @@
   };
 
   // ------------------------------------------------------------------ notifications (header bell + notifications page)
+  // Quill ships an unlabelled toolbar; give every control an accessible name and mark the editor as a textbox.
+  HKC.labelQuillToolbar = (quill) => {
+    const labels = { bold: 'Bold', italic: 'Italic', underline: 'Underline', strike: 'Strikethrough', blockquote: 'Quote', 'code-block': 'Code block', link: 'Insert link', image: 'Insert image', video: 'Insert video', clean: 'Remove formatting', header: 'Heading level', list: 'List', indent: 'Indent', align: 'Alignment', color: 'Text colour', background: 'Highlight colour', size: 'Text size', font: 'Font' };
+    const toolbar = quill.container.previousElementSibling;
+    if (!toolbar || !toolbar.classList.contains('ql-toolbar')) return;
+    toolbar.setAttribute('role', 'toolbar'); toolbar.setAttribute('aria-label', 'Text formatting');
+    toolbar.querySelectorAll('button, .ql-picker').forEach((el) => {
+      const format = [...el.classList].find((c) => c.startsWith('ql-') && !['ql-picker', 'ql-active', 'ql-expanded'].includes(c));
+      const value = el.value || el.getAttribute('data-value');
+      const base = labels[(format || '').slice(3)] || (format || '').slice(3);
+      const name = value ? `${base} ${value === 'ordered' ? 'numbered' : value === 'bullet' ? 'bulleted' : value}` : base;
+      if (el.classList.contains('ql-picker')) { const label = el.querySelector('.ql-picker-label'); if (label) { label.setAttribute('role', 'button'); label.setAttribute('aria-label', name); label.setAttribute('aria-haspopup', 'listbox'); } el.querySelectorAll('select').forEach((sel) => sel.setAttribute('aria-label', name)); }
+      else el.setAttribute('aria-label', name);
+    });
+    toolbar.querySelectorAll('select').forEach((sel) => { if (!sel.getAttribute('aria-label')) sel.setAttribute('aria-label', 'Formatting option'); });
+    quill.root.setAttribute('role', 'textbox'); quill.root.setAttribute('aria-multiline', 'true');
+    if (!quill.root.getAttribute('aria-label')) quill.root.setAttribute('aria-label', 'Post body');
+    quill.container.querySelectorAll('.ql-tooltip input').forEach((input) => input.setAttribute('aria-label', 'Link URL'));
+    const tooltipLabels = { 'ql-preview': 'Open link in a new tab', 'ql-action': 'Edit link', 'ql-remove': 'Remove link' };
+    quill.container.querySelectorAll('.ql-tooltip a').forEach((a) => { const key = Object.keys(tooltipLabels).find((k) => a.classList.contains(k)); if (key) a.setAttribute('aria-label', tooltipLabels[key]); });
+  };
   HKC.markRead = (id, targetUrl) => fetch('/api/notifications/' + id + '/read', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': HKC.csrf() } })
     .catch(() => null)
     .then(() => { if (targetUrl && targetUrl !== '#') window.location.href = targetUrl; else window.location.reload(); });

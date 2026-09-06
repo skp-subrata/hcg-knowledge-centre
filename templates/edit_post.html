@@ -46,7 +46,7 @@
     <div class="field">
       <span class="field-label" id="editor-label">Post content</span>
       <div id="editor-container" class="h-64" aria-labelledby="editor-label"></div>
-      <textarea name="description" id="description-textarea" hidden>{{ post.description }}</textarea>
+      <textarea name="description" id="description-textarea" hidden aria-hidden="true" tabindex="-1">{{ post.description }}</textarea>
     </div>
 
     {% if post.thumbnail %}
@@ -93,6 +93,7 @@
       placeholder: 'Write your post. Formatting tools are above.',
       modules: { toolbar: [[{ header: [1, 2, 3, false] }], ['bold', 'italic', 'underline', 'strike'], [{ list: 'ordered' }, { list: 'bullet' }], ['link', 'blockquote', 'code-block'], ['clean']] },
     });
+    HKC.labelQuillToolbar(quill);
     const textarea = document.getElementById('description-textarea');
     quill.root.innerHTML = textarea.value;
     document.getElementById('post-form').addEventListener('submit', () => { textarea.value = quill.root.innerHTML; });

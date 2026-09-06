@@ -24,7 +24,7 @@
     <div class="field">
       <span class="field-label" id="editor-label">Post content</span>
       <div id="editor-container" class="h-64" aria-labelledby="editor-label"></div>
-      <textarea name="description" id="description-textarea" hidden></textarea>
+      <textarea name="description" id="description-textarea" hidden aria-hidden="true" tabindex="-1"></textarea>
     </div>
     {{ file_field("thumbnail", "Cover image", accept="image/png,image/jpeg,image/gif,image/webp", hint="Optional. PNG, JPG, GIF or WebP.", id="post-thumbnail") }}
     {{ file_field("attachments", "Attachments", multiple=True, hint="Optional. PDF, images, video, Office documents, CSV, text or ZIP. Other file types are skipped.", id="post-attachments") }}
@@ -49,6 +49,7 @@
       placeholder: 'Write your post. Formatting tools are above.',
       modules: { toolbar: [[{ header: [1, 2, 3, false] }], ['bold', 'italic', 'underline', 'strike'], [{ list: 'ordered' }, { list: 'bullet' }], ['link', 'blockquote', 'code-block'], ['clean']] },
     });
+    HKC.labelQuillToolbar(quill);
     document.getElementById('post-form').addEventListener('submit', () => { document.getElementById('description-textarea').value = quill.root.innerHTML; });
   })();
 </script>

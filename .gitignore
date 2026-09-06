@@ -22,3 +22,8 @@ uploads/
 gh.exe
 git/
 courses_*.html
+
+# Browser QA scratch (qa/browser_qa.py)
+qa/qa.db*
+qa/uploads/
+qa/report.json
