@@ -34,7 +34,7 @@
       <td class="text-fg-2 tabular">{{ (d.created_at or '')[:10] or '–' }}</td>
       <td class="num"><div class="inline-flex gap-1">
         <button type="button" class="btn btn-secondary btn-sm" data-master-edit="dept" data-record='{{ d|tojson|forceescape }}'>{{ icon("edit") }}<span>Edit</span></button>
-        <form method="post" data-confirm="{% if (d.status or '')|lower == 'active' %}Deactivate {{ d.department_name }}? It will no longer be offered in dropdowns.{% else %}Reactivate {{ d.department_name }}?{% endif %}" data-confirm-title="{% if (d.status or '')|lower == 'active' %}Deactivate department{% else %}Activate department{% endif %}" data-confirm-label="Confirm"{% if (d.status or '')|lower == 'active' %} data-confirm-danger{% endif %}>
+        <form method="post" data-confirm="{% if (d.status or '')|lower == 'active' %}Deactivate {{ d.department_name }}? It will no longer be offered in dropdowns.{% else %}Reactivate {{ d.department_name }}?{% endif %}" data-confirm-title="{% if (d.status or '')|lower == 'active' %}Deactivate department{% else %}Activate department{% endif %}" data-confirm-label="Confirm"{% if (d.status or '')|lower == 'active' %} data-confirm-danger{% endif %}><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="action" value="toggle_department"><input type="hidden" name="record_id" value="{{ d.department_id }}"><input type="hidden" name="status" value="{% if (d.status or '')|lower == 'active' %}Inactive{% else %}Active{% endif %}">
           {{ btn("Deactivate" if (d.status or '')|lower == 'active' else "Activate", "ghost", type="submit", size="sm") }}
         </form>
@@ -70,7 +70,7 @@
       <td>{{ status_badge(l.status) }}</td>
       <td class="num"><div class="inline-flex gap-1">
         <button type="button" class="btn btn-secondary btn-sm" data-master-edit="loc" data-record='{{ l|tojson|forceescape }}'>{{ icon("edit") }}<span>Edit</span></button>
-        <form method="post" data-confirm="{% if (l.status or '')|lower == 'active' %}Deactivate {{ l.location_name }}? It will no longer be offered in dropdowns.{% else %}Reactivate {{ l.location_name }}?{% endif %}" data-confirm-title="{% if (l.status or '')|lower == 'active' %}Deactivate location{% else %}Activate location{% endif %}" data-confirm-label="Confirm"{% if (l.status or '')|lower == 'active' %} data-confirm-danger{% endif %}>
+        <form method="post" data-confirm="{% if (l.status or '')|lower == 'active' %}Deactivate {{ l.location_name }}? It will no longer be offered in dropdowns.{% else %}Reactivate {{ l.location_name }}?{% endif %}" data-confirm-title="{% if (l.status or '')|lower == 'active' %}Deactivate location{% else %}Activate location{% endif %}" data-confirm-label="Confirm"{% if (l.status or '')|lower == 'active' %} data-confirm-danger{% endif %}><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="action" value="toggle_location"><input type="hidden" name="record_id" value="{{ l.location_id }}"><input type="hidden" name="status" value="{% if (l.status or '')|lower == 'active' %}Inactive{% else %}Active{% endif %}">
           {{ btn("Deactivate" if (l.status or '')|lower == 'active' else "Activate", "ghost", type="submit", size="sm") }}
         </form>
@@ -86,7 +86,7 @@
 {% endcall %}
 
 {% call modal("dept-modal", "New department", size="sm") %}
-  <form method="post" id="dept-form" class="flex flex-col">
+  <form method="post" id="dept-form" class="flex flex-col"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" id="dept-action" value="add_department"><input type="hidden" name="record_id" id="dept-id">
     {{ field("department_name", "Department name", required=True, placeholder="e.g. Operations", id="dept-name") }}
     {{ field("department_code", "Code", required=True, placeholder="e.g. OPS", id="dept-code") }}
@@ -97,7 +97,7 @@
 {% endcall %}
 
 {% call modal("loc-modal", "New location") %}
-  <form method="post" id="loc-form" class="flex flex-col">
+  <form method="post" id="loc-form" class="flex flex-col"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" id="loc-action" value="add_location"><input type="hidden" name="record_id" id="loc-id">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
       {{ field("location_name", "Location name", required=True, placeholder="e.g. Bengaluru", id="loc-name") }}

@@ -27,9 +27,9 @@
     {% endif %}
     <div class="ml-auto flex items-center gap-1 sm:gap-2">
       {% if signed_in and real_role in ("admin", "moderator") and not impersonating %}
-      <a href="{{ url_for('switch_role') }}" class="chip hidden sm:inline-flex" title="Switch between the student view and your {{ real_role }} workspace">
-        {{ icon("switch", "w-3.5 h-3.5") }}<span>{% if eff_role == 'basic user' %}Student view{% else %}{{ real_role|title }} view{% endif %}</span>
-      </a>
+      <form method="post" action="{{ url_for('switch_role') }}" class="hidden sm:block"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="chip" title="Switch between the student view and your {{ real_role }} workspace">{{ icon("switch", "w-3.5 h-3.5") }}<span>{% if eff_role == 'basic user' %}Student view{% else %}{{ real_role|title }} view{% endif %}</span></button>
+      </form>
       {% endif %}
       {% if signed_in and active_release %}
       <button type="button" class="chip relative" data-dialog-open="release-sheet" data-release-version="{{ active_release.version_number }}" aria-label="What's new in version {{ active_release.version_number }}">
@@ -68,7 +68,7 @@
           <div class="menu-separator"></div>
           <a href="{{ url_for('profile') }}" class="menu-item" role="menuitem">{{ icon("user") }}<span>Edit profile</span></a>
           {% if real_role in ("admin", "moderator") and not impersonating %}
-          <a href="{{ url_for('switch_role') }}" class="menu-item" role="menuitem">{{ icon("switch") }}<span>{% if eff_role == 'basic user' %}Switch to {{ real_role }} view{% else %}Switch to student view{% endif %}</span></a>
+          <form method="post" action="{{ url_for('switch_role') }}" role="none"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="menu-item" role="menuitem">{{ icon("switch") }}<span>{% if eff_role == 'basic user' %}Switch to {{ real_role }} view{% else %}Switch to student view{% endif %}</span></button></form>
           {% endif %}
           {% if real_role == "admin" and not impersonating %}
           <a href="{{ url_for('view_as_page') }}" class="menu-item" role="menuitem">{{ icon("eye") }}<span>View as another user</span></a>
@@ -77,7 +77,7 @@
           <a href="{{ url_for('exit_view') }}" class="menu-item" role="menuitem">{{ icon("logout") }}<span>Exit view-as</span></a>
           {% endif %}
           <div class="menu-separator"></div>
-          <a href="{{ url_for('logout') }}" class="menu-item is-danger" role="menuitem">{{ icon("logout") }}<span>Log out</span></a>
+          <form method="post" action="{{ url_for('logout') }}" role="none"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="menu-item is-danger" role="menuitem">{{ icon("logout") }}<span>Log out</span></button></form>
         </div>
       </div>
       {% endif %}

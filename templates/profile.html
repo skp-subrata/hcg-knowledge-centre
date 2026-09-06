@@ -13,7 +13,7 @@
     </div>
   </header>
 
-  <form method="post" enctype="multipart/form-data" class="card flex flex-col">
+  <form method="post" enctype="multipart/form-data" class="card flex flex-col"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="flex items-center gap-5 mb-6">
       {{ avatar(user_data.full_name, src=(url_for('uploaded_file', filename=user_data.profile_picture) if user_data.profile_picture else None), size="lg") }}
       <div class="flex-1">{{ file_field("profile_picture", "Profile picture", accept="image/png,image/jpeg,image/gif,image/webp", hint="PNG, JPG, GIF or WebP.") }}</div>
@@ -79,16 +79,16 @@
     }
     async function add(id) {
       if (active.some((i) => i.id === id)) return close();
-      await fetch(`/api/users/${userId}/interests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interest_id: id }) });
+      await fetch(`/api/users/${userId}/interests`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': HKC.csrf() }, body: JSON.stringify({ interest_id: id }) });
       input.value = ''; close(); load();
     }
     async function create(name) {
-      const res = await fetch('/api/interests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interest_name: name }) });
+      const res = await fetch('/api/interests', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': HKC.csrf() }, body: JSON.stringify({ interest_name: name }) });
       const data = await res.json();
       if (data && data.id) add(data.id); else HKC.toast(data.error || 'Could not add that interest.', 'error');
     }
     async function remove(id) {
-      await fetch(`/api/users/${userId}/interests/${id}`, { method: 'DELETE' });
+      await fetch(`/api/users/${userId}/interests/${id}`, { method: 'DELETE', headers: { 'X-CSRF-Token': HKC.csrf() } });
       load();
     }
     function open() { listbox.hidden = false; requestAnimationFrame(() => listbox.classList.add('is-open')); input.setAttribute('aria-expanded', 'true'); }

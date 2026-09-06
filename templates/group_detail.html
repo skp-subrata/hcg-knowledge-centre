@@ -26,7 +26,7 @@
     <div class="flex justify-between gap-4 border-t hairline pt-3"><dt class="text-fg-2">Created</dt><dd class="font-medium tabular">{{ (group.created_at or '')[:10] }}</dd></div>
     <div class="flex justify-between gap-4 border-t hairline pt-3"><dt class="text-fg-2">Type</dt><dd class="font-medium">{{ group.group_type or 'General' }}</dd></div>
   </dl>
-  <form method="post" action="{{ url_for('assign_group_course', group_id=group.id) }}" class="card lg:col-span-2" aria-labelledby="assign-title">
+  <form method="post" action="{{ url_for('assign_group_course', group_id=group.id) }}" class="card lg:col-span-2" aria-labelledby="assign-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <h2 id="assign-title" class="text-base mb-4">Assign a course to every member</h2>
     <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-x-4 items-end">
       {{ select_field("course_id", "Course", all_courses, placeholder="Choose a course", required=True) }}
@@ -49,7 +49,7 @@
       <td class="text-fg-2">{{ member.department or '–' }}</td>
       <td class="text-fg-2">{{ member.location or '–' }}</td>
       <td>{{ status_badge(member.user_status or 'active') }}</td>
-      <td class="num"><form method="post" action="{{ url_for('remove_group_member', group_id=group.id) }}" data-confirm="Remove {{ member.full_name }} from {{ group.name }}? Their course access is kept." data-confirm-title="Remove member" data-confirm-label="Remove" data-confirm-danger><input type="hidden" name="user_id" value="{{ member.user_id }}">{{ btn_icon("Remove " ~ member.full_name, "trash", size="sm", type="submit") }}</form></td>
+      <td class="num"><form method="post" action="{{ url_for('remove_group_member', group_id=group.id) }}" data-confirm="Remove {{ member.full_name }} from {{ group.name }}? Their course access is kept." data-confirm-title="Remove member" data-confirm-label="Remove" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="user_id" value="{{ member.user_id }}">{{ btn_icon("Remove " ~ member.full_name, "trash", size="sm", type="submit") }}</form></td>
     </tr>
     {% endfor %}
   {% endcall %}
@@ -62,7 +62,7 @@
   <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
     <h2 id="mods-title">Moderators</h2>
     {% if role == 'admin' %}
-    <form method="post" action="{{ url_for('add_group_moderator', group_id=group.id) }}" class="flex items-end gap-2">
+    <form method="post" action="{{ url_for('add_group_moderator', group_id=group.id) }}" class="flex items-end gap-2"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field mb-0"><label class="sr-only" for="f-moderator_id">Moderator to add</label><select id="f-moderator_id" name="moderator_id" class="select min-w-[220px]" required><option value="">Select a moderator</option>{% for mod in eligible_moderators %}<option value="{{ mod.id }}">{{ mod.full_name }}</option>{% endfor %}</select></div>
       {{ btn("Add", "secondary", type="submit", icon_name="plus") }}
     </form>
@@ -77,8 +77,8 @@
       <td>{{ status_badge(mod.status) }}</td>
       {% if role == 'admin' %}
       <td class="num"><div class="inline-flex gap-1">
-        <form method="post" action="{{ url_for('toggle_group_moderator', group_id=group.id, user_id=mod.user_id) }}">{{ btn("Deactivate" if (mod.status or '')|lower == 'active' else "Activate", "secondary", type="submit", size="sm") }}</form>
-        <form method="post" action="{{ url_for('remove_group_moderator', group_id=group.id, user_id=mod.user_id) }}" data-confirm="Remove {{ mod.full_name }} as a moderator of this group?" data-confirm-title="Remove moderator" data-confirm-label="Remove" data-confirm-danger>{{ btn_icon("Remove moderator " ~ mod.full_name, "trash", size="sm", type="submit") }}</form>
+        <form method="post" action="{{ url_for('toggle_group_moderator', group_id=group.id, user_id=mod.user_id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ btn("Deactivate" if (mod.status or '')|lower == 'active' else "Activate", "secondary", type="submit", size="sm") }}</form>
+        <form method="post" action="{{ url_for('remove_group_moderator', group_id=group.id, user_id=mod.user_id) }}" data-confirm="Remove {{ mod.full_name }} as a moderator of this group?" data-confirm-title="Remove moderator" data-confirm-label="Remove" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ btn_icon("Remove moderator " ~ mod.full_name, "trash", size="sm", type="submit") }}</form>
       </div></td>
       {% endif %}
     </tr>

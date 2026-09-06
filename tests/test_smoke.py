@@ -33,17 +33,17 @@ def test_wrong_password_is_rejected(anon, login):
 
 def test_switch_role_toggles_for_staff(anon, login):
 	login(anon, "admin")
-	anon.get("/switch-role")
+	anon.post("/switch-role")
 	with anon.session_transaction() as sess:
 		assert sess["role"] == "admin"
-	anon.get("/switch-role")
+	anon.post("/switch-role")
 	with anon.session_transaction() as sess:
 		assert sess["role"] == "basic user"
 
 
 def test_switch_role_is_refused_for_students(anon, login):
 	login(anon, "student")
-	response = anon.get("/switch-role", follow_redirects=True)
+	response = anon.post("/switch-role", follow_redirects=True)
 	assert b"Only staff members can switch roles" in response.data
 	with anon.session_transaction() as sess:
 		assert sess["role"] == "basic user"
@@ -52,7 +52,7 @@ def test_switch_role_is_refused_for_students(anon, login):
 def test_admin_panel_needs_the_switch(anon, login):
 	login(anon, "admin")
 	assert anon.get("/admin").status_code == 302
-	anon.get("/switch-role")
+	anon.post("/switch-role")
 	response = anon.get("/admin")
 	assert response.status_code == 200
 

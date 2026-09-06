@@ -12,7 +12,7 @@
       <p class="text-fg-2 mt-1">Course assignments, certificates, approvals and replies to your posts.</p>
     </div>
     {% if notifications %}
-    <form method="post" action="{{ url_for('mark_all_read') }}">{{ btn("Mark all as read", "secondary", type="submit", size="sm", icon_name="check") }}</form>
+    <form method="post" action="{{ url_for('mark_all_read') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ btn("Mark all as read", "secondary", type="submit", size="sm", icon_name="check") }}</form>
     {% endif %}
   </header>
 

@@ -12,7 +12,7 @@
     <h1 id="hero-title" class="display">Make progress.<br>Every day.</h1>
     <p class="text-fg-2 text-lg mt-5 max-w-xl">One focused place for courses, assessments, certificates and the community that helps you grow.</p>
   </div>
-  <form class="card" method="post" novalidate aria-labelledby="signin-title">
+  <form class="card" method="post" novalidate aria-labelledby="signin-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <h2 id="signin-title" class="text-lg mb-5">Sign in</h2>
     {{ field("username", "Username", required=True, autocomplete="username", attrs='autocapitalize="none" spellcheck="false" autofocus') }}
     {{ field("password", "Password", type="password", required=True, autocomplete="current-password") }}

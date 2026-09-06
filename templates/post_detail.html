@@ -1,6 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import btn, icon, badge, avatar, textarea_field, empty_state %}
-{% from "community_feed.html" import stars, role_badge %}
+{% from "_macros.html" import btn, icon, badge, avatar, textarea_field, empty_state, stars, role_badge %}
 
 {% block title %}{{ post.title }} · Community · HCG Knowledge Centre{% endblock %}
 
@@ -67,7 +66,7 @@
           <p class="caption mt-1 inline-flex items-center gap-1">{{ icon("check", "w-3.5 h-3.5") }}Ratings cannot be changed</p>
         </div>
         {% else %}
-        <form method="post" action="{{ url_for('rate_post', post_id=post.id) }}" class="text-left sm:text-right">
+        <form method="post" action="{{ url_for('rate_post', post_id=post.id) }}" class="text-left sm:text-right"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <p class="caption mb-1.5" id="rate-label">Rate this post</p>
           <div class="flex gap-1" role="group" aria-labelledby="rate-label">
             {% for star in range(1, 6) %}
@@ -84,7 +83,7 @@
 
   <section class="card mt-6 flex flex-col gap-6" id="comments" aria-labelledby="comments-title">
     <h2 id="comments-title" class="text-base">Comments <span class="caption font-normal">({{ comments|length }})</span></h2>
-    <form method="post" action="{{ url_for('comment_post', post_id=post.id) }}">
+    <form method="post" action="{{ url_for('comment_post', post_id=post.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       {{ textarea_field("comment_text", "Add a comment", rows=3, required=True, placeholder="Share your feedback or ask a question") }}
       <div class="flex justify-end">{{ btn("Post comment", "primary", type="submit", size="sm") }}</div>
     </form>

@@ -362,3 +362,6 @@ html[data-contrast="more"] .badge { border: 1px solid currentColor; }
 .jump-nav a { flex: none; padding: .375rem .75rem; border-radius: var(--r-sm); font-size: .8125rem; font-weight: 500; color: rgb(var(--c-fg-2)); text-decoration: none; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .jump-nav a:hover { color: rgb(var(--c-fg)); }
 .jump-nav a[aria-current="true"] { background: rgb(var(--c-surface)); color: rgb(var(--c-fg)); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+
+/* Menu items rendered as form buttons (POST-only logout / role switch) */
+button.menu-item { width: 100%; text-align: left; background: transparent; border: 0; font: inherit; cursor: pointer; }

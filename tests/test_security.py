@@ -34,7 +34,7 @@ def test_impersonating_admin_cannot_switch_role(admin, world):
 	with admin.session_transaction() as sess:
 		assert sess["user_id"] == maya and sess["role"] == "basic user" and sess["impersonator_id"] == world.users["admin"]
 		assert sess["actual_role"] == "basic user", "the impersonated user's real role, not the admin's"
-	admin.get("/switch-role")
+	admin.post("/switch-role")
 	with admin.session_transaction() as sess:
 		assert sess["role"] == "basic user"
 	assert admin.get("/admin").status_code == 302  # still locked out while impersonating

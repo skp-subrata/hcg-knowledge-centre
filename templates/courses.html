@@ -35,8 +35,8 @@
       {% set can_edit = item.created_by == user_id or role == 'admin' %}
       {% call course_card(item, variant="manage", can_edit=can_edit) %}
         {% if can_edit and (item.status or '')|lower == 'draft' %}
-          <form method="post" action="{{ url_for('courses_publish', course_id=item.id) }}">{{ btn("Publish", "secondary", type="submit", size="sm", icon_name="upload") }}</form>
-          <form method="post" action="{{ url_for('delete_record', resource='course', record_id=item.id) }}" data-confirm="Delete the draft course '{{ item.name }}' permanently?" data-confirm-title="Delete draft" data-confirm-label="Delete" data-confirm-danger>
+          <form method="post" action="{{ url_for('courses_publish', course_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ btn("Publish", "secondary", type="submit", size="sm", icon_name="upload") }}</form>
+          <form method="post" action="{{ url_for('delete_record', resource='course', record_id=item.id) }}" data-confirm="Delete the draft course '{{ item.name }}' permanently?" data-confirm-title="Delete draft" data-confirm-label="Delete" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {{ btn_icon("Delete course", "trash", variant="ghost", size="sm", type="submit") }}
           </form>
         {% endif %}
@@ -68,7 +68,7 @@
     <li aria-current="step">Basics</li><li>Details</li><li>Content</li><li>Review</li>
   </ol>
   <div class="progress mb-6" aria-hidden="true"><span id="wizard-progress" style="width:0%"></span></div>
-  <form id="wizard-form" action="{{ url_for('courses_create') }}" method="post" enctype="multipart/form-data" novalidate>
+  <form id="wizard-form" action="{{ url_for('courses_create') }}" method="post" enctype="multipart/form-data" novalidate><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <section data-step="1">
       <div class="field">
         <label class="field-label flex justify-between" for="wiz-name">Course title<span class="req" aria-hidden="true">*</span><span id="title-counter" class="caption font-normal">0/200</span></label>
@@ -116,7 +116,7 @@
 
 {# ---- Edit course sheet ---- #}
 {% call sheet_right("course-edit", "Edit course") %}
-  <form method="post" enctype="multipart/form-data" action="" id="edit-form" class="flex flex-col">
+  <form method="post" enctype="multipart/form-data" action="" id="edit-form" class="flex flex-col"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="update_course">
     {{ field("name", "Course name", required=True, id="edit-name") }}
     {{ textarea_field("description", "Description", rows=3, id="edit-desc") }}

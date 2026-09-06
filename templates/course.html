@@ -25,7 +25,7 @@
     {% elif progress == 'ASSESSMENT_FAILED' and is_learner %}
       {{ btn("Try the assessment again", "primary", href=(url_for('assessment', assessment_id=assessments[0].id) if assessments else url_for('home')), icon_name="refresh") }}
     {% elif progress in ['NOT_STARTED', 'IN_PROGRESS', 'ASSESSMENT_PENDING'] and is_learner %}
-      <form method="post" action="{{ url_for('complete_course', course_id=course.id) }}">{{ btn("Continue course", "primary", type="submit", icon_name="play") }}</form>
+      <form method="post" action="{{ url_for('complete_course', course_id=course.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ btn("Continue course", "primary", type="submit", icon_name="play") }}</form>
     {% endif %}
   </div>
 </header>

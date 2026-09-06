@@ -42,7 +42,7 @@ _ws.generate_password_hash = _fast_generate_password_hash
 
 import app as app_module  # noqa: E402  - builds the app and seeds SEED_DB
 
-app_module.app.config.update(TESTING=True)
+app_module.app.config.update(TESTING=True, CSRF_ENABLED=False)  # tests/test_csrf.py re-enables it per test
 
 DEMO_PASSWORDS = {
 	"admin": "admin",
@@ -151,7 +151,7 @@ def admin(make_client):
 def login():
 	"""Real form login: ``login(client, username, password=None)``.
 
-	The app always sets ``role='basic user'`` on login; staff must ``GET /switch-role``.
+	The app always sets ``role='basic user'`` on login; staff must ``POST /switch-role``.
 	"""
 
 	def _login(client, username, password=None):

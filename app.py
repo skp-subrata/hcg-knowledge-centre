@@ -15,6 +15,7 @@ from openpyxl import Workbook, load_workbook
 from storage import save_file
 from db_init import apply_init_scripts, applied_scripts
 from security import attachment_allowed, is_safe_proxy_target, load_or_create_secret_key, sanitize_html, serve_inline
+from csrf import init_csrf
 
 
 DATABASE = Path(os.getenv("LMS_DATABASE", Path(__file__).with_name("users.db")))
@@ -956,6 +957,8 @@ def create_app():
 	app.config["TEMPLATES_AUTO_RELOAD"] = True
 	app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 	app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
+	app.config["CSRF_ENABLED"] = os.getenv("LMS_CSRF", "1") == "1"
+	init_csrf(app)
 	app.jinja_env.globals["embed_url"] = embed_url
 
 	app.jinja_env.filters["sanitize"] = sanitize_html
@@ -2521,7 +2524,7 @@ def create_app():
 		response.headers["X-Content-Type-Options"] = "nosniff"
 		return response
 
-	@app.get("/switch-role")
+	@app.post("/switch-role")
 	def switch_role():
 		"""Toggle between basic user and admin view for staff."""
 		if "user_id" not in session:
@@ -3816,7 +3819,7 @@ def create_app():
 		output = stream.getvalue().encode("utf-8-sig")
 		return send_file(BytesIO(output), as_attachment=True, download_name="Community_Content_Rewards_Report.csv", mimetype="text/csv")
 
-	@app.get("/logout")
+	@app.post("/logout")
 	def logout():
 		"""End the current session."""
 		session.clear()
@@ -4109,7 +4112,7 @@ def create_app():
 			total_records = conn.execute(count_sql, params).fetchone()["total"]
 
 			data_sql = f"""
-				SELECT a.id, a.title, a.type, a.course_id, c.name AS course_name 
+				SELECT a.id, a.title, a.type, a.course_id, a.pass_percentage, a.max_attempts, c.name AS course_name 
 				FROM assessments a 
 				LEFT JOIN courses c ON c.id = a.course_id 
 				{where_str}

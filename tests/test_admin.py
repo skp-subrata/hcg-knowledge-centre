@@ -84,3 +84,11 @@ def test_fromjson_filter_parses_release_note_lists():
 	assert fromjson('["a", "b"]') == ["a", "b"]
 	assert fromjson("not json") == []
 	assert fromjson(None) == []
+
+
+def test_admin_assessments_api_returns_pass_mark_and_attempts(admin, world):
+	"""The admin table re-renders from this endpoint; without these columns the rows and the edit sheet show blanks."""
+	data = admin.get("/api/admin/assessments?page=1&pageSize=5").get_json()["data"]
+	assert data, "seed has assessments"
+	for row in data:
+		assert {"id", "title", "type", "course_name", "pass_percentage", "max_attempts"} <= set(row)

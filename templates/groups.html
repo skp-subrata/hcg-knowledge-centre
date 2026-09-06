@@ -18,7 +18,7 @@
 </header>
 
 {% if groups %}
-<form method="post" action="{{ url_for('upload_group_members') }}" enctype="multipart/form-data" class="card mb-6" aria-labelledby="bulk-title">
+<form method="post" action="{{ url_for('upload_group_members') }}" enctype="multipart/form-data" class="card mb-6" aria-labelledby="bulk-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h2 id="bulk-title" class="text-base mb-4">Bulk-add members from a CSV</h2>
   <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-x-4 items-end">
     {{ select_field("group_id", "Group", groups, placeholder="Select a group", required=True) }}
@@ -55,7 +55,7 @@
 
 {% if is_staff %}
 {% call modal("group-create", "Create a group", size="lg", description="Name the group, then pick its first members.") %}
-  <form method="post" class="flex flex-col" id="group-form">
+  <form method="post" class="flex flex-col" id="group-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
       {{ field("name", "Group name", required=True, id="group-name") }}
       {{ field("group_type", "Group type", placeholder="e.g. Training, Sales, Support", id="group-type") }}

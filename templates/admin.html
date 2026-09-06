@@ -38,7 +38,7 @@
   <h2 id="create-title" class="text-xl mb-4">Create &amp; assign</h2>
   <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 
-    <form method="post" enctype="multipart/form-data" class="card flex flex-col gap-3" aria-labelledby="new-course-title">
+    <form method="post" enctype="multipart/form-data" class="card flex flex-col gap-3" aria-labelledby="new-course-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="add_course">
       <h3 id="new-course-title" class="text-base flex items-center gap-2">{{ icon("book", "w-4 h-4 text-accent") }}New course</h3>
       {{ field("course_name", "Course name", required=True, placeholder="e.g. Cloud Native Integrations", id="course-name") }}
@@ -52,7 +52,7 @@
       <div class="mt-auto pt-1">{{ btn("Create course", "primary", type="submit", icon_name="plus") }}</div>
     </form>
 
-    <form method="post" class="card flex flex-col gap-3" id="assign-form" aria-labelledby="assign-title">
+    <form method="post" class="card flex flex-col gap-3" id="assign-form" aria-labelledby="assign-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="assign_course">
       <h3 id="assign-title" class="text-base flex items-center gap-2">{{ icon("users", "w-4 h-4 text-accent") }}Assign a course</h3>
       {{ row_select("course_id", "Published course", assignable_courses, "assign-course", placeholder="Select a course", required=True) }}
@@ -69,7 +69,7 @@
       <div class="mt-auto pt-1">{{ btn("Assign course", "primary", type="submit", icon_name="check") }}</div>
     </form>
 
-    <form method="post" class="card flex flex-col gap-3" aria-labelledby="new-assessment-title">
+    <form method="post" class="card flex flex-col gap-3" aria-labelledby="new-assessment-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="add_assessment">
       <h3 id="new-assessment-title" class="text-base flex items-center gap-2">{{ icon("clipboard-check", "w-4 h-4 text-accent") }}New assessment</h3>
       {{ row_select("course_id", "Course", courses, "assessment-course", placeholder="Select a course", required=True) }}
@@ -83,7 +83,7 @@
       <div class="mt-auto pt-1">{{ btn("Create assessment", "primary", type="submit", icon_name="plus") }}</div>
     </form>
 
-    <form method="post" class="card flex flex-col gap-3" aria-labelledby="new-question-title">
+    <form method="post" class="card flex flex-col gap-3" aria-labelledby="new-question-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="add_question">
       <h3 id="new-question-title" class="text-base flex items-center gap-2">{{ icon("info", "w-4 h-4 text-accent") }}Add a question</h3>
       {{ row_select("assessment_id", "Assessment", assessments, "question-assessment", placeholder="Select an assessment", required=True, text_key="title") }}
@@ -101,7 +101,7 @@
       <div class="mt-auto pt-1">{{ btn("Add question", "primary", type="submit", icon_name="plus") }}</div>
     </form>
 
-    <form method="post" enctype="multipart/form-data" class="card flex flex-col gap-3" aria-labelledby="import-title">
+    <form method="post" enctype="multipart/form-data" class="card flex flex-col gap-3" aria-labelledby="import-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="import_questions">
       <h3 id="import-title" class="text-base flex items-center gap-2">{{ icon("upload", "w-4 h-4 text-accent") }}Import questions</h3>
       <p class="text-sm text-fg-2">Bulk-load questions from a workbook. Rows for assessments you do not manage are rejected.</p>
@@ -111,7 +111,7 @@
     </form>
 
     {% if is_admin %}
-    <form method="post" class="card flex flex-col gap-3" aria-labelledby="new-user-title">
+    <form method="post" class="card flex flex-col gap-3" aria-labelledby="new-user-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="add_user">
       <h3 id="new-user-title" class="text-base flex items-center gap-2">{{ icon("user", "w-4 h-4 text-accent") }}Add a user</h3>
       <div class="grid grid-cols-2 gap-3">
@@ -162,7 +162,7 @@
       <td>{{ status_badge((item.status or 'published')|lower) }}</td>
       <td class="num"><div class="flex justify-end gap-1">
         <button type="button" class="btn btn-icon btn-ghost btn-sm" data-course-edit data-course='{{ dict(item)|tojson|forceescape }}' aria-label="Edit {{ item.name }}">{{ icon("edit", "w-4 h-4") }}</button>
-        <form method="post" action="{{ url_for('delete_record', resource='course', record_id=item.id) }}" data-confirm="Delete “{{ item.name }}” and all of its assignments and assessments?" data-confirm-title="Delete course" data-confirm-label="Delete" data-confirm-danger><button type="submit" class="btn btn-icon btn-ghost btn-sm text-danger" aria-label="Delete {{ item.name }}">{{ icon("trash", "w-4 h-4") }}</button></form>
+        <form method="post" action="{{ url_for('delete_record', resource='course', record_id=item.id) }}" data-confirm="Delete “{{ item.name }}” and all of its assignments and assessments?" data-confirm-title="Delete course" data-confirm-label="Delete" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-icon btn-ghost btn-sm text-danger" aria-label="Delete {{ item.name }}">{{ icon("trash", "w-4 h-4") }}</button></form>
       </div></td>
     </tr>
     {% endfor %}
@@ -196,7 +196,7 @@
       <td class="num"><div class="flex justify-end gap-1">
         <a href="/assessments/{{ item.id }}/questions/download" class="btn btn-icon btn-ghost btn-sm" aria-label="Download questions for {{ item.title }}">{{ icon("download", "w-4 h-4") }}</a>
         <button type="button" class="btn btn-icon btn-ghost btn-sm" data-assessment-edit data-assessment='{{ dict(item)|tojson|forceescape }}' aria-label="Edit {{ item.title }}">{{ icon("edit", "w-4 h-4") }}</button>
-        <form method="post" action="{{ url_for('delete_record', resource='assessment', record_id=item.id) }}" data-confirm="Delete “{{ item.title }}” and its questions and attempts?" data-confirm-title="Delete assessment" data-confirm-label="Delete" data-confirm-danger><button type="submit" class="btn btn-icon btn-ghost btn-sm text-danger" aria-label="Delete {{ item.title }}">{{ icon("trash", "w-4 h-4") }}</button></form>
+        <form method="post" action="{{ url_for('delete_record', resource='assessment', record_id=item.id) }}" data-confirm="Delete “{{ item.title }}” and its questions and attempts?" data-confirm-title="Delete assessment" data-confirm-label="Delete" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-icon btn-ghost btn-sm text-danger" aria-label="Delete {{ item.title }}">{{ icon("trash", "w-4 h-4") }}</button></form>
       </div></td>
     </tr>
     {% endfor %}
@@ -230,9 +230,9 @@
       <td class="num tabular">{{ (item.course_ids|string).split(',')|length if item.course_ids else 0 }}</td>
       {% if is_admin %}
       <td class="num"><div class="flex justify-end gap-1">
-        <form method="post" action="{{ url_for('view_as', user_id=item.id) }}"><button type="submit" class="btn btn-icon btn-ghost btn-sm" aria-label="Preview as {{ item.full_name }}">{{ icon("eye", "w-4 h-4") }}</button></form>
+        <form method="post" action="{{ url_for('view_as', user_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-icon btn-ghost btn-sm" aria-label="Preview as {{ item.full_name }}">{{ icon("eye", "w-4 h-4") }}</button></form>
         <button type="button" class="btn btn-icon btn-ghost btn-sm" data-user-edit data-user='{{ item|tojson|forceescape }}' aria-label="Edit {{ item.full_name }}">{{ icon("edit", "w-4 h-4") }}</button>
-        <form method="post" action="{{ url_for('delete_record', resource='user', record_id=item.id) }}" data-confirm="Delete {{ item.full_name }}? Their assignments, attempts and wallet are removed." data-confirm-title="Delete user" data-confirm-label="Delete" data-confirm-danger><button type="submit" class="btn btn-icon btn-ghost btn-sm text-danger" aria-label="Delete {{ item.full_name }}">{{ icon("trash", "w-4 h-4") }}</button></form>
+        <form method="post" action="{{ url_for('delete_record', resource='user', record_id=item.id) }}" data-confirm="Delete {{ item.full_name }}? Their assignments, attempts and wallet are removed." data-confirm-title="Delete user" data-confirm-label="Delete" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-icon btn-ghost btn-sm text-danger" aria-label="Delete {{ item.full_name }}">{{ icon("trash", "w-4 h-4") }}</button></form>
       </div></td>
       {% endif %}
     </tr>
@@ -252,7 +252,7 @@
       <input id="api-search" type="search" class="input w-full md:w-56" placeholder="Search by user" data-filter-input autocomplete="off">
     </div>
   </div>
-  <form method="post" class="card flex flex-col sm:flex-row sm:items-end gap-3 mb-3">
+  <form method="post" class="card flex flex-col sm:flex-row sm:items-end gap-3 mb-3"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="generate_api_creds">
     <div class="flex-1">{{ row_select("target_user_id", "Generate keys for", users, "api-user", placeholder="Select a user", required=True, text_key="full_name") }}</div>
     {{ btn("Generate key pair", "primary", type="submit", icon_name="key") }}
@@ -268,7 +268,7 @@
       <td class="num"><div class="flex justify-end gap-1">
         {% if item.status == 'active' %}
         <a href="/admin/api-credentials/{{ item.user_id }}/download" class="btn btn-icon btn-ghost btn-sm" aria-label="Download credentials for {{ item.full_name }}">{{ icon("download", "w-4 h-4") }}</a>
-        <form method="post" data-confirm="Revoke API access for {{ item.full_name }}? Integrations using this key stop working immediately." data-confirm-title="Revoke key" data-confirm-label="Revoke" data-confirm-danger><input type="hidden" name="action" value="revoke_api_creds"><input type="hidden" name="target_user_id" value="{{ item.user_id }}"><button type="submit" class="btn btn-sm btn-ghost text-danger">Revoke</button></form>
+        <form method="post" data-confirm="Revoke API access for {{ item.full_name }}? Integrations using this key stop working immediately." data-confirm-title="Revoke key" data-confirm-label="Revoke" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="revoke_api_creds"><input type="hidden" name="target_user_id" value="{{ item.user_id }}"><button type="submit" class="btn btn-sm btn-ghost text-danger">Revoke</button></form>
         {% endif %}
       </div></td>
     </tr>
@@ -281,7 +281,7 @@
 
 {# ─────────────────────────── Sheets & modals ─────────────────────────── #}
 {% call sheet_right("course-edit", "Edit course", description="Rename, recategorise or publish. Content is edited from the course catalogue.") %}
-  <form method="post" class="flex flex-col gap-3" id="course-edit-form">
+  <form method="post" class="flex flex-col gap-3" id="course-edit-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="update_course"><input type="hidden" name="record_id" id="course-edit-id">
     {{ field("name", "Course name", required=True, id="course-edit-name") }}
     {{ field("category", "Category", id="course-edit-category") }}
@@ -291,7 +291,7 @@
 {% endcall %}
 
 {% call sheet_right("assessment-edit", "Edit assessment") %}
-  <form method="post" class="flex flex-col gap-3" id="assessment-edit-form">
+  <form method="post" class="flex flex-col gap-3" id="assessment-edit-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="update_assessment"><input type="hidden" name="record_id" id="assessment-edit-id">
     {{ field("title", "Title", required=True, id="assessment-edit-title") }}
     {{ select_field("type", "Type", [("pre", "Pre"), ("post", "Post")], id="assessment-edit-type") }}
@@ -305,7 +305,7 @@
 
 {% if is_admin %}
 {% call modal("user-edit", "Edit user", size="lg") %}
-  <form method="post" class="flex flex-col gap-3" id="editUserForm" novalidate>
+  <form method="post" class="flex flex-col gap-3" id="editUserForm" novalidate><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="update_user"><input type="hidden" name="record_id" id="edit_record_id">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {{ field("full_name", "Full name", required=True, id="edit_full_name") }}
@@ -338,13 +338,13 @@
     const roleBadge = (r) => badge(String(r || '').replace(/\b\w/g, (c) => c.toUpperCase()), { admin: 'info', moderator: 'warning' }[r] || 'neutral');
     const iconBtn = (name, label, extra = '', cls = '') => `<button type="button" class="btn btn-icon btn-ghost btn-sm ${cls}" ${extra} aria-label="${esc(label)}">${HKC_ICONS[name]}</button>`;
     const HKC_ICONS = {
-      edit: document.querySelector('[data-course-edit] svg, [data-assessment-edit] svg, [data-user-edit] svg')?.outerHTML || '✎',
-      trash: document.querySelector('form[data-confirm-danger] .text-danger svg')?.outerHTML || '✕',
-      eye: document.querySelector('[aria-label^="Preview as"] svg, [data-reveal] svg')?.outerHTML || '👁',
-      download: document.querySelector('a[aria-label^="Download"] svg')?.outerHTML || '↓',
-      copy: document.querySelector('[data-copy] svg')?.outerHTML || '⧉',
+      edit: {{ icon("edit", "w-4 h-4")|tojson }},
+      trash: {{ icon("trash", "w-4 h-4")|tojson }},
+      eye: {{ icon("eye", "w-4 h-4")|tojson }},
+      download: {{ icon("download", "w-4 h-4")|tojson }},
+      copy: {{ icon("copy", "w-3.5 h-3.5")|tojson }},
     };
-    const confirmForm = (action, hidden, message, title, label) => `<form method="post" action="${esc(action)}" data-confirm="${esc(message)}" data-confirm-title="${esc(title)}" data-confirm-label="${esc(label)}" data-confirm-danger>${hidden}`;
+    const confirmForm = (action, hidden, message, title, label) => `<form method="post" action="${esc(action)}" data-confirm="${esc(message)}" data-confirm-title="${esc(title)}" data-confirm-label="${esc(label)}" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">${hidden}`;
 
     // ---------------------------------------------------------------- jump navigation (scroll spy)
     const jumpLinks = Array.from(document.querySelectorAll('.jump-nav a'));
@@ -436,7 +436,7 @@
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('edit_email').value)) { show('Please enter a valid email address.'); return; }
       const submit = document.getElementById('editUserSubmitBtn'); submit.disabled = true;
       try {
-        const res = await fetch('/admin', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: new FormData(editForm), credentials: 'same-origin' });
+        const res = await fetch('/admin', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': HKC.csrf() }, body: new FormData(editForm), credentials: 'same-origin' });
         const data = (res.headers.get('Content-Type') || '').includes('application/json') ? await res.json() : {};
         if (res.ok && data.success) {
           HKC.toast(data.message || 'User updated.', 'success');
@@ -451,7 +451,7 @@
     if (!IS_ADMIN) return;
     const state = { users: { page: 1, search: '', role: '' }, courses: { page: 1, search: '', status: '' }, 'api-creds': { page: 1, search: '' }, assessments: { page: 1, search: '', type: '' } };
     const rows = {
-      users: (u) => `<tr><td><div class="font-medium">${esc(u.full_name)}</div><div class="caption mono">@${esc(u.username)}</div></td><td class="tabular">${esc(u.employee_id || '—')}</td><td class="text-fg-2">${esc(u.email || '—')}</td><td>${roleBadge(u.role)}</td><td class="num tabular">${u.course_ids ? String(u.course_ids).split(',').length : 0}</td><td class="num"><div class="flex justify-end gap-1"><form method="post" action="/admin/view-as/${u.id}">${iconBtn('eye', `Preview as ${u.full_name}`, 'type="submit"').replace('type="button" ', '')}</form>${iconBtn('edit', `Edit ${u.full_name}`, `data-user-edit data-user='${attr(u)}'`)}${confirmForm(`/admin/delete/user/${u.id}`, '', `Delete ${u.full_name}? Their assignments, attempts and wallet are removed.`, 'Delete user', 'Delete')}${iconBtn('trash', `Delete ${u.full_name}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,
+      users: (u) => `<tr><td><div class="font-medium">${esc(u.full_name)}</div><div class="caption mono">@${esc(u.username)}</div></td><td class="tabular">${esc(u.employee_id || '—')}</td><td class="text-fg-2">${esc(u.email || '—')}</td><td>${roleBadge(u.role)}</td><td class="num tabular">${u.course_ids ? String(u.course_ids).split(',').length : 0}</td><td class="num"><div class="flex justify-end gap-1"><form method="post" action="/admin/view-as/${u.id}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">${iconBtn('eye', `Preview as ${u.full_name}`, 'type="submit"').replace('type="button" ', '')}</form>${iconBtn('edit', `Edit ${u.full_name}`, `data-user-edit data-user='${attr(u)}'`)}${confirmForm(`/admin/delete/user/${u.id}`, '', `Delete ${u.full_name}? Their assignments, attempts and wallet are removed.`, 'Delete user', 'Delete')}${iconBtn('trash', `Delete ${u.full_name}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,
       courses: (c) => `<tr><td><div class="font-medium">${esc(c.name)}</div>${c.creator ? `<div class="caption">by ${esc(c.creator)}</div>` : ''}</td><td>${esc(c.category || '—')}</td><td>${badge(c.content_type || '—', 'neutral')}</td><td>${badge(String(c.status || 'published').toLowerCase(), tone(c.status || 'published'))}</td><td class="num"><div class="flex justify-end gap-1">${iconBtn('edit', `Edit ${c.name}`, `data-course-edit data-course='${attr(c)}'`)}${confirmForm(`/admin/delete/course/${c.id}`, '', `Delete “${c.name}” and all of its assignments and assessments?`, 'Delete course', 'Delete')}${iconBtn('trash', `Delete ${c.name}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,
       'api-creds': (k) => `<tr><td><div class="font-medium">${esc(k.full_name)}</div><div class="caption mono">@${esc(k.username)}</div></td><td>${roleBadge(k.role)}</td><td><span class="inline-flex items-center gap-1"><code class="mono text-xs">${esc(String(k.api_key).slice(0, 12))}…</code>${iconBtn('copy', 'Copy API key', `data-copy="${esc(k.api_key)}"`)}</span></td><td>${k.status === 'active' ? `<span class="inline-flex items-center gap-1"><code class="mono text-xs" data-secret="${esc(k.api_secret)}">••••••••••••</code>${iconBtn('eye', 'Reveal secret', 'data-reveal aria-pressed="false"')}${iconBtn('copy', 'Copy API secret', `data-copy="${esc(k.api_secret)}"`)}</span>` : '<span class="caption">Revoked</span>'}</td><td>${badge(k.status, tone(k.status))}</td><td class="num"><div class="flex justify-end gap-1">${k.status === 'active' ? `<a href="/admin/api-credentials/${k.user_id}/download" class="btn btn-icon btn-ghost btn-sm" aria-label="Download credentials for ${esc(k.full_name)}">${HKC_ICONS.download}</a>${confirmForm('', `<input type="hidden" name="action" value="revoke_api_creds"><input type="hidden" name="target_user_id" value="${k.user_id}">`, `Revoke API access for ${k.full_name}? Integrations using this key stop working immediately.`, 'Revoke key', 'Revoke').replace(' action=""', '')}<button type="submit" class="btn btn-sm btn-ghost text-danger">Revoke</button></form>` : ''}</div></td></tr>`,
       assessments: (a) => `<tr><td class="font-medium">${esc(a.title)}</td><td>${esc(a.course_name)}</td><td>${badge(a.type === 'pre' ? 'Pre' : 'Post', tone(a.type))}</td><td class="num tabular">${esc(a.pass_percentage)}%</td><td class="num tabular">${esc(a.max_attempts || 1)}</td><td class="num"><div class="flex justify-end gap-1"><a href="/assessments/${a.id}/questions/download" class="btn btn-icon btn-ghost btn-sm" aria-label="Download questions for ${esc(a.title)}">${HKC_ICONS.download}</a>${iconBtn('edit', `Edit ${a.title}`, `data-assessment-edit data-assessment='${attr(a)}'`)}${confirmForm(`/admin/delete/assessment/${a.id}`, '', `Delete “${a.title}” and its questions and attempts?`, 'Delete assessment', 'Delete')}${iconBtn('trash', `Delete ${a.title}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,

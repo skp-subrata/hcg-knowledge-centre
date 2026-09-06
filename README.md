@@ -46,6 +46,7 @@ All settings are environment variables; every one is optional.
 | `LMS_UPLOAD_FOLDER` | `./uploads` | Where uploaded course files, attachments and profile pictures are stored |
 | `LMS_SECRET_KEY` | generated | Flask session secret. When unset, a random key is generated once and stored in `.secret_key` (git-ignored) |
 | `LMS_SECRET_KEY_FILE` | `./.secret_key` | Where the generated key is kept |
+| `LMS_CSRF` | `1` | `1` requires a CSRF token on every session-authenticated POST (forms and fetches). API-key requests are exempt. Set `0` only for local debugging. |
 | `LMS_SEED_DEMO` | `1` | `1` seeds demo accounts, 100 sample users and two demo courses on start-up. Set `0` for a deployment |
 
 ## Database initialisation

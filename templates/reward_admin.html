@@ -43,7 +43,7 @@
 {% call tab_panel("rewards", "rules") %}
 <div class="grid grid-cols-1 gap-4">
   {% for src in sources %}
-  <form method="post" action="{{ url_for('admin_update_reward_source') }}" class="card" aria-labelledby="rule-{{ loop.index }}">
+  <form method="post" action="{{ url_for('admin_update_reward_source') }}" class="card" aria-labelledby="rule-{{ loop.index }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="name" value="{{ src.name }}">
     <div class="flex flex-wrap items-center justify-between gap-2 mb-4"><h2 id="rule-{{ loop.index }}" class="text-base">{{ src.name|replace('_', ' ')|title }}</h2>{{ status_badge(src.status) }}</div>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-4 items-end">
@@ -80,14 +80,14 @@
 
 {% call tab_panel("rewards", "ops") %}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-  <form method="post" action="{{ url_for('admin_reset_rewards') }}" class="card" aria-labelledby="reset-user-title">
+  <form method="post" action="{{ url_for('admin_reset_rewards') }}" class="card" aria-labelledby="reset-user-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <h2 id="reset-user-title" class="text-base mb-1">Reset one wallet</h2>
     <p class="text-sm text-fg-2 mb-4">Sets a learner's balance to zero with a reversing ledger entry. History is kept.</p>
     <div class="field"><label class="field-label" for="reset-user">Learner<span class="req" aria-hidden="true">*</span></label><select id="reset-user" name="user_id" class="select" required><option value="">Select a learner</option>{% for student in all_students %}<option value="{{ student.id }}">{{ student.full_name }} (@{{ student.username }})</option>{% endfor %}</select></div>
     <label class="card-inset flex items-start gap-3 text-sm cursor-pointer mb-4"><input type="checkbox" name="confirm" value="YES" required class="mt-0.5"><span>I understand this sets the learner's balance to zero and cannot be undone.</span></label>
     {{ btn("Reset this wallet", "danger", type="submit", icon_name="refresh") }}
   </form>
-  <form method="post" action="{{ url_for('admin_reset_rewards') }}" class="card" aria-labelledby="reset-all-title" data-confirm="Reset the balance of every user on the platform to zero?" data-confirm-title="Global reset" data-confirm-label="Reset everyone" data-confirm-danger>
+  <form method="post" action="{{ url_for('admin_reset_rewards') }}" class="card" aria-labelledby="reset-all-title" data-confirm="Reset the balance of every user on the platform to zero?" data-confirm-title="Global reset" data-confirm-label="Reset everyone" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="user_id" value="all">
     <h2 id="reset-all-title" class="text-base mb-1 text-danger">Reset every wallet</h2>
     <p class="text-sm text-fg-2 mb-4">Zeroes all balances at once. Use only for a programme restart.</p>
@@ -98,7 +98,7 @@
 {% endcall %}
 
 {% call modal("adjust-modal", "Adjust points", size="sm", description="Add or remove points from a wallet. Use a negative number to deduct.") %}
-  <form method="post" action="{{ url_for('admin_adjust_rewards') }}" class="flex flex-col">
+  <form method="post" action="{{ url_for('admin_adjust_rewards') }}" class="flex flex-col"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="user_id" id="adjust-user-id">
     <p class="text-sm mb-4">Wallet of <strong id="adjust-user-name" class="font-medium">–</strong></p>
     {{ field("points", "Points", type="number", required=True, placeholder="e.g. 50 or -50", id="adjust-points") }}
@@ -108,7 +108,7 @@
 {% endcall %}
 
 {% call modal("settle-modal", "Settle points", size="sm", description="Deduct redeemed points from the current balance.") %}
-  <form method="post" action="{{ url_for('admin_settle_rewards') }}" class="flex flex-col">
+  <form method="post" action="{{ url_for('admin_settle_rewards') }}" class="flex flex-col"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="user_id" id="settle-user-id">
     <p class="text-sm mb-4">Wallet of <strong id="settle-user-name" class="font-medium">–</strong> · balance <strong id="settle-balance" class="font-medium tabular">0</strong> points</p>
     {{ field("points", "Points to settle", type="number", required=True, id="settle-points", attrs='min="1"') }}

@@ -21,8 +21,9 @@
 
   // ------------------------------------------------------------------ utilities
   HKC.escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  HKC.csrf = () => (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
   HKC.fetchJSON = async (url, options = {}) => {
-    const headers = Object.assign({ 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, options.headers || {});
+    const headers = Object.assign({ 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': HKC.csrf() }, options.headers || {});
     const response = await fetch(url, Object.assign({}, options, { headers }));
     let data = null;
     try { data = await response.json(); } catch (e) { /* not JSON */ }
@@ -298,7 +299,7 @@
   };
 
   // ------------------------------------------------------------------ notifications (header bell + notifications page)
-  HKC.markRead = (id, targetUrl) => fetch('/api/notifications/' + id + '/read', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+  HKC.markRead = (id, targetUrl) => fetch('/api/notifications/' + id + '/read', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': HKC.csrf() } })
     .catch(() => null)
     .then(() => { if (targetUrl && targetUrl !== '#') window.location.href = targetUrl; else window.location.reload(); });
   window.markRead = HKC.markRead; // notifications.html still calls the global

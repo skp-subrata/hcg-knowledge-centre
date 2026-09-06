@@ -36,7 +36,7 @@
   </section>
   {% endif %}
 
-  <form method="post" action="{{ url_for('edit_post', post_id=post.id) }}" enctype="multipart/form-data" id="post-form" class="card flex flex-col">
+  <form method="post" action="{{ url_for('edit_post', post_id=post.id) }}" enctype="multipart/form-data" id="post-form" class="card flex flex-col"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {{ field("title", "Title", value=post.title, required=True, id="post-title") }}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-x-4">
       {{ select_field("content_type", "Content type", [("Text/Article", "Text / article"), ("PDF", "PDF"), ("Video", "Video"), ("Image", "Image"), ("PPT/PowerPoint", "PowerPoint")], selected=post.content_type, required=True, id="post-type") }}

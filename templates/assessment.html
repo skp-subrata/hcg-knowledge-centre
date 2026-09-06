@@ -25,7 +25,7 @@
       {% endcall %}
     {% endif %}
   {% elif questions %}
-  <form method="post" class="question-list flex flex-col gap-4">
+  <form method="post" class="question-list flex flex-col gap-4"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% for q in questions %}
     <fieldset class="card">
       <legend><span class="text-fg-2 mr-2">{{ loop.index }}.</span>{{ q.question_text }}</legend>

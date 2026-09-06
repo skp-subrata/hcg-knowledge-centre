@@ -30,7 +30,7 @@
             <span class="caption">@{{ student.username }}</span>
           </span>
         </span>
-        <form method="post" action="{{ url_for('view_as', user_id=student.id) }}">{{ btn("View as", "secondary", type="submit", size="sm", icon_name="eye") }}</form>
+        <form method="post" action="{{ url_for('view_as', user_id=student.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ btn("View as", "secondary", type="submit", size="sm", icon_name="eye") }}</form>
       </li>
       {% endfor %}
     </ul>
