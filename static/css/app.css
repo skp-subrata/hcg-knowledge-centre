@@ -145,9 +145,9 @@ h3 { font-size: 1.0625rem; line-height: 1.3; letter-spacing: -.01em; }
 
 /* ---------------------------------------------------------------- forms */
 .field { display: block; margin-bottom: 1rem; }
-.field-label, .form-label { display: block; margin-bottom: .375rem; font-size: .8125rem; font-weight: 500; color: rgb(var(--c-fg-2)); }
+.field-label { display: block; margin-bottom: .375rem; font-size: .8125rem; font-weight: 500; color: rgb(var(--c-fg-2)); }
 .field-label .req { color: rgb(var(--c-danger-text)); margin-left: .125rem; }
-.input, .select, .textarea, .form-input {
+.input, .select, .textarea {
   display: block; width: 100%; height: 2.5rem; padding: 0 .75rem; font: inherit; font-size: .9375rem; color: rgb(var(--c-fg));
   background: rgb(var(--c-surface)); border: 1px solid var(--hairline); border-radius: var(--r-sm);
   transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
@@ -155,9 +155,9 @@ h3 { font-size: 1.0625rem; line-height: 1.3; letter-spacing: -.01em; }
 .textarea { height: auto; min-height: 6rem; padding: .625rem .75rem; line-height: 1.5; resize: vertical; }
 .select { padding-right: 2.25rem; appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%236e6e73' stroke-width='2' viewBox='0 0 24 24'><path d='M19 9l-7 7-7-7'/></svg>"); background-repeat: no-repeat; background-position: right .625rem center; }
 .select[multiple] { height: auto; min-height: 6rem; padding: .375rem; background-image: none; }
-.input::placeholder, .textarea::placeholder, .form-input::placeholder { color: rgb(var(--c-fg-3)); }
-.input:hover, .select:hover, .textarea:hover, .form-input:hover { border-color: rgb(var(--c-line) / .2); }
-.input:focus-visible, .select:focus-visible, .textarea:focus-visible, .form-input:focus-visible { outline: none; border-color: rgb(var(--c-accent)); box-shadow: 0 0 0 3px rgb(var(--c-accent) / .2); }
+.input::placeholder, .textarea::placeholder { color: rgb(var(--c-fg-3)); }
+.input:hover, .select:hover, .textarea:hover { border-color: rgb(var(--c-line) / .2); }
+.input:focus-visible, .select:focus-visible, .textarea:focus-visible { outline: none; border-color: rgb(var(--c-accent)); box-shadow: 0 0 0 3px rgb(var(--c-accent) / .2); }
 .input[aria-invalid="true"], .textarea[aria-invalid="true"], .select[aria-invalid="true"] { border-color: rgb(var(--c-danger)); }
 .field-hint { margin-top: .375rem; font-size: .75rem; color: rgb(var(--c-fg-2)); }
 .field-error { margin-top: .375rem; font-size: .75rem; color: rgb(var(--c-danger-text)); }
@@ -169,13 +169,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: rgb(var(--c-accent))
 .choice:has(input:focus-visible) { outline: 2px solid rgb(var(--c-accent)); outline-offset: 2px; }
 
 /* ---------------------------------------------------------------- surfaces */
-.card, .glass-panel { background: rgb(var(--c-surface)); border: 1px solid var(--hairline); border-radius: var(--r-md); box-shadow: var(--shadow-card); }
+.card { background: rgb(var(--c-surface)); border: 1px solid var(--hairline); border-radius: var(--r-md); box-shadow: var(--shadow-card); }
 .card { padding: 1.5rem; }
 @media (max-width: 640px) { .card { padding: 1.25rem; } }
 .card.p-0 { padding: 0; }
 .card-inset { background: rgb(var(--c-surface-2)); border-radius: var(--r-md); padding: 1rem 1.25rem; }
-.card.is-interactive, .glass-panel-hover { transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), background-color var(--dur-fast); }
-.card.is-interactive:hover, .glass-panel-hover:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+.card.is-interactive { transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), background-color var(--dur-fast); }
+.card.is-interactive:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
 .stat { display: flex; flex-direction: column; gap: .25rem; }
 .stat-value { font-size: 1.75rem; line-height: 1.15; letter-spacing: -.02em; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat-hint { font-size: .75rem; color: rgb(var(--c-fg-2)); }
@@ -317,7 +317,7 @@ html[data-motion="reduce"] { --dur-fast: 1ms; --dur-base: 1ms; --dur-slow: 1ms; 
   dialog.sheet[open], dialog.sheet-right[open], dialog.drawer[open], dialog[open]::backdrop, .toast, .tab-panel.is-entering { animation: fade-in var(--dur-fade) var(--ease-out); }
   dialog.is-closing, dialog.is-closing::backdrop, .toast.is-leaving { animation: fade-out var(--dur-fade) var(--ease-out) forwards; }
   .popover { transform: none; }
-  .card.is-interactive:hover, .glass-panel-hover:hover { transform: none; }
+  .card.is-interactive:hover { transform: none; }
   .btn:active, .btn-primary:active, .btn-secondary:active, .btn-ghost:active, .btn-danger:active, .chip:active, .tab:active, .card.is-interactive:active { transform: none; }
   body[data-modal-open] #app { transform: none; }
   html.theme-transition, html.theme-transition * { transition: none !important; }
