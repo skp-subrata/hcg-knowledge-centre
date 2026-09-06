@@ -130,10 +130,11 @@ def init_db():
 				role TEXT NOT NULL CHECK (role IN ('admin', 'moderator', 'basic user'))
 			)
 		""")
-		connection.execute(
-			"INSERT OR IGNORE INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, ?)",
-			("Subratakumar Pradhan", "subratakumar.pradhan", generate_password_hash("admin123"), "admin"),
-		)
+		if not connection.execute("SELECT 1 FROM users WHERE username = ?", ("subratakumar.pradhan",)).fetchone():
+			connection.execute(
+				"INSERT OR IGNORE INTO users (full_name, username, password_hash, role) VALUES (?, ?, ?, ?)",
+				("Subratakumar Pradhan", "subratakumar.pradhan", generate_password_hash("admin123"), "admin"),
+			)
 		connection.execute("""
 			CREATE TABLE IF NOT EXISTS courses (
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -887,6 +888,9 @@ def create_app():
 	app.jinja_env.globals["embed_url"] = embed_url
 	init_db()
 
+	from support.controllers import support_bp
+	app.register_blueprint(support_bp)
+
 	@app.route("/", methods=["GET", "POST"])
 	def home():
 		"""Authenticate users and show their permitted courses."""
@@ -1041,22 +1045,8 @@ def create_app():
 					WHERE gmod.user_id = ? AND gmod.status = 'Active'
 					ORDER BY g.id DESC
 				""", (session["user_id"],)).fetchall()
-			users = connection.execute("""
-				SELECT u.id, u.full_name, u.username, u.role, u.employee_id, 
-				       u.department, u.department_id,
-				       COALESCE(d.department_name, u.department, '') AS resolved_department,
-				       u.location, COALESCE(u.is_active, 1) AS is_active 
-				FROM users u
-				LEFT JOIN departments d ON d.department_id = u.department_id
-				ORDER BY u.full_name
-			""").fetchall()
-			master_depts = connection.execute("""
-				SELECT department_id AS id, department_name 
-				FROM departments 
-				WHERE LOWER(COALESCE(status, 'active')) = 'active' 
-				ORDER BY department_name
-			""").fetchall()
-		return render_template("groups.html", groups=groups, users=users, master_depts=master_depts, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+			users = connection.execute("SELECT id, full_name, username, role, employee_id, department, location, COALESCE(is_active, 1) AS is_active FROM users ORDER BY full_name").fetchall()
+		return render_template("groups.html", groups=groups, users=users, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.get("/groups/<int:group_id>")
 	@staff_required
@@ -1380,12 +1370,8 @@ def create_app():
 						flash("Database integrity error occurred.")
 			elif action == "update_user" and session.get("role") == "admin":
 				user_id = request.form.get("record_id")
-				is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
 				if str(user_id) == str(session["user_id"]):
-					msg = "You cannot edit your own profile here. Use the Profile page."
-					if is_ajax:
-						return jsonify({"error": msg}), 400
-					flash(msg)
+					flash("You cannot edit your own profile here. Use the Profile page.")
 				else:
 					full_name = request.form.get("full_name", "").strip()
 					username = request.form.get("username", "").strip().lower()
@@ -1401,45 +1387,22 @@ def create_app():
 					location_id = int(location_id) if location_id else None
 					about_me = request.form.get("about_me", "").strip()
 					interests = request.form.getlist("interests")
-
-					if not full_name or not username or not employee_id or not email or not phone_number:
-						msg = "Full Name, Username, Employee ID, Email, and Phone Number are mandatory."
-						if is_ajax:
-							return jsonify({"error": msg}), 400
-						flash(msg)
+					
+					if not full_name or not username or not employee_id or not email or not phone_number or not location_id:
+						flash("Employee ID, Email, Phone Number, Location, Name, and Username are mandatory.")
 					else:
 						with get_db() as connection:
-							# Only check uniqueness for non-blank values to avoid false positives
-							# when multiple users have empty employee_id or email
-							dup_username = connection.execute(
-								"SELECT id FROM users WHERE username = ? AND id != ?", (username, user_id)
-							).fetchone()
-							dup_emp = connection.execute(
-								"SELECT id FROM users WHERE employee_id = ? AND employee_id != '' AND id != ?", (employee_id, user_id)
-							).fetchone() if employee_id else None
-							dup_email = connection.execute(
-								"SELECT id FROM users WHERE email = ? AND email != '' AND id != ?", (email, user_id)
-							).fetchone() if email else None
-
-							if dup_username:
-								msg = "Username already in use."
-								if is_ajax: return jsonify({"error": msg}), 409
-								flash(msg)
-							elif dup_emp:
-								msg = "Employee ID already in use."
-								if is_ajax: return jsonify({"error": msg}), 409
-								flash(msg)
-							elif dup_email:
-								msg = "Email already in use."
-								if is_ajax: return jsonify({"error": msg}), 409
-								flash(msg)
+							dup = connection.execute("SELECT id, employee_id, email, username FROM users WHERE (username = ? OR employee_id = ? OR email = ?) AND id != ?", (username, employee_id, email, user_id)).fetchone()
+							if dup:
+								if dup["employee_id"] == employee_id: flash("Employee ID already in use.")
+								elif dup["email"] == email: flash("Email already in use.")
+								else: flash("Username already in use.")
 							else:
 								connection.execute(
 									"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ? WHERE id = ?",
 									(full_name, username, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, user_id),
 								)
-								if is_ajax:
-									return jsonify({"success": True, "message": "User updated successfully."})
+
 								flash("User updated successfully.")
 			elif action == "add_course":
 				name = request.form.get("course_name", "").strip()
@@ -3771,7 +3734,7 @@ def create_app():
 
 	
 	
-	# --- SERVER-SIDE PAGINATION & SEARCH ADMIN APIS ---
+# --- SERVER-SIDE PAGINATION & SEARCH ADMIN APIS ---
 	@app.get("/api/admin/users")
 	def get_admin_users_api():
 		if not session.get("user_id") or session.get("role") != "admin":
@@ -3782,25 +3745,25 @@ def create_app():
 		offset = (page - 1) * page_size
 		search = request.args.get("search", "").strip().lower()
 		role_filter = request.args.get("role", "").strip().lower()
-
+	
 		where_clauses = []
 		params = []
-
+	
 		if search:
 			where_clauses.append("(LOWER(u.full_name) LIKE ? OR LOWER(u.username) LIKE ? OR LOWER(COALESCE(u.email,'')) LIKE ? OR LOWER(COALESCE(u.employee_id,'')) LIKE ? OR LOWER(u.role) LIKE ? OR LOWER(COALESCE(ca.course_id,'')) LIKE ?)")
 			s_pat = f"%{search}%"
 			params.extend([s_pat, s_pat, s_pat, s_pat, s_pat, s_pat])
-
+	
 		if role_filter:
 			where_clauses.append("LOWER(u.role) LIKE ?")
 			params.append(f"%{role_filter}%")
-
+	
 		where_str = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
-
+	
 		with get_db() as conn:
 			count_sql = f"SELECT COUNT(DISTINCT u.id) AS total FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id {where_str}"
 			total_records = conn.execute(count_sql, params).fetchone()["total"]
-
+	
 			data_sql = f"""
 				SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me,
 				       COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids,
@@ -3818,7 +3781,7 @@ def create_app():
 			
 			import math
 			total_pages = math.ceil(total_records / page_size) if total_records > 0 else 1
-
+	
 			return jsonify({
 				"data": [dict(r) for r in rows],
 				"pagination": {
@@ -3828,37 +3791,37 @@ def create_app():
 					"totalPages": total_pages
 				}
 			})
-
-
+	
+	
 	@app.get("/api/admin/courses")
 	def get_admin_courses_api():
 		if not session.get("user_id") or session.get("role") != "admin":
 			return jsonify({"error": "Unauthorized"}), 403
-
+	
 		page = max(1, request.args.get("page", 1, type=int))
 		page_size = 15
 		offset = (page - 1) * page_size
 		search = request.args.get("search", "").strip().lower()
 		status_filter = request.args.get("status", "").strip().lower()
-
+	
 		where_clauses = []
 		params = []
-
+	
 		if search:
 			where_clauses.append("(CAST(c.id AS TEXT) LIKE ? OR LOWER(c.name) LIKE ? OR LOWER(COALESCE(c.category,'general')) LIKE ? OR LOWER(COALESCE(c.content_type,'')) LIKE ? OR LOWER(COALESCE(c.status,'published')) LIKE ?)")
 			s_pat = f"%{search}%"
 			params.extend([s_pat, s_pat, s_pat, s_pat, s_pat])
-
+	
 		if status_filter:
 			where_clauses.append("LOWER(COALESCE(c.status, 'published')) = ?")
 			params.append(status_filter)
-
+	
 		where_str = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
-
+	
 		with get_db() as conn:
 			count_sql = f"SELECT COUNT(*) AS total FROM courses c {where_str}"
 			total_records = conn.execute(count_sql, params).fetchone()["total"]
-
+	
 			data_sql = f"""
 				SELECT c.*, u.full_name AS creator 
 				FROM courses c 
@@ -3868,10 +3831,10 @@ def create_app():
 				LIMIT ? OFFSET ?
 			"""
 			rows = conn.execute(data_sql, params + [page_size, offset]).fetchall()
-
+	
 			import math
 			total_pages = math.ceil(total_records / page_size) if total_records > 0 else 1
-
+	
 			return jsonify({
 				"data": [dict(r) for r in rows],
 				"pagination": {
@@ -3881,32 +3844,32 @@ def create_app():
 					"totalPages": total_pages
 				}
 			})
-
-
+	
+	
 	@app.get("/api/admin/api-credentials")
 	def get_admin_api_credentials_api():
 		if not session.get("user_id") or session.get("role") != "admin":
 			return jsonify({"error": "Unauthorized"}), 403
-
+	
 		page = max(1, request.args.get("page", 1, type=int))
 		page_size = 15
 		offset = (page - 1) * page_size
 		search = request.args.get("search", "").strip().lower()
-
+	
 		where_clauses = []
 		params = []
-
+	
 		if search:
 			where_clauses.append("(LOWER(ac.api_key) LIKE ? OR LOWER(u.username) LIKE ? OR LOWER(u.full_name) LIKE ? OR LOWER(u.role) LIKE ? OR LOWER(ac.status) LIKE ?)")
 			s_pat = f"%{search}%"
 			params.extend([s_pat, s_pat, s_pat, s_pat, s_pat])
-
+	
 		where_str = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
-
+	
 		with get_db() as conn:
 			count_sql = f"SELECT COUNT(*) AS total FROM api_credentials ac JOIN users u ON u.id = ac.user_id {where_str}"
 			total_records = conn.execute(count_sql, params).fetchone()["total"]
-
+	
 			data_sql = f"""
 				SELECT ac.*, u.username, u.full_name, u.role 
 				FROM api_credentials ac 
@@ -3916,10 +3879,10 @@ def create_app():
 				LIMIT ? OFFSET ?
 			"""
 			rows = conn.execute(data_sql, params + [page_size, offset]).fetchall()
-
+	
 			import math
 			total_pages = math.ceil(total_records / page_size) if total_records > 0 else 1
-
+	
 			return jsonify({
 				"data": [dict(r) for r in rows],
 				"pagination": {
@@ -3929,37 +3892,37 @@ def create_app():
 					"totalPages": total_pages
 				}
 			})
-
-
+	
+	
 	@app.get("/api/admin/assessments")
 	def get_admin_assessments_api():
 		if not session.get("user_id") or session.get("role") != "admin":
 			return jsonify({"error": "Unauthorized"}), 403
-
+	
 		page = max(1, request.args.get("page", 1, type=int))
 		page_size = 15
 		offset = (page - 1) * page_size
 		search = request.args.get("search", "").strip().lower()
 		type_filter = request.args.get("type", "").strip().lower()
-
+	
 		where_clauses = []
 		params = []
-
+	
 		if search:
 			where_clauses.append("(CAST(a.id AS TEXT) LIKE ? OR LOWER(a.title) LIKE ? OR LOWER(COALESCE(c.name,'')) LIKE ? OR LOWER(a.type) LIKE ?)")
 			s_pat = f"%{search}%"
 			params.extend([s_pat, s_pat, s_pat, s_pat])
-
+	
 		if type_filter:
 			where_clauses.append("LOWER(a.type) LIKE ?")
 			params.append(f"%{type_filter}%")
-
+	
 		where_str = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
-
+	
 		with get_db() as conn:
 			count_sql = f"SELECT COUNT(*) AS total FROM assessments a LEFT JOIN courses c ON c.id = a.course_id {where_str}"
 			total_records = conn.execute(count_sql, params).fetchone()["total"]
-
+	
 			data_sql = f"""
 				SELECT a.id, a.title, a.type, a.course_id, c.name AS course_name 
 				FROM assessments a 
@@ -3969,10 +3932,10 @@ def create_app():
 				LIMIT ? OFFSET ?
 			"""
 			rows = conn.execute(data_sql, params + [page_size, offset]).fetchall()
-
+	
 			import math
 			total_pages = math.ceil(total_records / page_size) if total_records > 0 else 1
-
+	
 			return jsonify({
 				"data": [dict(r) for r in rows],
 				"pagination": {
@@ -3982,21 +3945,7 @@ def create_app():
 					"totalPages": total_pages
 				}
 			})
-
-
-	@app.get('/api/departments')
-	@app.get('/api/v1/departments')
-	def get_departments_api():
-		"""Return active Department Master list for dynamic dropdowns."""
-		with get_db() as conn:
-			depts = conn.execute("""
-				SELECT department_id AS id, department_name 
-				FROM departments 
-				WHERE LOWER(COALESCE(status, 'active')) = 'active' 
-				ORDER BY department_name
-			""").fetchall()
-			return jsonify([{"id": d["id"], "department_name": d["department_name"]} for d in depts])
-
+	
 
 	@app.route('/api/v1/releases/active', methods=['GET'])
 	def get_active_release():

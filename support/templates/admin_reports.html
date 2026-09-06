@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}SLA & TAT Reports | Admin Support{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Header Navigation -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel p-6">
+        <div>
+            <a href="/support/admin" class="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline mb-2">
+                &larr; Back to Admin Support Panel
+            </a>
+            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">SLA & TAT Analytics Report</h1>
+            <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Monitor Turnaround Times (TAT), Service Level Agreements (SLA), and issue distribution across categories.</p>
+        </div>
+    </div>
+
+    <!-- Analytics Key Metrics Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass-panel p-5 space-y-1 border-l-4 border-indigo-500">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Average First Response TAT</span>
+            <span class="text-2xl font-bold text-indigo-600 dark:text-indigo-400 block">{{ report.avg_first_response_tat }}</span>
+            <span class="text-[11px] text-slate-500 block">Target SLA: &lt; 2 hours</span>
+        </div>
+
+        <div class="glass-panel p-5 space-y-1 border-l-4 border-emerald-500">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Average Resolution TAT</span>
+            <span class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 block">{{ report.avg_resolution_tat }}</span>
+            <span class="text-[11px] text-slate-500 block">Target SLA: &lt; 24 hours</span>
+        </div>
+
+        <div class="glass-panel p-5 space-y-1 border-l-4 border-sky-500">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Average Confirmation TAT</span>
+            <span class="text-2xl font-bold text-sky-600 dark:text-sky-400 block">{{ report.avg_confirmation_tat }}</span>
+            <span class="text-[11px] text-slate-500 block">User verification speed</span>
+        </div>
+
+        <div class="glass-panel p-5 space-y-1 border-l-4 border-amber-500">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Managed Issues</span>
+            <span class="text-2xl font-bold text-slate-900 dark:text-slate-50 block">{{ report.total_issues }}</span>
+            <span class="text-[11px] text-slate-500 block">Resolution rate: {{ report.resolution_rate }}%</span>
+        </div>
+    </div>
+
+    <!-- Category & Priority Breakdowns Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Issues by Category Breakdown -->
+        <div class="glass-panel p-6 space-y-4">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-50 border-b border-slate-200 dark:border-slate-800 pb-3 flex items-center justify-between">
+                <span>Issues Distribution by Category</span>
+                <span class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">{{ report.categories_count }} Categories</span>
+            </h3>
+
+            <div class="space-y-3">
+                {% for cat in report.category_breakdown %}
+                <div class="space-y-1">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-semibold text-slate-800 dark:text-slate-200">{{ cat.name }}</span>
+                        <span class="font-bold text-slate-900 dark:text-slate-100">{{ cat.count }} issues ({{ cat.percentage }}%)</span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                        <div class="bg-indigo-600 h-2 rounded-full" style="width: {{ cat.percentage }}%"></div>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-xs text-slate-400 py-4 text-center">No issue category data available yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Issues by Priority & Status Breakdown -->
+        <div class="glass-panel p-6 space-y-6">
+            <div>
+                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-50 border-b border-slate-200 dark:border-slate-800 pb-3 mb-4">
+                    Issues by Priority Level
+                </h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+                        <span class="text-[10px] font-bold uppercase text-red-600 dark:text-red-400 block">Critical Priority</span>
+                        <span class="text-xl font-bold text-red-700 dark:text-red-300">{{ report.priority_breakdown.Critical }}</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800">
+                        <span class="text-[10px] font-bold uppercase text-orange-600 dark:text-orange-400 block">High Priority</span>
+                        <span class="text-xl font-bold text-orange-700 dark:text-orange-300">{{ report.priority_breakdown.High }}</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                        <span class="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400 block">Medium Priority</span>
+                        <span class="text-xl font-bold text-blue-700 dark:text-blue-300">{{ report.priority_breakdown.Medium }}</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                        <span class="text-[10px] font-bold uppercase text-slate-500 block">Low Priority</span>
+                        <span class="text-xl font-bold text-slate-700 dark:text-slate-300">{{ report.priority_breakdown.Low }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category Master Management Card -->
+            <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">+ Add New Issue Category</h4>
+                <form id="addCategoryForm" class="flex flex-col sm:flex-row gap-2">
+                    <input id="catName" type="text" placeholder="Category Name (e.g. Mobile App)" class="form-input text-xs h-10 flex-grow" required>
+                    <input id="catCode" type="text" placeholder="CODE (e.g. MOBILE_APP)" class="form-input text-xs h-10 w-36 uppercase" required>
+                    <button type="submit" class="btn-primary text-xs px-4 py-2 shrink-0">Add Category</button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const addCatForm = document.getElementById('addCategoryForm');
+    if (addCatForm) {
+        addCatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('catName').value.trim();
+            const code = document.getElementById('catCode').value.trim();
+            if (!name || !code) return;
+
+            try {
+                const res = await fetch('/api/support/categories', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: name, code: code})
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    alert('Category added successfully.');
+                    window.location.reload();
+                } else {
+                    alert(data.message || 'Could not add category.');
+                }
+            } catch (err) {
+                alert('Error adding category: ' + err);
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+

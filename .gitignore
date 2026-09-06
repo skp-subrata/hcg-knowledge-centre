@@ -3,10 +3,11 @@ __pycache__/
 *.py[cod]
 
 users.db
+lms.db
+*.db
 uploads/
 gh.exe
 git/
 
-lms.db
 courses_*.html
 test_*.py

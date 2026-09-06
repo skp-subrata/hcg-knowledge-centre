@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Support & Helpdesk | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Header & Action -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel p-6">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Support & Helpdesk</h1>
+            <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Report issues, track progress, and communicate directly with technical support.</p>
+        </div>
+        <a href="/support/report" class="btn-primary flex items-center gap-2 px-5 py-3 text-sm font-semibold shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Report an Issue
+        </a>
+    </div>
+
+    <!-- Quick Filter Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="glass-panel p-4 flex flex-col justify-between">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Reported</span>
+            <span class="text-2xl font-bold text-slate-900 dark:text-slate-50 mt-2">{{ stats.total }}</span>
+        </div>
+        <div class="glass-panel p-4 flex flex-col justify-between border-l-4 border-amber-500">
+            <span class="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">In Progress</span>
+            <span class="text-2xl font-bold text-amber-700 dark:text-amber-300 mt-2">{{ stats.in_progress }}</span>
+        </div>
+        <div class="glass-panel p-4 flex flex-col justify-between border-l-4 border-indigo-500">
+            <span class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Awaiting Confirmation</span>
+            <span class="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mt-2">{{ stats.awaiting_confirmation }}</span>
+        </div>
+        <div class="glass-panel p-4 flex flex-col justify-between border-l-4 border-emerald-500">
+            <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Resolved</span>
+            <span class="text-2xl font-bold text-emerald-700 dark:text-emerald-300 mt-2">{{ stats.resolved }}</span>
+        </div>
+    </div>
+
+    <!-- User Issues Table Panel -->
+    <div class="glass-panel p-6">
+        <!-- Search and Filters Bar -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-slate-800">
+            <div class="relative flex-grow max-w-md">
+                <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
+                <input id="userIssueSearch" type="text" placeholder="Search by Issue #, Title..." value="{{ current_search }}" class="form-input pl-10 h-10 text-sm">
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <select id="userCategoryFilter" class="form-input h-10 text-xs w-auto">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if current_category == cat.id|string %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+
+                <select id="userStatusFilter" class="form-input h-10 text-xs w-auto">
+                    <option value="">All Statuses</option>
+                    <option value="REPORTED" {% if current_status == 'REPORTED' %}selected{% endif %}>Reported</option>
+                    <option value="UNDER_REVIEW" {% if current_status == 'UNDER_REVIEW' %}selected{% endif %}>Under Review</option>
+                    <option value="IN_PROGRESS" {% if current_status == 'IN_PROGRESS' %}selected{% endif %}>In Progress</option>
+                    <option value="RESOLUTION_PROVIDED" {% if current_status == 'RESOLUTION_PROVIDED' %}selected{% endif %}>Resolution Provided</option>
+                    <option value="AWAITING_CONFIRMATION" {% if current_status == 'AWAITING_CONFIRMATION' %}selected{% endif %}>Awaiting Confirmation</option>
+                    <option value="RESOLVED_CONFIRMED" {% if current_status == 'RESOLVED_CONFIRMED' %}selected{% endif %}>Resolved</option>
+                    <option value="REOPENED" {% if current_status == 'REOPENED' %}selected{% endif %}>Reopened</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Issues List -->
+        {% if issues_page.data %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-500">
+                        <th class="p-3">Issue #</th>
+                        <th class="p-3">Title</th>
+                        <th class="p-3">Category</th>
+                        <th class="p-3">Priority</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3">Reported On</th>
+                        <th class="p-3 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                    {% for issue in issues_page.data %}
+                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
+                        <td class="p-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            <a href="/support/issues/{{ issue.issue_id }}" class="hover:underline">{{ issue.issue_number }}</a>
+                        </td>
+                        <td class="p-3 font-semibold text-slate-900 dark:text-slate-50 max-w-xs truncate">
+                            <a href="/support/issues/{{ issue.issue_id }}" class="hover:underline">{{ issue.title }}</a>
+                        </td>
+                        <td class="p-3 text-slate-500 text-xs">{{ issue.category_name }}</td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                                {% if issue.priority == 'Critical' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400
+                                {% elif issue.priority == 'High' %}bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400
+                                {% elif issue.priority == 'Medium' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
+                                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+                                {{ issue.priority }}
+                            </span>
+                        </td>
+                        <td class="p-3">
+                            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider
+                                {% if issue.status == 'RESOLVED_CONFIRMED' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                                {% elif issue.status == 'AWAITING_CONFIRMATION' %}bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 animate-pulse
+                                {% elif issue.status == 'REOPENED' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400
+                                {% elif issue.status == 'IN_PROGRESS' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
+                                {% else %}bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400{% endif %}">
+                                {{ issue.status|replace('_', ' ') }}
+                            </span>
+                        </td>
+                        <td class="p-3 text-xs text-slate-400">{{ issue.reported_at }}</td>
+                        <td class="p-3 text-right">
+                            <a href="/support/issues/{{ issue.issue_id }}" class="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                                View Details &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        {% if issues_page.pagination.totalPages > 1 %}
+        <div class="flex items-center justify-between gap-4 mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500">
+            <div>Showing page <span class="font-bold text-slate-700 dark:text-slate-300">{{ issues_page.pagination.page }}</span> of <span class="font-bold text-slate-700 dark:text-slate-300">{{ issues_page.pagination.totalPages }}</span></div>
+            <div class="flex gap-2">
+                {% if issues_page.pagination.page > 1 %}
+                <a href="?page={{ issues_page.pagination.page - 1 }}&search={{ current_search }}&category_id={{ current_category }}&status={{ current_status }}" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">Previous</a>
+                {% endif %}
+                {% if issues_page.pagination.page < issues_page.pagination.totalPages %}
+                <a href="?page={{ issues_page.pagination.page + 1 }}&search={{ current_search }}&category_id={{ current_category }}&status={{ current_status }}" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-12">
+            <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+            <h3 class="text-base font-semibold text-slate-700 dark:text-slate-300">No support issues found</h3>
+            <p class="text-xs text-slate-500 mt-1">You haven't reported any issues matching your search criteria.</p>
+            <a href="/support/report" class="btn-primary inline-flex items-center gap-2 mt-4 px-4 py-2 text-xs font-semibold">Report an Issue</a>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const searchEl = document.getElementById('userIssueSearch');
+    const catEl = document.getElementById('userCategoryFilter');
+    const statusEl = document.getElementById('userStatusFilter');
+
+    function applyFilters() {
+        const search = searchEl ? searchEl.value.trim() : '';
+        const cat = catEl ? catEl.value : '';
+        const st = statusEl ? statusEl.value : '';
+        window.location.href = `/support?search=${encodeURIComponent(search)}&category_id=${encodeURIComponent(cat)}&status=${encodeURIComponent(st)}`;
+    }
+
+    let searchTimer;
+    if (searchEl) {
+        searchEl.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(applyFilters, 400);
+        });
+    }
+    if (catEl) catEl.addEventListener('change', applyFilters);
+    if (statusEl) statusEl.addEventListener('change', applyFilters);
+});
+</script>
+{% endblock %}
+

@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Support Panel | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Header Navigation -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel p-6">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Admin Support Panel</h1>
+            <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Manage technical support issues, assign tickets, set priorities, and track TAT metrics.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <a href="/support/admin/reports" class="btn-secondary px-4 py-2.5 text-xs font-bold flex items-center gap-1.5 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                SLA & TAT Reports
+            </a>
+            <a href="/support/report" class="btn-primary px-4 py-2.5 text-xs font-bold flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                + New Issue
+            </a>
+        </div>
+    </div>
+
+    <!-- Admin Metric Cards Grid -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div class="glass-panel p-3 flex flex-col justify-between">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+            <span class="text-xl font-bold text-slate-900 dark:text-slate-50 mt-1">{{ stats.total }}</span>
+        </div>
+        <div class="glass-panel p-3 flex flex-col justify-between border-l-2 border-sky-500">
+            <span class="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">Open</span>
+            <span class="text-xl font-bold text-sky-700 dark:text-sky-300 mt-1">{{ stats.open }}</span>
+        </div>
+        <div class="glass-panel p-3 flex flex-col justify-between border-l-2 border-amber-500">
+            <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">In Progress</span>
+            <span class="text-xl font-bold text-amber-700 dark:text-amber-300 mt-1">{{ stats.in_progress }}</span>
+        </div>
+        <div class="glass-panel p-3 flex flex-col justify-between border-l-2 border-indigo-500">
+            <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Awaiting</span>
+            <span class="text-xl font-bold text-indigo-700 dark:text-indigo-300 mt-1">{{ stats.awaiting_confirmation }}</span>
+        </div>
+        <div class="glass-panel p-3 flex flex-col justify-between border-l-2 border-emerald-500">
+            <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Resolved</span>
+            <span class="text-xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">{{ stats.resolved }}</span>
+        </div>
+        <div class="glass-panel p-3 flex flex-col justify-between border-l-2 border-rose-500">
+            <span class="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Reopened</span>
+            <span class="text-xl font-bold text-rose-700 dark:text-rose-300 mt-1">{{ stats.reopened }}</span>
+        </div>
+        <div class="glass-panel p-3 flex flex-col justify-between border-l-2 border-red-600 bg-red-50/20 dark:bg-red-950/20">
+            <span class="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">Critical</span>
+            <span class="text-xl font-bold text-red-700 dark:text-red-300 mt-1">{{ stats.critical }}</span>
+        </div>
+        <div class="glass-panel p-3 flex flex-col justify-between border-l-2 border-orange-500">
+            <span class="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">High</span>
+            <span class="text-xl font-bold text-orange-700 dark:text-orange-300 mt-1">{{ stats.high }}</span>
+        </div>
+    </div>
+
+    <!-- Admin Issues Table Panel -->
+    <div class="glass-panel p-6">
+        <!-- Search and Filters Bar -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-slate-800">
+            <div class="relative flex-grow max-w-md">
+                <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
+                <input id="adminIssueSearch" type="text" placeholder="Search Issue #, Title, Reporter, Email, Emp ID..." value="{{ current_search }}" class="form-input pl-10 h-10 text-sm">
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <select id="adminCategoryFilter" class="form-input h-10 text-xs w-auto">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if current_category == cat.id|string %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+
+                <select id="adminPriorityFilter" class="form-input h-10 text-xs w-auto">
+                    <option value="">All Priorities</option>
+                    <option value="Critical" {% if current_priority == 'Critical' %}selected{% endif %}>Critical</option>
+                    <option value="High" {% if current_priority == 'High' %}selected{% endif %}>High</option>
+                    <option value="Medium" {% if current_priority == 'Medium' %}selected{% endif %}>Medium</option>
+                    <option value="Low" {% if current_priority == 'Low' %}selected{% endif %}>Low</option>
+                </select>
+
+                <select id="adminStatusFilter" class="form-input h-10 text-xs w-auto">
+                    <option value="">All Statuses</option>
+                    <option value="REPORTED" {% if current_status == 'REPORTED' %}selected{% endif %}>Reported</option>
+                    <option value="UNDER_REVIEW" {% if current_status == 'UNDER_REVIEW' %}selected{% endif %}>Under Review</option>
+                    <option value="IN_PROGRESS" {% if current_status == 'IN_PROGRESS' %}selected{% endif %}>In Progress</option>
+                    <option value="RESOLUTION_PROVIDED" {% if current_status == 'RESOLUTION_PROVIDED' %}selected{% endif %}>Resolution Provided</option>
+                    <option value="AWAITING_CONFIRMATION" {% if current_status == 'AWAITING_CONFIRMATION' %}selected{% endif %}>Awaiting Confirmation</option>
+                    <option value="RESOLVED_CONFIRMED" {% if current_status == 'RESOLVED_CONFIRMED' %}selected{% endif %}>Resolved</option>
+                    <option value="REOPENED" {% if current_status == 'REOPENED' %}selected{% endif %}>Reopened</option>
+                    <option value="CLOSED" {% if current_status == 'CLOSED' %}selected{% endif %}>Closed</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Issues List -->
+        {% if issues_page.data %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-500">
+                        <th class="p-3">Issue #</th>
+                        <th class="p-3">Title & Category</th>
+                        <th class="p-3">Reporter Info</th>
+                        <th class="p-3">Priority</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3">Reported On</th>
+                        <th class="p-3 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                    {% for issue in issues_page.data %}
+                    <tr class="hover:bg-white/30 dark:hover:bg-white/5 transition">
+                        <td class="p-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            <a href="/support/issues/{{ issue.issue_id }}" class="hover:underline">{{ issue.issue_number }}</a>
+                        </td>
+                        <td class="p-3 max-w-xs">
+                            <a href="/support/issues/{{ issue.issue_id }}" class="font-semibold text-slate-900 dark:text-slate-50 hover:underline block truncate">{{ issue.title }}</a>
+                            <span class="text-[10px] text-slate-400 block">{{ issue.category_name }}</span>
+                        </td>
+                        <td class="p-3">
+                            <strong class="font-semibold text-slate-800 dark:text-slate-200 block text-xs">{{ issue.reporter_name }}</strong>
+                            <span class="text-[10px] text-slate-400 block font-mono">ID: {{ issue.reporter_employee_id or 'N/A' }}</span>
+                            <div class="flex gap-2 text-[10px] mt-0.5">
+                                {% if issue.reporter_email %}
+                                <a href="mailto:{{ issue.reporter_email }}" class="text-indigo-600 hover:underline">Email</a>
+                                {% endif %}
+                                {% if issue.reporter_phone %}
+                                <a href="tel:{{ issue.reporter_phone }}" class="text-emerald-600 hover:underline">Call</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                                {% if issue.priority == 'Critical' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400
+                                {% elif issue.priority == 'High' %}bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400
+                                {% elif issue.priority == 'Medium' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
+                                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+                                {{ issue.priority }}
+                            </span>
+                        </td>
+                        <td class="p-3">
+                            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider
+                                {% if issue.status == 'RESOLVED_CONFIRMED' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                                {% elif issue.status == 'AWAITING_CONFIRMATION' %}bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 animate-pulse
+                                {% elif issue.status == 'REOPENED' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400
+                                {% elif issue.status == 'IN_PROGRESS' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
+                                {% else %}bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400{% endif %}">
+                                {{ issue.status|replace('_', ' ') }}
+                            </span>
+                        </td>
+                        <td class="p-3 text-xs text-slate-400">{{ issue.reported_at }}</td>
+                        <td class="p-3 text-right">
+                            <a href="/support/issues/{{ issue.issue_id }}" class="btn-secondary text-xs px-3 py-1.5 font-semibold">
+                                Manage &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        {% if issues_page.pagination.totalPages > 1 %}
+        <div class="flex items-center justify-between gap-4 mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500">
+            <div>Showing page <span class="font-bold text-slate-700 dark:text-slate-300">{{ issues_page.pagination.page }}</span> of <span class="font-bold text-slate-700 dark:text-slate-300">{{ issues_page.pagination.totalPages }}</span></div>
+            <div class="flex gap-2">
+                {% if issues_page.pagination.page > 1 %}
+                <a href="?page={{ issues_page.pagination.page - 1 }}&search={{ current_search }}&category_id={{ current_category }}&priority={{ current_priority }}&status={{ current_status }}" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">Previous</a>
+                {% endif %}
+                {% if issues_page.pagination.page < issues_page.pagination.totalPages %}
+                <a href="?page={{ issues_page.pagination.page + 1 }}&search={{ current_search }}&category_id={{ current_category }}&priority={{ current_priority }}&status={{ current_status }}" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-12">
+            <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+            <h3 class="text-base font-semibold text-slate-700 dark:text-slate-300">No support issues found</h3>
+            <p class="text-xs text-slate-500 mt-1">No support tickets match the selected filters.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const searchEl = document.getElementById('adminIssueSearch');
+    const catEl = document.getElementById('adminCategoryFilter');
+    const prioEl = document.getElementById('adminPriorityFilter');
+    const statusEl = document.getElementById('adminStatusFilter');
+
+    function applyFilters() {
+        const search = searchEl ? searchEl.value.trim() : '';
+        const cat = catEl ? catEl.value : '';
+        const prio = prioEl ? prioEl.value : '';
+        const st = statusEl ? statusEl.value : '';
+        window.location.href = `/support/admin?search=${encodeURIComponent(search)}&category_id=${encodeURIComponent(cat)}&priority=${encodeURIComponent(prio)}&status=${encodeURIComponent(st)}`;
+    }
+
+    let searchTimer;
+    if (searchEl) {
+        searchEl.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(applyFilters, 400);
+        });
+    }
+    if (catEl) catEl.addEventListener('change', applyFilters);
+    if (prioEl) prioEl.addEventListener('change', applyFilters);
+    if (statusEl) statusEl.addEventListener('change', applyFilters);
+});
+</script>
+{% endblock %}
+

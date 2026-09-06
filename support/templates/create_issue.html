@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Report an Issue | HCG Support{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+
+    <!-- Header Navigation -->
+    <div class="flex items-center justify-between">
+        <a href="/support" class="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+            &larr; Back to My Issues
+        </a>
+        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">New Support Ticket</span>
+    </div>
+
+    <!-- Form Container -->
+    <div class="glass-panel p-6 sm:p-8">
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-50 mb-1">Report an Issue</h1>
+        <p class="text-xs text-slate-500 mb-6">Describe the problem you experienced. Our support team will review and respond promptly.</p>
+
+        <!-- Reporter Snapshot Info Card (Auto-filled) -->
+        <div class="mb-6 p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 text-xs">
+            <h4 class="font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider mb-2 text-[10px]">Reporter Profile (Auto-detected)</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-slate-700 dark:text-slate-300">
+                <div><span class="text-slate-400 block text-[10px]">Name:</span> <strong class="font-semibold">{{ user_snapshot.name }}</strong></div>
+                <div><span class="text-slate-400 block text-[10px]">Employee ID:</span> <strong class="font-semibold">{{ user_snapshot.employee_id or 'N/A' }}</strong></div>
+                <div><span class="text-slate-400 block text-[10px]">Email:</span> <strong class="font-semibold">{{ user_snapshot.email or 'N/A' }}</strong></div>
+                <div><span class="text-slate-400 block text-[10px]">Phone:</span> <strong class="font-semibold">{{ user_snapshot.phone or 'N/A' }}</strong></div>
+            </div>
+        </div>
+
+        <form method="post" action="/support/report" enctype="multipart/form-data" class="space-y-5">
+            <!-- Issue Category -->
+            <div>
+                <label class="form-label">Category *</label>
+                <select name="category_id" class="form-input" required>
+                    <option value="" disabled selected>Select an Issue Category</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }} — {{ cat.description }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Issue Title -->
+            <div>
+                <label class="form-label">Issue Title *</label>
+                <input name="title" type="text" placeholder="Brief summary of the problem (e.g. Cannot download certificate after post-assessment)" class="form-input" required minlength="5">
+            </div>
+
+            <!-- Detailed Description -->
+            <div>
+                <label class="form-label">Detailed Description *</label>
+                <textarea name="description" rows="5" placeholder="Explain step-by-step what happened, what you expected, and any error message displayed..." class="form-input text-sm py-3 min-h-[120px]" required minlength="10"></textarea>
+            </div>
+
+            <!-- Optional Environment Details (Accordion/Grid) -->
+            <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 space-y-4">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Optional Context & Environment Details</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="form-label text-xs">Page / Module Name</label>
+                        <input name="module_name" type="text" placeholder="e.g. Courses, Assessments, Profile" class="form-input text-xs h-10">
+                    </div>
+                    <div>
+                        <label class="form-label text-xs">Page URL Reference</label>
+                        <input name="page_url" id="env_page_url" type="text" placeholder="http://..." class="form-input text-xs h-10">
+                    </div>
+                    <div>
+                        <label class="form-label text-xs">Device & OS</label>
+                        <input name="os_info" id="env_os_info" type="text" placeholder="e.g. Windows 11, Mac M2, Android" class="form-input text-xs h-10">
+                    </div>
+                    <div>
+                        <label class="form-label text-xs">Browser Info</label>
+                        <input name="browser_info" id="env_browser_info" type="text" placeholder="e.g. Chrome 120, Safari" class="form-input text-xs h-10">
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Attachments (Images, Videos, Documents) -->
+            <div>
+                <label class="form-label">Upload Attachments (Screenshots, Videos, Logs, PDFs)</label>
+                <input name="attachments" type="file" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.mov,.avi,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" class="form-input text-xs py-2 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/30 dark:file:text-indigo-300">
+                <p class="text-[11px] text-slate-400 mt-1">Supported formats: JPG, PNG, GIF, WEBP, MP4, MOV, PDF, DOCX, XLSX, TXT (Max size: Images 10MB, Videos 100MB, Docs 25MB).</p>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3">
+                <a href="/support" class="btn-secondary px-5 py-3 text-xs font-semibold">Cancel</a>
+                <button type="submit" class="btn-primary px-6 py-3 text-xs font-bold flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                    Submit Support Ticket
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Auto-detect browser, OS and URL
+    const pageUrlInput = document.getElementById('env_page_url');
+    const browserInput = document.getElementById('env_browser_info');
+    const osInput = document.getElementById('env_os_info');
+
+    if (pageUrlInput && document.referrer) {
+        pageUrlInput.value = document.referrer;
+    }
+    if (browserInput) {
+        const ua = navigator.userAgent;
+        let b = 'Browser';
+        if (ua.includes('Chrome')) b = 'Chrome';
+        else if (ua.includes('Safari')) b = 'Safari';
+        else if (ua.includes('Firefox')) b = 'Firefox';
+        else if (ua.includes('Edg')) b = 'Edge';
+        browserInput.value = b;
+    }
+    if (osInput) {
+        const platform = navigator.platform || navigator.userAgent;
+        let os = 'OS';
+        if (platform.includes('Win')) os = 'Windows';
+        else if (platform.includes('Mac')) os = 'macOS';
+        else if (platform.includes('Linux')) os = 'Linux';
+        else if (platform.includes('Android')) os = 'Android';
+        else if (platform.includes('iPhone') || platform.includes('iPad')) os = 'iOS';
+        osInput.value = os;
+    }
+});
+</script>
+{% endblock %}
+
