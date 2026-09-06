@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_macros.html" import btn, icon, field, select_field, textarea_field, file_field, page_header %}
+
+{% block title %}Report an issue · HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+{% call page_header("Report an issue", "Tell us what went wrong; we'll keep you updated right here.", eyebrow="Support & helpdesk", crumbs=[("Support", url_for('support.user_dashboard')), ("Report an issue", None)]) %}{% endcall %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <form method="post" enctype="multipart/form-data" class="card flex flex-col gap-4 lg:col-span-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ field("title", "Title", required=True, placeholder="A short summary, e.g. \"Certificate download fails\"", id="issue-title", hint="At least 5 characters.") }}
+    {{ textarea_field("description", "Description", rows=5, required=True, placeholder="What happened, what did you expect, and how can we reproduce it?", id="issue-description", hint="At least 10 characters.") }}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ select_field("category_id", "Category", categories, placeholder="Select a category", required=True, id="issue-category") }}
+      {{ select_field("module_name", "Where does this happen?", ["Dashboard", "Courses", "Assessments", "Certificates", "Community", "Rewards", "Notifications", "Admin", "Other"], placeholder="Optional", id="issue-module") }}
+    </div>
+    {{ file_field("attachments", "Attachments", accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv", hint="Screenshots or recordings help a lot. Images up to 5 MB, videos up to 15 MB, documents up to 10 MB.", multiple=True, id="issue-attachments") }}
+    <input type="hidden" name="page_url" id="issue-page-url">
+    <input type="hidden" name="browser_info" id="issue-browser-info">
+    <input type="hidden" name="os_info" id="issue-os-info">
+    <input type="hidden" name="device_info" id="issue-device-info">
+    <div class="flex justify-end gap-2 pt-2">
+      {{ btn("Cancel", "secondary", href=url_for('support.user_dashboard')) }}
+      {{ btn("Submit ticket", "primary", type="submit", icon_name="plus") }}
+    </div>
+  </form>
+
+  <aside class="card flex flex-col gap-3" aria-labelledby="reporter-title">
+    <h2 id="reporter-title" class="text-base flex items-center gap-2">{{ icon("user", "w-4 h-4 text-accent") }}Reporting as</h2>
+    <dl class="flex flex-col gap-2 text-sm m-0">
+      <div><dt class="caption">Name</dt><dd class="m-0 font-medium">{{ user_snapshot.name or "—" }}</dd></div>
+      <div><dt class="caption">Employee ID</dt><dd class="m-0 font-medium">{{ user_snapshot.employee_id or "—" }}</dd></div>
+      <div><dt class="caption">Email</dt><dd class="m-0 font-medium">{{ user_snapshot.email or "—" }}</dd></div>
+      <div><dt class="caption">Phone</dt><dd class="m-0 font-medium">{{ user_snapshot.phone or "—" }}</dd></div>
+    </dl>
+    <p class="caption">This snapshot is attached to your ticket automatically so support can reach you. Update it from your <a href="{{ url_for('profile') }}" class="text-accent font-medium">profile</a> if it's out of date.</p>
+  </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const set = (id, value) => { const el = document.getElementById(id); if (el) el.value = value; };
+    set('issue-page-url', document.referrer || '');
+    set('issue-browser-info', navigator.userAgent);
+    set('issue-os-info', navigator.platform || '');
+    set('issue-device-info', `${window.innerWidth}x${window.innerHeight}`);
+  })();
+</script>
+{% endblock %}

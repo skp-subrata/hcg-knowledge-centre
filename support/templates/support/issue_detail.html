@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% from "_macros.html" import btn, icon, field, select_field, textarea_field, file_field, status_badge, badge, page_header %}
+
+{% block title %}{{ issue.issue_number }} · Support · HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+{% call page_header(issue.title, None, eyebrow=issue.issue_number, crumbs=[("Support", url_for('support.user_dashboard' if not is_admin else 'support.admin_dashboard')), (issue.issue_number, None)]) %}
+  {{ status_badge(issue.priority) }}
+  {{ status_badge(issue.status) }}
+{% endcall %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 flex flex-col gap-6">
+    <section class="card" aria-labelledby="description-title">
+      <h2 id="description-title" class="text-base mb-2">Description</h2>
+      <p class="text-sm text-fg-2 whitespace-pre-line">{{ issue.description }}</p>
+      {% if attachments %}
+      <div class="mt-4 flex flex-wrap gap-2">
+        {% for a in attachments %}
+        <a href="{{ url_for('support.serve_attachment_file', issue_id=issue.issue_id, filename=a.stored_file_name) }}" class="chip" target="_blank" rel="noopener">{{ icon("link", "w-3.5 h-3.5") }}{{ a.original_file_name }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="timeline-title">
+      <h2 id="timeline-title" class="text-base mb-4">Conversation</h2>
+      {% if updates %}
+      <ol class="flex flex-col gap-4 m-0 p-0 list-none border-l hairline ml-1 pl-4 mb-6">
+        {% for u in updates %}
+        <li class="relative text-sm">
+          <span class="absolute -left-[1.3rem] top-1.5 w-2 h-2 rounded-full {{ 'bg-accent' if u.update_type == 'COMMENT' else 'bg-fg-3' }}" aria-hidden="true"></span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-medium">{{ u.updated_by_name or "System" }}</span>
+            {% if u.update_type != 'COMMENT' %}{{ badge(u.update_type|replace("_", " ")|title, "neutral") }}{% endif %}
+            {% if u.is_internal %}{{ badge("Internal note", "warning") }}{% endif %}
+            <span class="caption">{{ u.created_at }}</span>
+          </div>
+          {% if u.message %}<p class="mt-1 mb-0 whitespace-pre-line">{{ u.message }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="caption mb-6">No activity yet.</p>
+      {% endif %}
+
+      <form method="post" enctype="multipart/form-data" action="{{ url_for('support.post_issue_message', issue_id=issue.issue_id) }}" class="flex flex-col gap-3 border-t hairline pt-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ textarea_field("message", "Add a comment", rows=3, placeholder="Share an update or ask a question", id="issue-message") }}
+        {{ file_field("attachments", "Attach a file", accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv", multiple=True, id="issue-message-attachments") }}
+        <div class="flex justify-end">{{ btn("Post", "primary", type="submit", icon_name="chat") }}</div>
+      </form>
+    </section>
+  </div>
+
+  <aside class="flex flex-col gap-6">
+    <section class="card" aria-labelledby="meta-title">
+      <h2 id="meta-title" class="text-base mb-3">Details</h2>
+      <dl class="flex flex-col gap-2 text-sm m-0">
+        <div><dt class="caption">Reported by</dt><dd class="m-0 font-medium">{{ issue.reporter_name }}</dd></div>
+        <div><dt class="caption">Category</dt><dd class="m-0 font-medium">{{ issue.category_name or "—" }}</dd></div>
+        <div><dt class="caption">Assigned to</dt><dd class="m-0 font-medium">{{ issue.assignee_name or "Unassigned" }}</dd></div>
+        <div><dt class="caption">Reported</dt><dd class="m-0 font-medium">{{ issue.reported_at }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="card" aria-labelledby="tat-title">
+      <h2 id="tat-title" class="text-base mb-3">Turnaround time</h2>
+      <dl class="flex flex-col gap-2 text-sm m-0">
+        <div class="flex justify-between"><dt class="caption">First response</dt><dd class="m-0 font-medium tabular">{{ tat.first_response_tat_str }}</dd></div>
+        <div class="flex justify-between"><dt class="caption">Resolution</dt><dd class="m-0 font-medium tabular">{{ tat.resolution_tat_str }}</dd></div>
+        <div class="flex justify-between"><dt class="caption">Confirmation</dt><dd class="m-0 font-medium tabular">{{ tat.confirmation_tat_str }}</dd></div>
+      </dl>
+    </section>
+
+    {% if issue.status == "AWAITING_CONFIRMATION" and current_user_id == issue.reported_by_user_id %}
+    <section class="card border-2 border-warning/40" aria-labelledby="resolution-title">
+      <h2 id="resolution-title" class="text-base mb-2">Resolution provided</h2>
+      <p class="text-sm text-fg-2 whitespace-pre-line mb-1"><strong class="text-fg">{{ issue.resolution_summary }}</strong></p>
+      <p class="text-sm text-fg-2 whitespace-pre-line mb-4">{{ issue.resolution_details }}</p>
+      <div class="flex flex-col gap-2">
+        {{ btn("Confirm resolved", "primary", icon_name="check", attrs='data-support-confirm="' ~ issue.issue_id ~ '"') }}
+        {{ btn("Not fixed, reopen", "secondary", icon_name="refresh", attrs='data-support-reopen="' ~ issue.issue_id ~ '"') }}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if is_admin %}
+    <section class="card" aria-labelledby="admin-title">
+      <h2 id="admin-title" class="text-base mb-3">Admin controls</h2>
+      <div class="flex flex-col gap-4">
+        {% if next_statuses %}
+        <form method="post" action="{{ url_for('support.admin_update_status', issue_id=issue.issue_id) }}" class="flex items-end gap-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="flex-1">{{ select_field("status", "Change status", next_statuses, id="issue-status") }}</div>
+          {{ btn("Apply", "secondary", type="submit", size="sm") }}
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('support.admin_update_priority', issue_id=issue.issue_id) }}" class="flex items-end gap-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="flex-1">{{ select_field("priority", "Change priority", [("Critical", "Critical"), ("High", "High"), ("Medium", "Medium"), ("Low", "Low")], selected=issue.priority, id="issue-priority") }}</div>
+          {{ btn("Apply", "secondary", type="submit", size="sm") }}
+        </form>
+        {% if issue.status not in ("AWAITING_CONFIRMATION", "RESOLVED_CONFIRMED", "CLOSED") %}
+        <form method="post" action="{{ url_for('support.admin_provide_resolution', issue_id=issue.issue_id) }}" enctype="multipart/form-data" class="flex flex-col gap-2 border-t hairline pt-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {{ field("summary", "Resolution summary", required=True, id="resolution-summary") }}
+          {{ textarea_field("details", "Details", rows=3, required=True, id="resolution-details") }}
+          {{ file_field("attachments", "Attach a file", multiple=True, id="resolution-attachments") }}
+          {{ btn("Submit resolution", "primary", type="submit", size="sm", icon_name="check") }}
+        </form>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('click', async (event) => {
+    const confirmBtn = event.target.closest('[data-support-confirm]');
+    const reopenBtn = event.target.closest('[data-support-reopen]');
+    if (!confirmBtn && !reopenBtn) return;
+    const issueId = (confirmBtn || reopenBtn).dataset.supportConfirm || (confirmBtn || reopenBtn).dataset.supportReopen;
+    if (confirmBtn) {
+      const ok = await HKC.confirm({ title: 'Confirm resolution', body: 'Mark this issue as resolved? You can still reopen it later if the problem comes back.', confirmLabel: 'Confirm resolved' });
+      if (!ok) return;
+      const { ok: success } = await HKC.fetchJSON(`/api/support/issues/${issueId}/confirm-resolution`, { method: 'POST', body: JSON.stringify({}) });
+      if (success) window.location.reload(); else HKC.toast('Could not confirm the resolution.', 'error');
+    } else {
+      const reason = await HKC.prompt({ title: 'Reopen issue', message: 'What still needs fixing?', label: 'Reason', placeholder: 'Optional' });
+      if (reason === null) return;
+      const { ok: success } = await HKC.fetchJSON(`/api/support/issues/${issueId}/reopen`, { method: 'POST', body: JSON.stringify({ reason }) });
+      if (success) window.location.reload(); else HKC.toast('Could not reopen the issue.', 'error');
+    }
+  });
+</script>
+{% endblock %}

@@ -50,6 +50,12 @@ POLICY = {
 	"complete_course": "login", "feedback_form": "login",
 	"notifications_page": "login", "mark_read": "login", "mark_all_read": "login",
 	"profile": "login", "rewards_dashboard": "login", "proxy_embed": "login", "uploaded_file": "login",
+	# support/helpdesk: open to any signed-in user; ownership of a specific issue is enforced
+	# inside the route (a non-owner is redirected to /support, not to home, so this matrix
+	# cannot see that denial as such -- see tests/test_support.py for ownership coverage)
+	"support.user_dashboard": "login", "support.report_issue": "login", "support.issue_detail": "login",
+	"support.post_issue_message": "login", "support.serve_attachment_file": "login",
+	"support.api_confirm_resolution": "login", "support.api_reopen_issue": "login", "support.api_categories": "login",
 	# staff (admin or moderator)
 	"admin_panel": "staff", "delete_record": "staff", "download_question_template": "staff",
 	"admin_reports": "staff", "download_assessment_questions": "staff",
@@ -60,6 +66,8 @@ POLICY = {
 	# admin only
 	"download_api_credentials": "admin", "master_management": "admin", "api_docs_playground": "admin", "view_as_page": "admin",
 	"admin_system": "admin",
+	"support.admin_dashboard": "admin", "support.admin_reports": "admin",
+	"support.admin_update_status": "admin", "support.admin_update_priority": "admin", "support.admin_provide_resolution": "admin",
 	"admin_rewards": "admin", "admin_adjust_rewards": "admin", "admin_reset_rewards": "admin",
 	"admin_settle_rewards": "admin", "admin_update_reward_source": "admin",
 	"add_group_moderator": "admin", "remove_group_moderator": "admin", "toggle_group_moderator": "admin",
@@ -88,6 +96,12 @@ POLICY = {
 MAY_DENY = {
 	# elevated admins are deliberately blocked from learner actions (app.py assessment/complete/feedback gates)
 	"assessment": {"admin"}, "complete_course": {"admin"}, "feedback_form": {"admin"},
+	# api_categories' GET is open to any signed-in user, but its POST (create a category) is
+	# admin-only, enforced inside the route -- everyone else gets a genuine 403 there.
+	"support.api_categories": {"student", "mod", "imp_admin"},
+	# the seeded issue in `world` is reported by 'student'; mod/imp_admin own neither it nor
+	# admin rights, so this returns a genuine 403 (JSON, not a redirect) for them.
+	"support.serve_attachment_file": {"mod", "imp_admin"},
 	# attempt pages belong to maya; everyone else is refused (imp_admin IS maya, so it passes)
 	"assessment_result": {"student", "mod", "admin"}, "assessment_review": {"student", "mod", "admin"},
 	"add_user_interest": {"student", "mod"},
@@ -222,6 +236,8 @@ def _param(name, endpoint, world):
 		return world.notification_id
 	if name == "interest_id":
 		return world.interest_id
+	if name == "issue_id":
+		return world.support_issue_id
 	if name == "resource":
 		return "course"
 	if name == "record_id":
@@ -271,6 +287,11 @@ def _request_kwargs(endpoint, method, world, db):
 		"complete_course": {}, "courses_publish": {}, "delete_record": {}, "delete_post": {},
 		"mark_read": {}, "mark_all_read": {}, "api_mark_notification_read": {},
 		"remove_group_moderator": {}, "toggle_group_moderator": {},
+		"support.report_issue": {"title": "Smoke support issue", "description": "Filed by the route matrix smoke test.", "category_id": world.support_category_id},
+		"support.post_issue_message": {"message": "smoke comment"},
+		"support.admin_update_status": {"status": "UNDER_REVIEW"},
+		"support.admin_update_priority": {"priority": "High"},
+		"support.admin_provide_resolution": {"summary": "Smoke resolution", "details": "Resolved by the route matrix smoke test."},
 	}
 	if endpoint == "assessment":
 		qids = [row["question_id"] for row in db("SELECT question_id FROM assessment_questions WHERE assessment_id = ?", (world.post_assessment_id,))]
@@ -298,6 +319,9 @@ def _request_kwargs(endpoint, method, world, db):
 		"api_create_user": {"username": "smoke.user", "full_name": "Smoke User", "password": "secret123", "role": "basic user"},
 		"api_update_user": {"full_name": "Renamed By Smoke"},
 		"api_delete_user": {}, "delete_user_interest": {},
+		"support.api_confirm_resolution": {"comment": "smoke"},
+		"support.api_reopen_issue": {"reason": "smoke"},
+		"support.api_categories": {"name": "Smoke Category", "code": "SMOKE"},
 	}
 	if endpoint in payload:
 		return {"json": payload[endpoint]}

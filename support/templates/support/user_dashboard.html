@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_macros.html" import btn, icon, stat_tile, status_badge, table, empty_state, page_header %}
+
+{% block title %}Support & helpdesk · HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+{% call page_header("Support & helpdesk", "Issues you've reported and their current status.", eyebrow="Support") %}
+  {{ btn("Report an issue", "primary", href=url_for('support.report_issue'), icon_name="plus") }}
+{% endcall %}
+
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+  {{ stat_tile("Total", stats.total) }}
+  {{ stat_tile("In progress", stats.in_progress, tone="info") }}
+  {{ stat_tile("Awaiting you", stats.awaiting_confirmation, tone="warning") }}
+  {{ stat_tile("Resolved", stats.resolved, tone="success") }}
+</div>
+
+<form method="get" class="card flex flex-col sm:flex-row sm:items-end gap-3 mb-6" aria-label="Filter your issues">
+  <label class="flex-1 min-w-0"><span class="field-label">Search</span><input type="search" name="search" value="{{ current_search }}" class="input" placeholder="Title or description"></label>
+  <label class="w-full sm:w-48"><span class="field-label">Category</span><select name="category_id" class="select" onchange="this.form.requestSubmit()">
+    <option value="">All categories</option>
+    {% for c in categories %}<option value="{{ c.id }}"{% if current_category == c.id|string %} selected{% endif %}>{{ c.name }}</option>{% endfor %}
+  </select></label>
+  <label class="w-full sm:w-44"><span class="field-label">Status</span><select name="status" class="select" onchange="this.form.requestSubmit()">
+    <option value="">Any status</option>
+    {% for s in ("REPORTED", "UNDER_REVIEW", "IN_PROGRESS", "RESOLUTION_PROVIDED", "AWAITING_CONFIRMATION", "RESOLVED_CONFIRMED", "REOPENED", "CLOSED") %}
+    <option value="{{ s }}"{% if current_status == s %} selected{% endif %}>{{ s.replace("_", " ")|title }}</option>
+    {% endfor %}
+  </select></label>
+  {{ btn("Search", "secondary", type="submit") }}
+</form>
+
+{% if issues_page.data %}
+{% call table("my-issues-table", ["Issue", "Category", "Priority", "Status", "Updated", {"label": "", "align": "right"}], caption="Your support issues") %}
+  {% for issue in issues_page.data %}
+  <tr>
+    <td><a href="{{ url_for('support.issue_detail', issue_id=issue.issue_id) }}" class="font-medium text-accent">{{ issue.issue_number }}</a><div class="caption truncate max-w-xs">{{ issue.title }}</div></td>
+    <td class="text-fg-2">{{ issue.category_name or "—" }}</td>
+    <td>{{ status_badge(issue.priority) }}</td>
+    <td>{{ status_badge(issue.status) }}</td>
+    <td class="caption tabular whitespace-nowrap">{{ issue.updated_at }}</td>
+    <td class="num"><a href="{{ url_for('support.issue_detail', issue_id=issue.issue_id) }}" class="btn btn-ghost btn-sm">Open</a></td>
+  </tr>
+  {% endfor %}
+{% endcall %}
+{% if issues_page.pagination.totalPages > 1 %}
+<nav class="flex items-center justify-between gap-3 mt-4" aria-label="Pagination">
+  <span class="caption tabular">Page {{ issues_page.pagination.page }} of {{ issues_page.pagination.totalPages }}</span>
+  <div class="flex gap-2">
+    {% if issues_page.pagination.page > 1 %}{{ btn("Prev", "secondary", size="sm", href=url_for('support.user_dashboard', page=issues_page.pagination.page - 1, search=current_search, category_id=current_category, status=current_status)) }}{% endif %}
+    {% if issues_page.pagination.page < issues_page.pagination.totalPages %}{{ btn("Next", "secondary", size="sm", href=url_for('support.user_dashboard', page=issues_page.pagination.page + 1, search=current_search, category_id=current_category, status=current_status)) }}{% endif %}
+  </div>
+</nav>
+{% endif %}
+{% else %}
+{% call empty_state("No support issues yet", "Reported issues and their progress will show up here.", icon_name="info") %}
+  {{ btn("Report an issue", "primary", href=url_for('support.report_issue'), icon_name="plus") }}
+{% endcall %}
+{% endif %}
+{% endblock %}

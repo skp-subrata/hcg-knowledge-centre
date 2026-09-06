@@ -32,6 +32,8 @@ class World:
 	location_id: int = 0
 	upload_name: str = "planted.pdf"
 	api_keys: dict = field(default_factory=dict)      # username -> headers
+	support_category_id: int = 0                       # first support_categories row
+	support_issue_id: int = 0                          # reported by student, status REPORTED
 
 
 def _connect(db_path):
@@ -120,6 +122,18 @@ def build_world(db_path, upload_folder):
 			notif = c.execute("SELECT id FROM notifications WHERE user_id = ? ORDER BY id LIMIT 1", (maya,)).fetchone()
 			world.notification_id = notif["id"] if notif else c.execute(
 				"INSERT INTO notifications (user_id, message, type) VALUES (?, 'world notification', 'system')", (maya,)).lastrowid
+
+			# support/helpdesk: one issue reported by the plain 'student' account, status REPORTED.
+			# init_support_db() is called directly (rather than relying on the blueprint's
+			# before_app_request hook) since this connection never goes through a real request.
+			from support.models.schema import init_support_db
+			init_support_db(c)
+			world.support_category_id = c.execute("SELECT id FROM support_categories ORDER BY id LIMIT 1").fetchone()["id"]
+			world.support_issue_id = c.execute(
+				"""INSERT INTO support_issues (issue_number, reported_by_user_id, reporter_name, title, description, category_id, priority, created_by, updated_by)
+				   VALUES ('SUP-WORLD-000001', ?, 'World Student', 'World support issue', 'Seeded for the route matrix and support tests.', ?, 'Medium', ?, ?)""",
+				(student, world.support_category_id, student, student),
+			).lastrowid
 
 			world.interest_id = c.execute("SELECT id FROM interest_master ORDER BY id LIMIT 1").fetchone()["id"]
 			world.department_id = c.execute("SELECT department_id FROM departments ORDER BY department_id LIMIT 1").fetchone()["department_id"]

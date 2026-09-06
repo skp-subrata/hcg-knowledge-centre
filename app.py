@@ -1250,6 +1250,17 @@ def create_app():
 			return []
 	init_db()
 
+	from support.controllers import support_bp
+	from support.models.schema import init_support_db
+	app.register_blueprint(support_bp)
+	# Created once here, at app-construction time, same as every other table above -- not via
+	# a lazy before_request hook. A before_request "run once ever" flag would live on the
+	# Blueprint object itself, which outlives any one database file (e.g. across the test
+	# suite's per-test databases, or a redeployed DATABASE path), so it could end up never
+	# actually creating these tables in whichever database is active later.
+	with get_db() as connection:
+		init_support_db(connection)
+
 	@app.route("/", methods=["GET", "POST"])
 	def home():
 		"""Authenticate users and show their permitted courses."""

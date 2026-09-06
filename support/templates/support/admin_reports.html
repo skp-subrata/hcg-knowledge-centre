@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_macros.html" import btn, icon, stat_tile, page_header %}
+
+{% block title %}Support reports · HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+{% call page_header("SLA & TAT reports", "How quickly issues get a first response, a resolution, and confirmation.", eyebrow="Management") %}
+  {{ btn("Back to admin", "secondary", href=url_for('support.admin_dashboard'), icon_name="arrow-left") }}
+{% endcall %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  {{ stat_tile("Total issues", report.total_issues) }}
+  {{ stat_tile("Resolution rate", report.resolution_rate ~ "%", report.resolved_issues ~ " resolved") }}
+  {{ stat_tile("Avg. first response", report.avg_first_response_tat) }}
+  {{ stat_tile("Avg. resolution", report.avg_resolution_tat) }}
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <section class="card" aria-labelledby="cat-chart-title">
+    <h2 id="cat-chart-title" class="text-base mb-4">Issues by category</h2>
+    {% if report.category_breakdown %}
+    <div class="relative h-72"><canvas id="categoryChart" role="img" aria-label="Bar chart of issues by category"></canvas></div>
+    {% else %}<p class="caption text-center py-6">No issues yet.</p>{% endif %}
+  </section>
+  <section class="card" aria-labelledby="prio-chart-title">
+    <h2 id="prio-chart-title" class="text-base mb-4">Issues by priority</h2>
+    <div class="relative h-72"><canvas id="priorityChart" role="img" aria-label="Doughnut chart of issues by priority"></canvas></div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  (function () {
+    const token = (name, alpha) => { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return alpha === undefined ? `rgb(${v})` : `rgb(${v} / ${alpha})`; };
+    const categories = {{ report.category_breakdown | map(attribute="name") | list | tojson | safe }};
+    const categoryCounts = {{ report.category_breakdown | map(attribute="count") | list | tojson | safe }};
+    const priority = {{ report.priority_breakdown | tojson | safe }};
+    let charts = [];
+    function draw() {
+      charts.forEach((c) => c.destroy()); charts = [];
+      const text = token('--c-fg-2'), grid = token('--c-line', .08);
+      if (categories.length) {
+        charts.push(new Chart(document.getElementById('categoryChart'), {
+          type: 'bar',
+          data: { labels: categories, datasets: [{ label: 'Issues', data: categoryCounts, backgroundColor: token('--c-accent', .85), borderRadius: 6 }] },
+          options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { color: text, precision: 0 }, grid: { color: grid } }, y: { ticks: { color: text }, grid: { display: false } } }, plugins: { legend: { display: false } } },
+        }));
+      }
+      charts.push(new Chart(document.getElementById('priorityChart'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Critical', 'High', 'Medium', 'Low'],
+          datasets: [{ data: [priority.Critical, priority.High, priority.Medium, priority.Low], backgroundColor: [token('--c-danger', .85), token('--c-warning', .85), token('--c-info', .85), token('--c-fg-3', .6)], borderWidth: 0, hoverOffset: 4 }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: text, padding: 16 } } } },
+      }));
+    }
+    draw();
+    document.addEventListener('hkc:themechange', () => requestAnimationFrame(draw));
+  })();
+</script>
+{% endblock %}

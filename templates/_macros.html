@@ -138,7 +138,9 @@
 {%- set kinds = {
   "published": "success", "active": "success", "certified": "success", "approved": "success", "pass": "success", "passed": "success", "earn": "success", "completed": "success", "basic_user": "neutral",
   "draft": "warning", "pending": "warning", "pending_approval": "warning", "feedback_pending": "warning", "in_progress": "info", "assessment_pending": "info", "adjustment": "warning", "unpublished": "warning", "not_started": "neutral", "settlement": "info", "pre": "info", "post": "info",
-  "inactive": "danger", "rejected": "danger", "fail": "danger", "failed": "danger", "assessment_failed": "danger", "reversal": "danger", "not_certified": "danger", "admin": "info", "moderator": "warning"
+  "inactive": "danger", "rejected": "danger", "fail": "danger", "failed": "danger", "assessment_failed": "danger", "reversal": "danger", "not_certified": "danger", "admin": "info", "moderator": "warning",
+  "reported": "neutral", "under_review": "info", "resolution_provided": "info", "awaiting_confirmation": "warning", "resolved_confirmed": "success", "reopened": "danger", "closed": "neutral",
+  "critical": "danger", "high": "warning", "medium": "info", "low": "neutral"
 } -%}
 <span class="badge badge-{{ kinds.get(s, 'neutral') }}{% if class %} {{ class }}{% endif %}">{{ (status or "")|string|replace("_", " ")|title }}</span>
 {%- endmacro %}
