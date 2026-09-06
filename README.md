@@ -94,29 +94,48 @@ Every login starts in the **student view**, whatever the account's role. Adminis
 ## Running the tests
 
 ```bash
-pip install -r requirements-dev.txt
-python -m pytest
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pytest                       # ~840 tests in about 5 seconds
+.venv/bin/python -m pytest --cov=app --cov=security --cov=csrf --cov=db_init --cov=storage --cov-report=term-missing
 ```
 
-The tests use a temporary copy of a freshly seeded database and never touch `users.db`, `uploads/` or the network.
+The suite covers startup, every route for eight personas (`docs/ROUTE_ROLE_MATRIX.md`), the learner/staff/community/rewards flows, the API, security and CSRF, and renders every page. `docs/TEST_STRATEGY.md` explains the layout and how to add a route.
+
+Browser pass (optional, needs Chromium):
+
+```bash
+.venv/bin/python -m pip install playwright && .venv/bin/python -m playwright install chromium
+.venv/bin/python qa/browser_qa.py               # writes docs/qa/browser_report.md and docs/qa/screens/*.jpg
+```
 
 ## Project layout
 
-| Path | Purpose |
-|---|---|
-| `app.py` | The Flask application: routes, schema (`init_db`), demo seeding, reward engine, API v1 |
-| `db_init.py` | Applies `init_scripts/*.sql` once each and records them in `schema_migrations` |
-| `init_scripts/` | Numbered SQL scripts: master tables, interests, user columns, seed data, release notes |
-| `storage.py` | Upload helper with the allowed file types for course content |
-| `run.sh` | One-command setup and start (macOS/Linux) |
-| `templates/` | Jinja2 templates (Tailwind CSS via CDN) |
-| `tests/` | pytest suite |
-| `docs/` | Database ER diagram and cloud hosting notes |
+```
+app.py                 Flask application factory, all routes (web + API v1)
+security.py            SSRF guard, attachment allowlist, secret-key persistence, HTML sanitiser
+csrf.py                Session CSRF tokens (LMS_CSRF)
+db_init.py             Applies init_scripts/*.sql once each (schema_migrations)
+storage.py             Upload folder helpers
+init_scripts/          Versioned SQL: 000 columns, 001 masters, 002 interests, 003 profile columns,
+                       004 master seed, 005 releases, 006 certificate uniqueness
+run.sh                 One-command bootstrap (venv, dependencies, init-db, run)
+templates/             Jinja pages; _macros.html (design-system components), _partials/ (header, drawer, toasts, ...)
+static/css/app.css     Design tokens, components, motion and accessibility rules
+static/js/app.js       window.HKC: theme, dialogs, menus, tabs, toasts, filters, pagination, CSRF helper
+tests/                 pytest suite (conftest.py builds the isolated database per test)
+qa/browser_qa.py       Playwright browser pass
+docs/                  ER diagram, QA findings, route matrix, test strategy, improvement plan, browser report
+```
 
 ## Documentation
 
-- `docs/database_er_diagram.md` — SQLite schema and ER diagram.
-- `docs/cloud_hosting_architecture.md` — production deployment and security notes.
+- `docs/database_er_diagram.md` — schema and how it is built
+- `docs/TEST_STRATEGY.md` — how the app is tested and how to extend the suite
+- `docs/ROUTE_ROLE_MATRIX.md` — generated route × role matrix
+- `docs/QA_FINDINGS.md` — every defect found, with status and the test that pins it
+- `docs/qa/browser_report.md` — scripted browser pass (pages, accessibility, interactions)
+- `docs/IMPROVEMENT_PLAN.md` — scorecard, prioritised backlog and roadmap
+- `docs/cloud_hosting_architecture.md` — hosting notes from the original author
 
 ## Tech stack
 

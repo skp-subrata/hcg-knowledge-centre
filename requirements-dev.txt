@@ -1,3 +1,5 @@
 -r requirements.txt
 pytest>=8,<9
 pytest-cov>=5
+# Optional, for qa/browser_qa.py (then run: python -m playwright install chromium)
+playwright>=1.45
