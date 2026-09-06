@@ -502,7 +502,7 @@ def seed_demo_data(connection):
 	for full_name, username, role in (("Admin", "admin", "admin"), ("Moderator", "mod", "moderator"), ("Student", "student", "basic user")):
 		connection.execute(
 			"INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			(full_name, username, generate_password_hash(username), role, f"EMP-{username.upper()}", "Operations", "Hyderabad", 1),
+			(full_name, username, generate_password_hash(os.getenv("LMS_ADMIN_PASSWORD") or "admin" if username == "admin" else username), role, f"EMP-{username.upper()}", "Operations", "Hyderabad", 1),
 		)
 
 	# Create 100 additional sample users with mandatory employee IDs.
@@ -959,6 +959,12 @@ def create_app():
 	app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 	app.config["CSRF_ENABLED"] = os.getenv("LMS_CSRF", "1") == "1"
 	init_csrf(app)
+	if os.getenv("LMS_PROXY_FIX", "0") == "1":
+		# Behind Render/Heroku-style proxies: trust X-Forwarded-For/Proto/Host so request.host_url, the CSRF referrer check and redirects see https.
+		from werkzeug.middleware.proxy_fix import ProxyFix
+		app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+	if os.getenv("LMS_SECURE_COOKIES", "0") == "1":
+		app.config["SESSION_COOKIE_SECURE"] = True
 
 	ERROR_PAGES = {
 		403: ("Access denied", "You don't have permission to view this page."),
@@ -5187,6 +5193,6 @@ if __name__ == "__main__":
 	_debug_default = "1" if _host in ("127.0.0.1", "localhost", "::1") else "0"
 	app.run(
 		host=_host,
-		port=int(os.getenv("LMS_PORT", "5000")),
+		port=int(os.getenv("LMS_PORT") or os.getenv("PORT") or "5000"),
 		debug=os.getenv("LMS_DEBUG", _debug_default) == "1",
 	)

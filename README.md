@@ -22,16 +22,28 @@ cd hcg-knowledge-centre
 
 ## Manual setup (any OS, including Windows)
 
+Windows (PowerShell), same steps as `run.sh`:
+
+```powershell
+.\run.ps1                 # venv, dependencies, database, then http://127.0.0.1:5000
+.\run.ps1 -SetupOnly      # prepare without starting
+.\run.ps1 -Port 8000 -NoDebug
+```
+
+If PowerShell refuses to run scripts: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. Git Bash and WSL can use `./run.sh` instead.
+
+Any OS, by hand:
+
 ```bash
 python -m venv .venv
 # macOS/Linux:            source .venv/bin/activate
 # Windows (PowerShell):   .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-flask --app app init-db        # optional: the app also does this on start-up
-python app.py
+flask --app app init-db          # creates tables, applies init_scripts/*.sql, seeds demo data
+python app.py                    # http://127.0.0.1:5000
 ```
 
-On Windows, set variables with `set LMS_PORT=5050` (cmd) or `$env:LMS_PORT=5050` (PowerShell) before `python app.py`. Python 3.8 or newer is required.
+On Windows, set variables with `set LMS_PORT=5050` (cmd) or `$env:LMS_PORT=5050` (PowerShell) before `python app.py`.
 
 ## Configuration
 
@@ -47,6 +59,10 @@ All settings are environment variables; every one is optional.
 | `LMS_SECRET_KEY` | generated | Flask session secret. When unset, a random key is generated once and stored in `.secret_key` (git-ignored) |
 | `LMS_SECRET_KEY_FILE` | `./.secret_key` | Where the generated key is kept |
 | `LMS_CSRF` | `1` | `1` requires a CSRF token on every session-authenticated POST (forms and fetches). API-key requests are exempt. Set `0` only for local debugging. |
+| `LMS_ADMIN_PASSWORD` | `admin` | Password of the seeded `admin` account (used only when the account is created) |
+| `LMS_PROXY_FIX` | `0` | `1` trusts `X-Forwarded-For/Proto/Host` from a reverse proxy (Render, nginx, load balancers) |
+| `LMS_SECURE_COOKIES` | `0` | `1` marks the session cookie `Secure` (HTTPS only) |
+| `PORT` | – | Used when `LMS_PORT` is unset (set automatically by Render and similar hosts) |
 | `LMS_SEED_DEMO` | `1` | `1` seeds demo accounts, 100 sample users and two demo courses on start-up. Set `0` for a deployment |
 
 ## Database initialisation
@@ -129,6 +145,7 @@ docs/                  ER diagram, QA findings, route matrix, test strategy, imp
 
 ## Documentation
 
+- `docs/DEPLOY_RENDER.md` — deploying to Render (or any container host) with `render.yaml`
 - `docs/database_er_diagram.md` — schema and how it is built
 - `docs/TEST_STRATEGY.md` — how the app is tested and how to extend the suite
 - `docs/ROUTE_ROLE_MATRIX.md` — generated route × role matrix

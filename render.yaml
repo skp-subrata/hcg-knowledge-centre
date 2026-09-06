@@ -1,0 +1,39 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo/branch. Render reads this file.
+services:
+  - type: web
+    name: hcg-knowledge-centre
+    runtime: python
+    plan: starter               # a persistent disk needs a paid instance; "free" has no disk and loses data on every deploy
+    region: singapore           # pick the region closest to your users
+    branch: dev-akash
+    buildCommand: pip install -r requirements.txt
+    # One worker keeps SQLite writes serialised; threads handle concurrent readers.
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 app:app
+    healthCheckPath: /api/v1/releases/active
+    autoDeploy: true
+    disk:
+      name: lms-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: LMS_DATABASE
+        value: /var/data/users.db
+      - key: LMS_UPLOAD_FOLDER
+        value: /var/data/uploads
+      - key: LMS_SECRET_KEY
+        generateValue: true      # Render generates a random value once and keeps it
+      - key: LMS_DEBUG
+        value: "0"
+      - key: LMS_PROXY_FIX
+        value: "1"
+      - key: LMS_SECURE_COOKIES
+        value: "1"
+      - key: LMS_CSRF
+        value: "1"
+      - key: LMS_SEED_DEMO
+        value: "1"               # creates admin/mod/student and demo courses on first boot; set "0" once you have real data
+      - key: LMS_ADMIN_PASSWORD
+        sync: false              # set in the dashboard: the password the seeded "admin" account gets instead of "admin"
