@@ -15,11 +15,11 @@
       <span class="font-semibold tracking-tight hidden sm:inline">HCG Knowledge Centre</span>
     </a>
     {% if signed_in %}
-    <nav class="hidden lg:flex items-center gap-1 ml-4" aria-label="Primary">
+    <nav class="hidden lg:flex items-center gap-1 ml-4" aria-label="Primary" data-tour="nav">
       {{ render_nav(eff_role, unread, "bar") }}
       {% if eff_role in ("admin", "moderator") %}
       <div class="relative">
-        <button type="button" class="nav-link" data-menu aria-controls="manage-menu" aria-haspopup="menu" aria-expanded="false">{{ icon("bars") }}<span>Manage</span>{{ icon("chevron-down", "w-3.5 h-3.5") }}</button>
+        <button type="button" class="nav-link" data-menu aria-controls="manage-menu" aria-haspopup="menu" aria-expanded="false" data-tour="manage">{{ icon("bars") }}<span>Manage</span>{{ icon("chevron-down", "w-3.5 h-3.5") }}</button>
         <div id="manage-menu" class="popover popover-left" role="menu" aria-label="Manage" hidden>{{ render_nav(eff_role, unread, "manage") }}</div>
       </div>
       {% endif %}
@@ -28,21 +28,21 @@
     <div class="ml-auto flex items-center gap-1 sm:gap-2">
       {% if signed_in and real_role in ("admin", "moderator") and not impersonating %}
       <form method="post" action="{{ url_for('switch_role') }}" class="hidden sm:block"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="chip" title="Switch between the student view and your {{ real_role }} workspace">{{ icon("switch", "w-3.5 h-3.5") }}<span>{% if eff_role == 'basic user' %}Student view{% else %}{{ real_role|title }} view{% endif %}</span></button>
+        <button type="submit" class="chip" title="Switch between the student view and your {{ real_role }} workspace" data-tour="switch-role">{{ icon("switch", "w-3.5 h-3.5") }}<span>{% if eff_role == 'basic user' %}Student view{% else %}{{ real_role|title }} view{% endif %}</span></button>
       </form>
       {% endif %}
       {% if signed_in and active_release %}
-      <button type="button" class="chip relative" data-dialog-open="release-sheet" data-release-version="{{ active_release.version_number }}" aria-label="What's new in version {{ active_release.version_number }}">
+      <button type="button" class="chip relative" data-dialog-open="release-sheet" data-release-version="{{ active_release.version_number }}" aria-label="What's new in version {{ active_release.version_number }}" data-tour="release">
         <span>v{{ active_release.version_number }}</span>
         <span class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-accent" data-release-dot hidden></span>
       </button>
       {% endif %}
-      <button type="button" class="btn btn-icon btn-ghost" data-theme-toggle aria-pressed="false" aria-label="Switch theme">
+      <button type="button" class="btn btn-icon btn-ghost" data-theme-toggle aria-pressed="false" aria-label="Switch theme" data-tour="theme">
         <span class="dark:hidden">{{ icon("moon", "w-5 h-5") }}</span><span class="hidden dark:inline">{{ icon("sun", "w-5 h-5") }}</span>
       </button>
       {% if signed_in %}
       <div class="relative">
-        <button type="button" id="notification-btn" class="btn btn-icon btn-ghost relative" data-menu aria-controls="notification-menu" aria-haspopup="true" aria-expanded="false" aria-label="Notifications{% if unread %}, {{ unread }} unread{% endif %}">
+        <button type="button" id="notification-btn" class="btn btn-icon btn-ghost relative" data-menu aria-controls="notification-menu" aria-haspopup="true" aria-expanded="false" aria-label="Notifications{% if unread %}, {{ unread }} unread{% endif %}" data-tour="notifications">
           {{ icon("bell", "w-5 h-5") }}
           <span id="notification-badge" class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-danger"{% if not unread %} hidden{% endif %}></span>
         </button>
@@ -57,7 +57,7 @@
         </div>
       </div>
       <div class="relative">
-        <button type="button" id="profile-btn" class="rounded-full" data-menu aria-controls="profile-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu">
+        <button type="button" id="profile-btn" class="rounded-full" data-menu aria-controls="profile-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu" data-tour="profile">
           {{ avatar(session.get('user'), src=(url_for('uploaded_file', filename=session.get('profile_picture')) if session.get('profile_picture') else None)) }}
         </button>
         <div id="profile-menu" class="popover popover-right w-64" role="menu" aria-label="Account" hidden>

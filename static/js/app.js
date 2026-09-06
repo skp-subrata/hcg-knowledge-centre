@@ -384,6 +384,113 @@
     if (sheet) sheet.addEventListener('hkc:open', () => { try { localStorage.setItem('hkc-seen-version', version); } catch (e) { /* ignore */ } if (dot) dot.hidden = true; });
   }
 
+  // ------------------------------------------------------------------ release notes: auto-show once per new version
+  // wireRelease() above only tracks the badge dot; this opens the sheet automatically the first
+  // time a signed-in user is on a page after a release they have not seen, then (once it is
+  // dismissed, or immediately if there is nothing new) hands off to the onboarding tour below.
+  function autoShowRelease(onSettled) {
+    const badge = $('[data-release-version]');
+    const sheet = document.getElementById('release-sheet');
+    if (!badge || !sheet) { onSettled(); return; }
+    const version = badge.dataset.releaseVersion;
+    let seen;
+    try { seen = localStorage.getItem('hkc-seen-version'); } catch (e) { seen = version; }
+    if (seen === version) { onSettled(); return; }
+    setTimeout(() => {
+      sheet.addEventListener('hkc:close', onSettled, { once: true });
+      wireDialog(sheet);
+      HKC.dialog.open(sheet);
+    }, 500);
+  }
+
+  // ------------------------------------------------------------------ onboarding tour (first visit only)
+  const TOUR_SEEN_KEY = 'hkc-tour-seen-v1';
+  const TOUR_STEPS = [
+    { key: 'nav', title: 'Get around', body: 'Dashboard, courses, community and rewards are one click away here.' },
+    { key: 'manage', title: 'Staff tools', body: 'Admin workspace, masters, groups, reports and API docs live under Manage.' },
+    { key: 'switch-role', title: 'See it as a learner', body: 'Switch to the student view any time to check what your team sees.' },
+    { key: 'release', title: "What's new", body: 'This badge always holds the latest release notes.' },
+    { key: 'theme', title: 'Light or dark', body: 'Switch the whole app\'s theme any time, it remembers your choice.' },
+    { key: 'notifications', title: 'Stay in the loop', body: 'New assignments, approvals and rewards show up here.' },
+    { key: 'profile', title: 'Your account', body: 'Edit your profile, switch roles or sign out from here.' },
+  ];
+
+  function buildTour() {
+    const isVisible = (el) => !!el && !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length) && el.getAttribute('aria-hidden') !== 'true';
+    return TOUR_STEPS
+      .map((step) => ({ ...step, el: document.querySelector(`[data-tour="${step.key}"]`) }))
+      .filter((step) => isVisible(step.el));
+  }
+
+  function runTour(steps) {
+    let index = 0;
+    let highlighted = null;
+    const tip = document.createElement('div');
+    tip.className = 'tour-tip';
+    tip.setAttribute('role', 'dialog');
+    tip.setAttribute('aria-live', 'polite');
+    document.body.appendChild(tip);
+    const finish = () => {
+      try { localStorage.setItem(TOUR_SEEN_KEY, '1'); } catch (e) { /* ignore */ }
+      if (highlighted) highlighted.classList.remove('tour-target-highlight');
+      tip.classList.remove('is-open');
+      tip.classList.add('is-closing');
+      afterAnimation(tip, () => tip.remove(), 200);
+      document.removeEventListener('keydown', onKey);
+    };
+    const place = () => {
+      const step = steps[index];
+      if (highlighted) highlighted.classList.remove('tour-target-highlight');
+      highlighted = step.el;
+      highlighted.classList.add('tour-target-highlight');
+      highlighted.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      const last = index === steps.length - 1;
+      tip.innerHTML = `
+        <h3>${HKC.escapeHtml(step.title)}</h3>
+        <p>${HKC.escapeHtml(step.body)}</p>
+        <div class="tour-tip-footer">
+          <span class="caption">${index + 1} of ${steps.length}</span>
+          <div class="tour-tip-actions">
+            <button type="button" class="btn btn-ghost btn-sm" data-tour-skip>Skip</button>
+            <button type="button" class="btn btn-primary btn-sm" data-tour-next>${last ? 'Got it' : 'Next'}</button>
+          </div>
+        </div>`;
+      const rect = highlighted.getBoundingClientRect();
+      const tipWidth = 272; // matches .tour-tip's width (17rem @ 16px root)
+      let left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - tipWidth - 8));
+      let top = rect.bottom + 10;
+      if (top + 140 > window.innerHeight) top = Math.max(8, rect.top - 150);
+      tip.style.left = `${left}px`;
+      tip.style.top = `${top}px`;
+      requestAnimationFrame(() => tip.classList.add('is-open'));
+      tip.querySelector('[data-tour-next]').focus();
+    };
+    const advance = () => { if (index < steps.length - 1) { index += 1; place(); } else { finish(); } };
+    const onKey = (event) => {
+      if (event.key === 'Escape') finish();
+      else if (event.key === 'ArrowRight' || event.key === 'Enter') advance();
+      else if (event.key === 'ArrowLeft' && index > 0) { index -= 1; place(); }
+    };
+    tip.addEventListener('click', (event) => {
+      if (event.target.closest('[data-tour-skip]')) finish();
+      else if (event.target.closest('[data-tour-next]')) advance();
+    });
+    document.addEventListener('keydown', onKey);
+    place();
+  }
+
+  function prefersReducedMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+  }
+
+  function maybeStartTour() {
+    let seen;
+    try { seen = localStorage.getItem(TOUR_SEEN_KEY); } catch (e) { seen = '1'; }
+    if (seen) return;
+    const steps = buildTour();
+    if (steps.length) runTour(steps);
+  }
+
   // ------------------------------------------------------------------ boot
   function init() {
     HKC.theme.apply(HKC.theme.get(), false);
@@ -412,6 +519,7 @@
     }
     wireNotifications();
     wireRelease();
+    autoShowRelease(maybeStartTour);
     document.dispatchEvent(new CustomEvent('hkc:ready'));
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

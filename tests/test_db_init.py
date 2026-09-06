@@ -1,4 +1,5 @@
 """Schema creation, init scripts and seeding behave on fresh and existing databases."""
+import json
 import sqlite3
 
 import pytest
@@ -95,6 +96,15 @@ def test_exactly_one_active_release_is_seeded(db):
 	assert db("SELECT COUNT(*) AS n FROM app_releases")[0]["n"] >= 2
 
 
+def test_active_release_is_1_7_0_and_earlier_releases_are_retired(db):
+	active = db("SELECT version_number, features, improvements, bug_fixes FROM app_releases WHERE is_active = 1")
+	assert len(active) == 1 and active[0]["version_number"] == "1.7.0"
+	for column in ("features", "improvements", "bug_fixes"):
+		assert json.loads(active[0][column]), f"{column} must be non-empty JSON so the release sheet has something to show"
+	retired = {r["version_number"] for r in db("SELECT version_number FROM app_releases WHERE is_active = 0")}
+	assert {"1.6.1", "1.5.0", "1.4.0", "1.3.2"} <= retired
+
+
 def test_statements_keeps_a_trailing_statement_without_a_semicolon():
 	from db_init import _statements
 
@@ -157,5 +167,30 @@ def test_demo_seeding_skips_rehashing_once_already_seeded(monkeypatch, tmp_path)
 		app_module.seed_demo_data(connection)
 		assessment = connection.execute("SELECT id FROM assessments WHERE course_id = ?", (new_course_id,)).fetchone()
 		assert assessment is not None, "seed_course_questions must still back-fill new courses on every restart"
+	finally:
+		connection.close()
+
+
+def test_extended_catalog_seeds_courses_posts_and_named_users(db):
+	assert db("SELECT COUNT(*) AS n FROM courses")[0]["n"] >= 7
+	named = db("SELECT COUNT(*) AS n FROM users WHERE username = 'priya.nair'")[0]["n"]
+	assert named == 1
+	statuses = {r["status"] for r in db("SELECT DISTINCT status FROM posts")}
+	assert {"PUBLISHED", "PENDING_APPROVAL", "REJECTED"} <= statuses
+	assert db("SELECT COUNT(*) AS n FROM post_ratings")[0]["n"] > 0
+	assert db("SELECT COUNT(*) AS n FROM post_comments")[0]["n"] > 0
+	rejected = db("SELECT id FROM posts WHERE status = 'REJECTED' LIMIT 1")[0]["id"]
+	assert db("SELECT COUNT(*) AS n FROM post_approval_history WHERE post_id = ? AND action = 'REJECT'", (rejected,))[0]["n"] == 1
+
+
+def test_extended_catalog_is_idempotent_across_restarts(db_path, db):
+	connection = sqlite3.connect(db_path)
+	connection.row_factory = sqlite3.Row
+	try:
+		before = {t: db(f"SELECT COUNT(*) AS n FROM {t}")[0]["n"] for t in ("courses", "posts", "post_ratings", "post_comments", "course_assignments", "users")}
+		with connection:
+			app_module.seed_demo_data(connection)
+		after = {t: db(f"SELECT COUNT(*) AS n FROM {t}")[0]["n"] for t in before}
+		assert before == after
 	finally:
 		connection.close()

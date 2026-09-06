@@ -530,6 +530,26 @@ def seed_demo_data(connection):
 				"INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 				(full_name, username, generate_password_hash("learn123"), role, employee_id, "Operations", "Hyderabad", 1),
 			)
+
+		# A handful of realistically-named users (as opposed to the generic sample accounts
+		# above) so the directory, course rosters and community feed feel like a real org.
+		named_users = (
+			("Priya Nair", "priya.nair", "basic user", "Engineering", "Bengaluru"),
+			("Arjun Mehta", "arjun.mehta", "basic user", "Engineering", "Hyderabad"),
+			("Sara Fernandes", "sara.fernandes", "basic user", "Sales", "Mumbai"),
+			("Vikram Rao", "vikram.rao", "moderator", "Human Resources", "Hyderabad"),
+			("Ananya Iyer", "ananya.iyer", "basic user", "Finance", "Bengaluru"),
+			("Karan Malhotra", "karan.malhotra", "basic user", "Sales", "Remote"),
+			("Divya Krishnan", "divya.krishnan", "basic user", "Engineering", "Bengaluru"),
+			("Rahul Bhatt", "rahul.bhatt", "basic user", "Operations", "Hyderabad"),
+			("Neha Kapoor", "neha.kapoor", "basic user", "Human Resources", "Mumbai"),
+			("Farhan Sheikh", "farhan.sheikh", "basic user", "Finance", "Remote"),
+		)
+		for idx, (full_name, username, role, department, location) in enumerate(named_users, start=201):
+			connection.execute(
+				"INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				(full_name, username, generate_password_hash("learn123"), role, f"EMP-{idx:04d}", department, location, 1),
+			)
 	admin = connection.execute("SELECT id FROM users WHERE username = 'subratakumar.pradhan'").fetchone()[0]
 	student = connection.execute("SELECT id FROM users WHERE username = 'maya.student'").fetchone()[0]
 	course_row = connection.execute("SELECT id FROM courses WHERE name = 'Python Foundations'").fetchone()
@@ -556,6 +576,9 @@ def seed_demo_data(connection):
 	# notifications has no unique key, so INSERT OR IGNORE would add a duplicate on every start-up.
 	if not connection.execute("SELECT 1 FROM notifications WHERE user_id = ? AND message = 'Python Foundations is ready for you.'", (student,)).fetchone():
 		connection.execute("INSERT INTO notifications (user_id, message, type) VALUES (?, 'Python Foundations is ready for you.', 'assignment')", (student,))
+	# Create the extended catalogue's courses first, so seed_course_questions (next) backfills
+	# their assessments in this same run instead of only catching up on the following restart.
+	seed_extended_catalog(connection, admin, student)
 	seed_course_questions(connection, admin)
 
 
@@ -606,6 +629,85 @@ def seed_course_questions(connection, creator_id):
 			if not question:
 				question = (connection.execute("INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (bank[0], text, option_a, option_b, option_c, option_d, correct, creator_id)).lastrowid,)
 			connection.execute("INSERT OR IGNORE INTO assessment_questions (assessment_id, question_id) VALUES (?, ?)", (assessment[0], question[0]))
+
+
+def seed_extended_catalog(connection, admin_id, student_id):
+	"""Backfill a richer demo catalogue: more courses, spread-out assignments, and a community
+	feed with posts in every status. Runs on every start-up (like seed_course_questions above),
+	each piece guarded by its own existence check, so it is safe to run again after new rows are
+	added here later and safe on a database that already has some or all of them."""
+	courses = (
+		("Cloud Fundamentals", "An introduction to cloud computing: compute, storage and networking basics.", "Technology", "URL", "https://cloud.google.com/docs/overview"),
+		("Effective Communication at Work", "Write clearer messages and run meetings people actually want to attend.", "Communication", "PDF", "https://www.mindtools.com/pages/article/effective-communication.htm"),
+		("People Leadership Basics", "The first habits of a new manager: feedback, delegation and one-on-ones.", "Leadership", "Video", "https://www.youtube.com/watch?v=dRZgApRcOgg"),
+		("Data Analytics with Spreadsheets", "Pivot tables, lookups and charts for everyday reporting.", "Data Analytics", "PPT", "https://support.microsoft.com/en-us/office/pivottable-overview-fdf9edf2-c6a6-4a5c-9426-1cb46921d6a5"),
+		("Workplace Security Awareness", "Phishing, password hygiene and reporting an incident.", "Security", "PDF", "https://www.cisa.gov/topics/cybersecurity-best-practices"),
+	)
+	course_ids = {}
+	for name, description, category, content_type, content_url in courses:
+		row = connection.execute("SELECT id FROM courses WHERE name = ?", (name,)).fetchone()
+		if row:
+			course_ids[name] = row["id"]
+		else:
+			course_ids[name] = connection.execute(
+				"INSERT INTO courses (name, description, category, content_type, content_url, created_by, status) VALUES (?, ?, ?, ?, ?, ?, 'published')",
+				(name, description, category, content_type, content_url, admin_id),
+			).lastrowid
+
+	# Spread assignments across the named and generic sample users with a mix of progress states.
+	roster = [row["id"] for row in connection.execute(
+		"SELECT id FROM users WHERE username IN ('priya.nair','arjun.mehta','sara.fernandes','ananya.iyer','karan.malhotra','divya.krishnan','rahul.bhatt','neha.kapoor','farhan.sheikh','sampleuser001','sampleuser002','sampleuser003','sampleuser004','sampleuser005')"
+	).fetchall()]
+	statuses = ("not_started", "in_progress", "completed", "in_progress", "not_started")
+	for i, cid in enumerate(course_ids.values()):
+		for j, uid in enumerate(roster):
+			status = statuses[(i + j) % len(statuses)]
+			completed_at = "CURRENT_TIMESTAMP" if status == "completed" else "NULL"
+			connection.execute(
+				f"INSERT OR IGNORE INTO course_assignments (course_id, student_id, status, completed_at) VALUES (?, ?, ?, {completed_at})",
+				(cid, uid, status),
+			)
+
+	# A community feed with posts in every status an admin/moderator would actually see.
+	posts = (
+		("Getting the most out of the Knowledge Centre", "<p>A quick tour of dashboards, courses and rewards to help you get oriented in your first week.</p>", "Text/Article", "General", "onboarding", "aarav.moderator", "PUBLISHED"),
+		("5 tips for passing your first assessment", "<p>Read the question twice, eliminate the obviously wrong options first, and review your flagged answers before submitting.</p>", "Text/Article", "Learning", "assessments", "maya.student", "PUBLISHED"),
+		("Notes from Cloud Fundamentals", "<p>My three takeaways from the course: think in managed services, design for failure, and always tag your resources.</p>", "Text/Article", "Technology", "cloud", "priya.nair", "PUBLISHED"),
+		("My experience switching careers into data", "<p>Six months ago I had never opened a spreadsheet for analysis. Here is what actually helped.</p>", "Text/Article", "Career", "data", "rohan.student", "PENDING_APPROVAL"),
+		("Why leadership skills matter early", "<p>You do not need a title to start practising the habits that make a good manager.</p>", "Text/Article", "Leadership", "leadership", "arjun.mehta", "PENDING_APPROVAL"),
+		("Thoughts on remote work culture", "<p>An unfinished draft about staying connected with a distributed team.</p>", "Text/Article", "Workplace", "remote-work", "karan.malhotra", "REJECTED"),
+	)
+	for title, description, content_type, category, topic_tag, author_username, status in posts:
+		if connection.execute("SELECT 1 FROM posts WHERE title = ?", (title,)).fetchone():
+			continue
+		author = connection.execute("SELECT id FROM users WHERE username = ?", (author_username,)).fetchone()
+		if not author:
+			continue
+		author_id = author["id"]
+		published_by = admin_id if status == "PUBLISHED" else None
+		published_at = "CURRENT_TIMESTAMP" if status == "PUBLISHED" else None
+		post_id = connection.execute(
+			"INSERT INTO posts (title, description, content_type, category, topic_tag, created_by, status, published_by, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			(title, description, content_type, category, topic_tag, author_id, status, published_by, published_at),
+		).lastrowid
+		if status == "REJECTED":
+			connection.execute(
+				"INSERT INTO post_approval_history (post_id, version_number, submitted_by, reviewed_by, reviewed_at, action, comments, previous_status, new_status) VALUES (?, 1, ?, ?, CURRENT_TIMESTAMP, 'REJECT', ?, 'PENDING_APPROVAL', 'REJECTED')",
+				(post_id, author_id, admin_id, "Needs a clear conclusion and at least one concrete example before this can be published."),
+			)
+		if status == "PUBLISHED":
+			for rater_username, rating in (("maya.student", 5), ("priya.nair", 4), ("sara.fernandes", 4)):
+				if rater_username == author_username:
+					continue
+				rater = connection.execute("SELECT id FROM users WHERE username = ?", (rater_username,)).fetchone()
+				if rater:
+					connection.execute("INSERT OR IGNORE INTO post_ratings (post_id, user_id, rating) VALUES (?, ?, ?)", (post_id, rater["id"], rating))
+			for commenter_username, comment_text in (("student", "Thanks, this was useful!"), ("mod", "Great write-up, sharing this with the team.")):
+				if commenter_username == author_username:
+					continue
+				commenter = connection.execute("SELECT id FROM users WHERE username = ?", (commenter_username,)).fetchone()
+				if commenter and not connection.execute("SELECT 1 FROM post_comments WHERE post_id = ? AND user_id = ?", (post_id, commenter["id"])).fetchone():
+					connection.execute("INSERT INTO post_comments (post_id, user_id, comment_text) VALUES (?, ?, ?)", (post_id, commenter["id"], comment_text))
 
 
 def staff_required(view):

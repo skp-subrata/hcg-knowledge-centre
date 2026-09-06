@@ -365,3 +365,15 @@ html[data-contrast="more"] .badge { border: 1px solid currentColor; }
 
 /* Menu items rendered as form buttons (POST-only logout / role switch) */
 button.menu-item { width: 100%; text-align: left; background: transparent; border: 0; font: inherit; cursor: pointer; }
+
+/* Onboarding tour: a small, clean tooltip that walks a first-time visitor past a few chrome
+   controls. One reused bubble, repositioned per step; a soft ring highlights the current target. */
+.tour-tip { position: fixed; z-index: 80; width: 17rem; max-width: calc(100vw - 2rem); padding: .875rem 1rem; border-radius: var(--r-md); background: rgb(var(--c-surface)); box-shadow: var(--shadow-pop); border: 1px solid var(--hairline); opacity: 0; transform: translateY(-4px) scale(.98); transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); pointer-events: none; }
+.tour-tip.is-open { opacity: 1; transform: none; pointer-events: auto; }
+.tour-tip.is-closing { transition-duration: 140ms; }
+.tour-tip h3 { font-size: .875rem; font-weight: 600; margin: 0 0 .25rem; }
+.tour-tip p { font-size: .8125rem; line-height: 1.4; color: rgb(var(--c-fg-2)); margin: 0; }
+.tour-tip-footer { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .75rem; }
+.tour-tip-actions { display: flex; align-items: center; gap: .375rem; }
+.tour-target-highlight { position: relative; z-index: 81; border-radius: var(--r-sm); outline: 2px solid rgb(var(--c-accent)); outline-offset: 3px; transition: outline-color var(--dur-fast) var(--ease-out); }
+@media (prefers-reduced-motion: reduce) { .tour-tip { transition: opacity 150ms linear; transform: none; } }
