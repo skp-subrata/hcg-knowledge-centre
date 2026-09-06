@@ -276,8 +276,9 @@ body[data-modal-open] #app { transform: scale(.985); }
 .avatar { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 2.25rem; height: 2.25rem; border-radius: 999px; background: rgb(var(--c-surface-2)); color: rgb(var(--c-fg)); font-size: .8125rem; font-weight: 600; overflow: hidden; background-size: cover; background-position: center; }
 .avatar-sm { width: 1.75rem; height: 1.75rem; font-size: .6875rem; }
 .avatar-lg { width: 3.5rem; height: 3.5rem; font-size: 1.125rem; }
-.stepper { display: flex; gap: .5rem; padding: 0; margin: 0; list-style: none; counter-reset: step; }
-.stepper li { display: flex; align-items: center; gap: .5rem; flex: 1; font-size: .8125rem; color: rgb(var(--c-fg-2)); }
+.stepper { display: flex; gap: .5rem; padding: 0; margin: 0; list-style: none; counter-reset: step; overflow-x: auto; scrollbar-width: none; }
+.stepper li { display: flex; align-items: center; gap: .5rem; flex: none; white-space: nowrap; font-size: .8125rem; color: rgb(var(--c-fg-2)); }
+@media (min-width: 640px) { .stepper li { flex: 1; } }
 .stepper li::before { counter-increment: step; content: counter(step); display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: 999px; border: 1px solid var(--hairline); font-size: .6875rem; font-weight: 600; }
 .stepper li[aria-current="step"] { color: rgb(var(--c-fg)); font-weight: 500; }
 .stepper li[aria-current="step"]::before { background: rgb(var(--c-accent)); border-color: rgb(var(--c-accent)); color: rgb(var(--c-on-accent)); }
