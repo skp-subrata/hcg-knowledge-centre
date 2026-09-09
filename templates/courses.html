@@ -36,10 +36,15 @@
          data-status="{{ item.status or 'published' }}">
         
         <div class="flex justify-between items-start mb-4">
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-1.5">
                 <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
                     {{ item.content_type }}
                 </span>
+                {% if item.is_compulsory %}
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                    COMPULSORY
+                </span>
+                {% endif %}
                 <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider {% if item.status == 'draft' %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300{% else %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300{% endif %}">
                     {{ item.status or 'published' }}
                 </span>
@@ -75,7 +80,7 @@
         
         <div class="flex gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/60">
             {% if item.created_by == user_id or role == 'admin' %}
-            <button onclick="openEditPanel({{ item.id }}, '{{ item.name|escape }}', '{{ (item.description or '')|escape }}', '{{ (item.category or '')|escape }}', '{{ item.status or 'published' }}', '{{ item.difficulty or 'beginner' }}', {{ item.duration_minutes or 0 }}, '{{ (item.tags or '')|escape }}', '{{ item.content_type }}', '{{ (item.content_url or '')|escape }}')" class="flex-1 btn-secondary py-2 text-sm font-semibold flex items-center justify-center gap-2">
+            <button onclick="openEditPanel({{ item.id }}, '{{ item.name|escape }}', '{{ (item.description or '')|escape }}', '{{ (item.category or '')|escape }}', '{{ item.status or 'published' }}', '{{ item.difficulty or 'beginner' }}', {{ item.duration_minutes or 0 }}, '{{ (item.tags or '')|escape }}', '{{ item.content_type }}', '{{ (item.content_url or '')|escape }}', {{ 1 if item.is_compulsory else 0 }})" class="flex-1 btn-secondary py-2 text-sm font-semibold flex items-center justify-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                 Edit
             </button>
@@ -264,6 +269,15 @@
                                 <option value="inactive">Inactive</option>
                             </select>
                         </div>
+                        {% if role == 'admin' %}
+                        <div class="p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 flex items-center gap-3">
+                            <input type="checkbox" name="is_compulsory" id="wiz-compulsory" value="1" class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500">
+                            <div>
+                                <label for="wiz-compulsory" class="font-bold text-sm text-slate-900 dark:text-slate-50 cursor-pointer">This is a Compulsory Course</label>
+                                <p class="text-xs text-slate-500">Compulsory courses are automatically assigned to all active platform users.</p>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -398,6 +412,16 @@
                 <label class="form-label">Tags</label>
                 <input name="tags" id="edit-tags" class="form-input">
             </div>
+            
+            {% if role == 'admin' %}
+            <div class="p-3 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl flex items-center gap-3">
+                <input type="checkbox" name="is_compulsory" id="edit-compulsory" value="1" class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500">
+                <div>
+                    <label for="edit-compulsory" class="font-bold text-sm text-slate-900 dark:text-slate-50 cursor-pointer">Compulsory Course</label>
+                    <p class="text-xs text-slate-500">Assigns course to all active platform users automatically.</p>
+                </div>
+            </div>
+            {% endif %}
             
             <div class="border-t border-slate-100 dark:border-slate-800 pt-4 mt-4">
                 <h4 class="font-bold text-sm text-slate-900 dark:text-slate-50 mb-3">Course Content</h4>
@@ -613,7 +637,7 @@ function populateReview() {
 }
 
 // Edit Panel Logic
-function openEditPanel(id, name, desc, cat, status, diff, dur, tags, contentType, contentUrl) {
+function openEditPanel(id, name, desc, cat, status, diff, dur, tags, contentType, contentUrl, isCompulsory) {
     document.getElementById('edit-form').action = `/courses/${id}/update`;
     document.getElementById('edit-name').value = name;
     document.getElementById('edit-desc').value = desc;
@@ -622,6 +646,10 @@ function openEditPanel(id, name, desc, cat, status, diff, dur, tags, contentType
     document.getElementById('edit-diff').value = diff;
     document.getElementById('edit-dur').value = dur;
     document.getElementById('edit-tags').value = tags;
+    const compEl = document.getElementById('edit-compulsory');
+    if (compEl) {
+        compEl.checked = !!isCompulsory;
+    }
     
     // Set content source type based on contentUrl path
     const isLocalFile = contentUrl && contentUrl.startsWith('/uploads/');

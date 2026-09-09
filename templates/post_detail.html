@@ -15,9 +15,13 @@
         <!-- Author Header -->
         <div class="flex items-center justify-between mb-6 pb-6 border-b border-slate-100 dark:border-slate-800/50">
             <div class="flex items-center gap-3">
-                <div class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white text-lg shadow" style="background-color: {% if post.role == 'admin' %}#ef4444{% elif post.role == 'moderator' %}#6366f1{% else %}#10b981{% endif %}">
+                {% if post.creator_profile_picture %}
+                <div class="w-12 h-12 rounded-full bg-cover bg-center border border-slate-200 dark:border-slate-700 shrink-0 shadow" style="background-image: url('/uploads/{{ post.creator_profile_picture }}')"></div>
+                {% else %}
+                <div class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white text-lg shadow shrink-0" style="background-color: {% if post.role == 'admin' %}#ef4444{% elif post.role == 'moderator' %}#6366f1{% else %}#10b981{% endif %}">
                     {{ post.creator_name[:2]|upper }}
                 </div>
+                {% endif %}
                 <div>
                     <div class="flex items-center gap-1.5">
                         <span class="font-bold text-slate-900 dark:text-slate-50 text-base">{{ post.creator_name }}</span>
@@ -191,9 +195,13 @@
         <div class="space-y-4">
             {% for comment in comments %}
             <div class="p-4 bg-white/60 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800/80 rounded-2xl flex items-start gap-3">
+                {% if comment.profile_picture %}
+                <div class="w-8 h-8 rounded-full bg-cover bg-center border border-slate-200 dark:border-slate-700 shrink-0" style="background-image: url('/uploads/{{ comment.profile_picture }}')"></div>
+                {% else %}
                 <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0" style="background-color: {% if comment.role == 'admin' %}#ef4444{% elif comment.role == 'moderator' %}#6366f1{% else %}#10b981{% endif %}">
                     {{ comment.full_name[:2]|upper }}
                 </div>
+                {% endif %}
                 <div class="flex-grow">
                     <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-1.5 flex-wrap">

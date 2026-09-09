@@ -10,7 +10,7 @@ from urllib.parse import parse_qs
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from uuid import uuid4
-from flask import Flask, flash, redirect, render_template, request, send_file, send_from_directory, session, url_for, jsonify
+from flask import Flask, flash, redirect, render_template, request, send_file, send_from_directory, session, url_for, jsonify, abort
 from openpyxl import Workbook, load_workbook
 from storage import save_file
 
@@ -270,6 +270,21 @@ def init_db():
 			if column not in user_columns:
 				connection.execute(column_sql)
 
+		group_columns = [col[1] for col in connection.execute("PRAGMA table_info(groups)").fetchall()]
+		for column, column_sql in (
+			("system_generated", "ALTER TABLE groups ADD COLUMN system_generated INTEGER DEFAULT 0"),
+			("source_master_type", "ALTER TABLE groups ADD COLUMN source_master_type TEXT DEFAULT ''"),
+			("source_master_id", "ALTER TABLE groups ADD COLUMN source_master_id INTEGER DEFAULT NULL"),
+		):
+			if column not in group_columns:
+				connection.execute(column_sql)
+
+		connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_groups_system_source ON groups(group_type, source_master_type, source_master_id) WHERE system_generated = 1")
+
+		course_columns = [col[1] for col in connection.execute("PRAGMA table_info(courses)").fetchall()]
+		if "is_compulsory" not in course_columns:
+			connection.execute("ALTER TABLE courses ADD COLUMN is_compulsory INTEGER DEFAULT 0")
+
 		# â”€â”€ Migrate courses table if old schema (missing PPT or extra columns) â”€â”€
 		table_sql = connection.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'courses'").fetchone()[0]
 		if "'PPT'" not in table_sql:
@@ -466,41 +481,41 @@ def init_db():
 
 def seed_demo_data(connection):
 	"""Insert a small, repeatable dataset for local exploration."""
+	# Migrate users table for profile fields
+	table_info = connection.execute("PRAGMA table_info(users)").fetchall()
+	columns = [col['name'] for col in table_info]
+	if 'email' not in columns:
+		connection.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''")
+		connection.execute("ALTER TABLE users ADD COLUMN phone_number TEXT DEFAULT ''")
+		connection.execute("ALTER TABLE users ADD COLUMN profile_picture TEXT DEFAULT ''")
+
+	# Migrate courses table for new fields
+	courses_info = connection.execute("PRAGMA table_info(courses)").fetchall()
+	course_cols = [col['name'] for col in courses_info]
+	if 'tags' not in course_cols:
+		connection.execute("ALTER TABLE courses ADD COLUMN tags TEXT DEFAULT ''")
+	if 'duration_minutes' not in course_cols:
+		connection.execute("ALTER TABLE courses ADD COLUMN duration_minutes INTEGER DEFAULT 0")
+	if 'difficulty' not in course_cols:
+		connection.execute("ALTER TABLE courses ADD COLUMN difficulty TEXT DEFAULT 'beginner'")
+	if 'thumbnail_color' not in course_cols:
+		connection.execute("ALTER TABLE courses ADD COLUMN thumbnail_color TEXT DEFAULT '#6366f1'")
+
 	for name, username, role in (("Aarav Moderator", "aarav.moderator", "moderator"), ("Maya Student", "maya.student", "basic user"), ("Rohan Student", "rohan.student", "basic user")):
-		
-		# Migrate users table for profile fields
-		table_info = connection.execute("PRAGMA table_info(users)").fetchall()
-		columns = [col['name'] for col in table_info]
-		if 'email' not in columns:
-			connection.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''")
-			connection.execute("ALTER TABLE users ADD COLUMN phone_number TEXT DEFAULT ''")
-			connection.execute("ALTER TABLE users ADD COLUMN profile_picture TEXT DEFAULT ''")
-
-		
-		# Migrate courses table for new fields
-		courses_info = connection.execute("PRAGMA table_info(courses)").fetchall()
-		course_cols = [col['name'] for col in courses_info]
-		if 'tags' not in course_cols:
-			connection.execute("ALTER TABLE courses ADD COLUMN tags TEXT DEFAULT ''")
-		if 'duration_minutes' not in course_cols:
-			connection.execute("ALTER TABLE courses ADD COLUMN duration_minutes INTEGER DEFAULT 0")
-		if 'difficulty' not in course_cols:
-			connection.execute("ALTER TABLE courses ADD COLUMN difficulty TEXT DEFAULT 'beginner'")
-		if 'thumbnail_color' not in course_cols:
-			connection.execute("ALTER TABLE courses ADD COLUMN thumbnail_color TEXT DEFAULT '#6366f1'")
-
 		connection.execute("INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id) VALUES (?, ?, ?, ?, ?)", (name, username, generate_password_hash("learn123"), role, f"EMP-{len(columns) + 1:04d}" if role == "moderator" else f"EMP-{abs(hash(username)) % 9000 + 1000:04d}"))
 
-	# Create 100 additional sample users with mandatory employee IDs.
-	for idx in range(1, 101):
-		full_name = f"Sample User {idx}"
-		username = f"sampleuser{idx:03d}"
-		employee_id = f"EMP-{idx:04d}"
-		role = "basic user" if idx % 10 != 0 else "moderator"
-		connection.execute(
-			"INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			(full_name, username, generate_password_hash("learn123"), role, employee_id, "Operations", "Hyderabad", 1),
-		)
+	# Create 100 additional sample users only if not already seeded
+	if not connection.execute("SELECT 1 FROM users WHERE username = 'sampleuser001'").fetchone():
+		sample_pw = generate_password_hash("learn123")
+		for idx in range(1, 101):
+			full_name = f"Sample User {idx}"
+			username = f"sampleuser{idx:03d}"
+			employee_id = f"EMP-{idx:04d}"
+			role = "basic user" if idx % 10 != 0 else "moderator"
+			connection.execute(
+				"INSERT OR IGNORE INTO users (full_name, username, password_hash, role, employee_id, department, location, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				(full_name, username, sample_pw, role, employee_id, "Operations", "Hyderabad", 1),
+			)
 	admin = connection.execute("SELECT id FROM users WHERE username = 'subratakumar.pradhan'").fetchone()[0]
 	student = connection.execute("SELECT id FROM users WHERE username = 'maya.student'").fetchone()[0]
 	course_row = connection.execute("SELECT id FROM courses WHERE name = 'Python Foundations'").fetchone()
@@ -576,12 +591,365 @@ def seed_course_questions(connection, creator_id):
 				question = (connection.execute("INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (bank[0], text, option_a, option_b, option_c, option_d, correct, creator_id)).lastrowid,)
 			connection.execute("INSERT OR IGNORE INTO assessment_questions (assessment_id, question_id) VALUES (?, ?)", (assessment[0], question[0]))
 
+		ensure_system_generated_groups(connection)
+
+
+def get_admin_user_id(connection):
+	admin = connection.execute("SELECT id FROM users WHERE LOWER(role) = 'admin' ORDER BY id ASC LIMIT 1").fetchone()
+	return admin["id"] if admin else 1
+
+
+def sync_department_group_members(connection, dept_id, group_id):
+	"""Sync users belonging to a department into its department group."""
+	dept = connection.execute("SELECT department_name FROM departments WHERE department_id = ?", (dept_id,)).fetchone()
+	if not dept:
+		return
+	dept_name = dept["department_name"]
+
+	current_users = connection.execute(
+		"SELECT id, employee_id, email, department, location, is_active FROM users WHERE (department_id = ? OR (department_id IS NULL AND department = ?))",
+		(dept_id, dept_name)
+	).fetchall()
+	valid_user_ids = {u["id"] for u in current_users}
+
+	for u in current_users:
+		user_status = 'active' if (u["is_active"] is None or u["is_active"] == 1) else 'inactive'
+		connection.execute(
+			"INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			(group_id, u["id"], u["employee_id"] or '', u["email"] or '', u["department"] or dept_name, u["location"] or '', user_status)
+		)
+
+	existing_members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ?", (group_id,)).fetchall()
+	for m in existing_members:
+		uid = m["user_id"]
+		if uid not in valid_user_ids:
+			connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, uid))
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (uid, group_id))
+
+
+def sync_location_group_members(connection, loc_id, group_id):
+	"""Sync users belonging to a location into its location group."""
+	loc = connection.execute("SELECT location_name, city FROM locations WHERE location_id = ?", (loc_id,)).fetchone()
+	if not loc:
+		return
+	loc_name = loc["location_name"]
+	city_name = loc["city"]
+
+	current_users = connection.execute(
+		"SELECT id, employee_id, email, department, location, is_active FROM users WHERE (location_id = ? OR (location_id IS NULL AND (location = ? OR location = ?)))",
+		(loc_id, loc_name, city_name)
+	).fetchall()
+	valid_user_ids = {u["id"] for u in current_users}
+
+	for u in current_users:
+		user_status = 'active' if (u["is_active"] is None or u["is_active"] == 1) else 'inactive'
+		connection.execute(
+			"INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			(group_id, u["id"], u["employee_id"] or '', u["email"] or '', u["department"] or '', u["location"] or loc_name, user_status)
+		)
+
+	existing_members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ?", (group_id,)).fetchall()
+	for m in existing_members:
+		uid = m["user_id"]
+		if uid not in valid_user_ids:
+			connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, uid))
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (uid, group_id))
+
+
+def sync_department_group(connection, dept_id):
+	"""Create or update a department group for the given department_id."""
+	dept = connection.execute("SELECT department_id, department_name, status FROM departments WHERE department_id = ?", (dept_id,)).fetchone()
+	if not dept:
+		return
+	dept_name = dept["department_name"]
+	status = dept["status"]
+	grp_status = 'active' if str(status).lower() == 'active' else 'inactive'
+	target_name = f"Department - {dept_name}"
+	admin_id = get_admin_user_id(connection)
+
+	grp = connection.execute("SELECT id, name, status FROM groups WHERE group_type = 'DEPARTMENT' AND source_master_id = ?", (dept_id,)).fetchone()
+	if not grp:
+		grp_by_name = connection.execute("SELECT id FROM groups WHERE name = ?", (target_name,)).fetchone()
+		if grp_by_name:
+			group_id = grp_by_name["id"]
+			connection.execute("UPDATE groups SET group_type = 'DEPARTMENT', system_generated = 1, source_master_type = 'DEPARTMENT', source_master_id = ?, status = ? WHERE id = ?", (dept_id, grp_status, group_id))
+		else:
+			group_id = connection.execute(
+				"INSERT INTO groups (name, description, group_type, status, created_by, system_generated, source_master_type, source_master_id) VALUES (?, ?, 'DEPARTMENT', ?, ?, 1, 'DEPARTMENT', ?)",
+				(target_name, f"System-generated group for {dept_name} department", grp_status, admin_id, dept_id)
+			).lastrowid
+	else:
+		group_id = grp["id"]
+		if grp["name"] != target_name or grp["status"] != grp_status:
+			connection.execute("UPDATE groups SET name = ?, status = ? WHERE id = ?", (target_name, grp_status, group_id))
+
+	if grp_status == 'active':
+		sync_department_group_members(connection, dept_id, group_id)
+
+
+def sync_location_group(connection, loc_id):
+	"""Create or update a location group for the given location_id."""
+	loc = connection.execute("SELECT location_id, location_name, status FROM locations WHERE location_id = ?", (loc_id,)).fetchone()
+	if not loc:
+		return
+	loc_name = loc["location_name"]
+	status = loc["status"]
+	grp_status = 'active' if str(status).lower() == 'active' else 'inactive'
+	target_name = f"Location - {loc_name}"
+	admin_id = get_admin_user_id(connection)
+
+	grp = connection.execute("SELECT id, name, status FROM groups WHERE group_type = 'LOCATION' AND source_master_id = ?", (loc_id,)).fetchone()
+	if not grp:
+		grp_by_name = connection.execute("SELECT id FROM groups WHERE name = ?", (target_name,)).fetchone()
+		if grp_by_name:
+			group_id = grp_by_name["id"]
+			connection.execute("UPDATE groups SET group_type = 'LOCATION', system_generated = 1, source_master_type = 'LOCATION', source_master_id = ?, status = ? WHERE id = ?", (loc_id, grp_status, group_id))
+		else:
+			group_id = connection.execute(
+				"INSERT INTO groups (name, description, group_type, status, created_by, system_generated, source_master_type, source_master_id) VALUES (?, ?, 'LOCATION', ?, ?, 1, 'LOCATION', ?)",
+				(target_name, f"System-generated group for {loc_name} location", grp_status, admin_id, loc_id)
+			).lastrowid
+	else:
+		group_id = grp["id"]
+		if grp["name"] != target_name or grp["status"] != grp_status:
+			connection.execute("UPDATE groups SET name = ?, status = ? WHERE id = ?", (target_name, grp_status, group_id))
+
+	if grp_status == 'active':
+		sync_location_group_members(connection, loc_id, group_id)
+
+
+def sync_all_users_group(connection, user_id=None):
+	"""Ensure All Users group exists and users belong to it."""
+	admin_id = get_admin_user_id(connection)
+	grp = connection.execute("SELECT id FROM groups WHERE group_type = 'ALL_USERS' AND system_generated = 1").fetchone()
+	if not grp:
+		existing = connection.execute("SELECT id FROM groups WHERE name = 'All Users'").fetchone()
+		if existing:
+			group_id = existing["id"]
+			connection.execute("UPDATE groups SET group_type = 'ALL_USERS', system_generated = 1 WHERE id = ?", (group_id,))
+		else:
+			group_id = connection.execute(
+				"INSERT INTO groups (name, description, group_type, status, created_by, system_generated) VALUES ('All Users', 'System-generated group containing all users', 'ALL_USERS', 'active', ?, 1)",
+				(admin_id,)
+			).lastrowid
+	else:
+		group_id = grp["id"]
+
+	if user_id:
+		u = connection.execute("SELECT id, employee_id, email, department, location, is_active FROM users WHERE id = ?", (user_id,)).fetchone()
+		if u:
+			user_status = 'active' if (u["is_active"] is None or u["is_active"] == 1) else 'inactive'
+			connection.execute(
+				"INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+				(group_id, u["id"], u["employee_id"] or '', u["email"] or '', u["department"] or '', u["location"] or '', user_status)
+			)
+	else:
+		connection.execute("""
+			INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status)
+			SELECT ?, u.id, COALESCE(u.employee_id, ''), COALESCE(u.email, ''), COALESCE(u.department, ''), COALESCE(u.location, ''),
+			       CASE WHEN COALESCE(u.is_active, 1) = 1 THEN 'active' ELSE 'inactive' END
+			FROM users u
+		""", (group_id,))
+
+
+def sync_user_groups(connection, user_id):
+	"""Synchronize a single user's membership across All Users, Department, and Location system groups."""
+	user = connection.execute("SELECT id, department_id, department, location_id, location, employee_id, email, is_active FROM users WHERE id = ?", (user_id,)).fetchone()
+	if not user:
+		return
+
+	# 1. All Users
+	sync_all_users_group(connection, user_id=user_id)
+
+	# 2. Department Group Sync
+	dept_id = user["department_id"]
+	dept_name = user["department"]
+	target_dept_grp_id = None
+
+	if dept_id:
+		d_row = connection.execute("SELECT department_id FROM departments WHERE department_id = ? AND status = 'Active'", (dept_id,)).fetchone()
+		if d_row:
+			sync_department_group(connection, dept_id)
+			grp = connection.execute("SELECT id FROM groups WHERE group_type = 'DEPARTMENT' AND source_master_id = ? AND status = 'active'", (dept_id,)).fetchone()
+			if grp:
+				target_dept_grp_id = grp["id"]
+	elif dept_name:
+		d_row = connection.execute("SELECT department_id FROM departments WHERE department_name = ? AND status = 'Active'", (dept_name,)).fetchone()
+		if d_row:
+			dept_id = d_row["department_id"]
+			sync_department_group(connection, dept_id)
+			grp = connection.execute("SELECT id FROM groups WHERE group_type = 'DEPARTMENT' AND source_master_id = ? AND status = 'active'", (dept_id,)).fetchone()
+			if grp:
+				target_dept_grp_id = grp["id"]
+
+	user_status = 'active' if (user["is_active"] is None or user["is_active"] == 1) else 'inactive'
+
+	current_dept_memberships = connection.execute("""
+		SELECT gm.group_id 
+		FROM group_members gm
+		JOIN groups g ON g.id = gm.group_id
+		WHERE gm.user_id = ? AND g.group_type = 'DEPARTMENT' AND g.system_generated = 1
+	""", (user_id,)).fetchall()
+
+	for m in current_dept_memberships:
+		gid = m["group_id"]
+		if gid != target_dept_grp_id:
+			connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (gid, user_id))
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (user_id, gid))
+
+	if target_dept_grp_id:
+		ins = connection.execute("INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (target_dept_grp_id, user_id, user["employee_id"] or '', user["email"] or '', user["department"] or '', user["location"] or '', user_status))
+		if ins.rowcount > 0:
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_ADDED', 'group', ?)", (user_id, target_dept_grp_id))
+
+	# 3. Location Group Sync
+	loc_id = user["location_id"]
+	loc_name = user["location"]
+	target_loc_grp_id = None
+
+	if loc_id:
+		l_row = connection.execute("SELECT location_id FROM locations WHERE location_id = ? AND status = 'Active'", (loc_id,)).fetchone()
+		if l_row:
+			sync_location_group(connection, loc_id)
+			grp = connection.execute("SELECT id FROM groups WHERE group_type = 'LOCATION' AND source_master_id = ? AND status = 'active'", (loc_id,)).fetchone()
+			if grp:
+				target_loc_grp_id = grp["id"]
+	elif loc_name:
+		l_row = connection.execute("SELECT location_id FROM locations WHERE (location_name = ? OR city = ?) AND status = 'Active'", (loc_name, loc_name)).fetchone()
+		if l_row:
+			loc_id = l_row["location_id"]
+			sync_location_group(connection, loc_id)
+			grp = connection.execute("SELECT id FROM groups WHERE group_type = 'LOCATION' AND source_master_id = ? AND status = 'active'", (loc_id,)).fetchone()
+			if grp:
+				target_loc_grp_id = grp["id"]
+
+	current_loc_memberships = connection.execute("""
+		SELECT gm.group_id 
+		FROM group_members gm
+		JOIN groups g ON g.id = gm.group_id
+		WHERE gm.user_id = ? AND g.group_type = 'LOCATION' AND g.system_generated = 1
+	""", (user_id,)).fetchall()
+
+	for m in current_loc_memberships:
+		gid = m["group_id"]
+		if gid != target_loc_grp_id:
+			connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (gid, user_id))
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (user_id, gid))
+
+	if target_loc_grp_id:
+		ins = connection.execute("INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (target_loc_grp_id, user_id, user["employee_id"] or '', user["email"] or '', user["department"] or '', user["location"] or '', user_status))
+		if ins.rowcount > 0:
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_ADDED', 'group', ?)", (user_id, target_loc_grp_id))
+
+	# 4. Compulsory Course Auto-Assignment for user
+	assign_compulsory_courses_to_user(connection, user_id)
+
+
+def assign_compulsory_course_to_all(connection, course_id):
+	"""Assign a compulsory course to all eligible active platform users."""
+	course = connection.execute(
+		"SELECT id, name, status, is_compulsory FROM courses WHERE id = ?",
+		(course_id,)
+	).fetchone()
+	if not course or not course["is_compulsory"]:
+		return
+	
+	status = (course["status"] or "published").lower()
+	if status not in ("published", "active"):
+		return
+
+	all_users_grp = connection.execute("SELECT id FROM groups WHERE group_type = 'ALL_USERS' AND system_generated = 1").fetchone()
+	all_users_grp_id = all_users_grp["id"] if all_users_grp else None
+
+	active_users = connection.execute("SELECT id, full_name FROM users WHERE COALESCE(is_active, 1) = 1").fetchall()
+	
+	for u in active_users:
+		uid = u["id"]
+		existing = connection.execute("SELECT 1 FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, uid)).fetchone()
+		if not existing:
+			connection.execute(
+				"INSERT INTO course_assignments (course_id, student_id, status) VALUES (?, ?, 'not_started') ON CONFLICT(course_id, student_id) DO NOTHING",
+				(course_id, uid)
+			)
+			create_group_assignment_history(
+				connection, course_id, course["name"], uid, u["full_name"],
+				'Group', all_users_grp_id, 'All Users', 1, 'SYSTEM', 'new', 'assigned'
+			)
+			notif_msg = f"'{course['name']}' has been assigned to you as a compulsory course."
+			notif_exists = connection.execute(
+				"SELECT 1 FROM notifications WHERE user_id = ? AND message = ?",
+				(uid, notif_msg)
+			).fetchone()
+			if not notif_exists:
+				connection.execute(
+					"INSERT INTO notifications (user_id, message, type, target_url) VALUES (?, ?, ?, ?)",
+					(uid, notif_msg, "course_assigned", f"/course/{course_id}")
+				)
+
+
+def assign_compulsory_courses_to_user(connection, user_id):
+	"""Assign all published/active compulsory courses to a newly onboarded user."""
+	comp_courses = connection.execute(
+		"SELECT id, name FROM courses WHERE is_compulsory = 1 AND LOWER(IFNULL(status, 'published')) IN ('published', 'active')"
+	).fetchall()
+
+	user = connection.execute("SELECT id, full_name, is_active FROM users WHERE id = ?", (user_id,)).fetchone()
+	if not user or (user["is_active"] is not None and user["is_active"] == 0):
+		return
+
+	all_users_grp = connection.execute("SELECT id FROM groups WHERE group_type = 'ALL_USERS' AND system_generated = 1").fetchone()
+	all_users_grp_id = all_users_grp["id"] if all_users_grp else None
+
+	for c in comp_courses:
+		cid = c["id"]
+		existing = connection.execute("SELECT 1 FROM course_assignments WHERE course_id = ? AND student_id = ?", (cid, user_id)).fetchone()
+		if not existing:
+			connection.execute(
+				"INSERT INTO course_assignments (course_id, student_id, status) VALUES (?, ?, 'not_started') ON CONFLICT(course_id, student_id) DO NOTHING",
+				(cid, user_id)
+			)
+			create_group_assignment_history(
+				connection, cid, c["name"], user_id, user["full_name"],
+				'Group', all_users_grp_id, 'All Users', 1, 'SYSTEM', 'new', 'assigned'
+			)
+			notif_msg = f"'{c['name']}' has been assigned to you as a compulsory course."
+			notif_exists = connection.execute(
+				"SELECT 1 FROM notifications WHERE user_id = ? AND message = ?",
+				(user_id, notif_msg)
+			).fetchone()
+			if not notif_exists:
+				connection.execute(
+					"INSERT INTO notifications (user_id, message, type, target_url) VALUES (?, ?, ?, ?)",
+					(user_id, notif_msg, "course_assigned", f"/course/{cid}")
+				)
+
+
+def ensure_system_generated_groups(connection):
+	"""Ensure All Users, Department, and Location system groups are created and synchronized."""
+	sync_all_users_group(connection)
+
+	depts = connection.execute("SELECT department_id FROM departments").fetchall()
+	for d in depts:
+		sync_department_group(connection, d["department_id"])
+
+	locs = connection.execute("SELECT location_id FROM locations").fetchall()
+	for l in locs:
+		sync_location_group(connection, l["location_id"])
+
+	users = connection.execute("SELECT id FROM users").fetchall()
+	for u in users:
+		sync_user_groups(connection, u["id"])
+
 
 def staff_required(view):
 	"""Allow only administrators and moderators into the staff workspace."""
 	@wraps(view)
 	def wrapped(*args, **kwargs):
-		if session.get("role") not in ("admin", "moderator"):
+		user_role = session.get("role")
+		actual_role = session.get("actual_role")
+		if user_role not in ("admin", "moderator") and actual_role not in ("admin", "moderator"):
 			return redirect(url_for("home"))
 		return view(*args, **kwargs)
 	return wrapped
@@ -591,7 +959,9 @@ def admin_required(view):
 	"""Allow only a non-impersonating administrator."""
 	@wraps(view)
 	def wrapped(*args, **kwargs):
-		if session.get("role") != "admin" or session.get("impersonator_id"):
+		user_role = session.get("role")
+		actual_role = session.get("actual_role")
+		if (user_role != "admin" and actual_role != "admin") or session.get("impersonator_id"):
 			return redirect(url_for("home"))
 		return view(*args, **kwargs)
 	return wrapped
@@ -876,6 +1246,10 @@ def safe_referrer(default_url):
 	from flask import request
 	ref = request.referrer
 	if ref and ref.startswith(request.host_url):
+		ref_path = ref.split('?')[0].rstrip('/')
+		curr_path = request.base_url.rstrip('/')
+		if ref_path == curr_path:
+			return default_url
 		return ref
 	return default_url
 
@@ -930,6 +1304,7 @@ def create_app():
 				LEFT JOIN users creator ON c.created_by = creator.id
 				LEFT JOIN course_certifications cc ON cc.course_id = c.id AND cc.user_id = ca.student_id
 				WHERE ca.student_id = ? 
+				  AND LOWER(IFNULL(c.status, 'published')) IN ('published', 'active')
 				ORDER BY c.id DESC
 			""", (user_id,)).fetchall()
 			
@@ -1003,14 +1378,14 @@ def create_app():
 				return redirect(safe_referrer(url_for("groups_page")))
 			name = request.form.get("name", "").strip()
 			description = request.form.get("description", "").strip()
-			group_type = request.form.get("group_type", "").strip()
+			group_type = request.form.get("group_type", "").strip() or "MANUAL"
 			status = request.form.get("status", "active").strip() or "active"
 			if not name:
 				flash("Group name is required.")
 				return redirect(safe_referrer(url_for("groups_page")))
 			with get_db() as connection:
 				cursor = connection.execute(
-					"INSERT INTO groups (name, description, group_type, status, created_by) VALUES (?, ?, ?, ?, ?)",
+					"INSERT INTO groups (name, description, group_type, status, created_by, system_generated) VALUES (?, ?, ?, ?, ?, 0)",
 					(name, description, group_type, status, session["user_id"])
 				)
 				group_id = cursor.lastrowid
@@ -1025,28 +1400,44 @@ def create_app():
 			flash("Group created successfully.")
 			return redirect(safe_referrer(url_for("groups_page")))
 		with get_db() as connection:
+			filter_type = request.args.get("filter_type", "all").strip().lower()
+			where_sql = ""
+			if filter_type == "manual":
+				where_sql = "WHERE (g.system_generated = 0 OR g.group_type = 'MANUAL')"
+			elif filter_type == "department":
+				where_sql = "WHERE g.group_type = 'DEPARTMENT'"
+			elif filter_type == "location":
+				where_sql = "WHERE g.group_type = 'LOCATION'"
+			elif filter_type == "all_users":
+				where_sql = "WHERE g.group_type = 'ALL_USERS'"
+
 			if session.get("role") == "admin":
-				groups = connection.execute("""
+				sql = f"""
 					SELECT g.*, u.full_name AS creator_name,
 					(SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS member_count,
 					(SELECT COUNT(DISTINCT gca.course_id) FROM group_course_assignments gca WHERE gca.group_id = g.id) AS course_count
 					FROM groups g
 					JOIN users u ON u.id = g.created_by
-					ORDER BY g.id DESC
-				""").fetchall()
+					{where_sql}
+					ORDER BY g.system_generated DESC, g.id DESC
+				"""
+				groups = connection.execute(sql).fetchall()
 			else:
-				groups = connection.execute("""
+				mod_where = "WHERE gmod.user_id = ? AND gmod.status = 'Active'" if not where_sql else f"{where_sql} AND gmod.user_id = ? AND gmod.status = 'Active'"
+				sql = f"""
 					SELECT g.*, u.full_name AS creator_name,
 					(SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS member_count,
 					(SELECT COUNT(DISTINCT gca.course_id) FROM group_course_assignments gca WHERE gca.group_id = g.id) AS course_count
 					FROM groups g
 					JOIN group_moderators gmod ON g.id = gmod.group_id
 					JOIN users u ON u.id = g.created_by
-					WHERE gmod.user_id = ? AND gmod.status = 'Active'
-					ORDER BY g.id DESC
-				""", (session["user_id"],)).fetchall()
+					{mod_where}
+					ORDER BY g.system_generated DESC, g.id DESC
+				"""
+				groups = connection.execute(sql, (session["user_id"],)).fetchall()
 			users = connection.execute("SELECT id, full_name, username, role, employee_id, department, location, COALESCE(is_active, 1) AS is_active FROM users ORDER BY full_name").fetchall()
-		return render_template("groups.html", groups=groups, users=users, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+			master_depts = connection.execute("SELECT department_id as id, department_name FROM departments WHERE status = 'Active' ORDER BY department_name").fetchall()
+		return render_template("groups.html", groups=groups, users=users, master_depts=master_depts, filter_type=filter_type, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.get("/groups/<int:group_id>")
 	@staff_required
@@ -1058,7 +1449,7 @@ def create_app():
 				flash("Group not found.")
 				return redirect(safe_referrer(url_for("groups_page")))
 			members = connection.execute("""
-				SELECT gm.*, u.full_name, u.username, u.role, u.email, u.department, u.location, COALESCE(u.is_active, 1) AS is_active
+				SELECT gm.*, u.full_name, u.username, u.role, u.email, u.department, u.location, u.profile_picture, COALESCE(u.is_active, 1) AS is_active
 				FROM group_members gm
 				JOIN users u ON u.id = gm.user_id
 				WHERE gm.group_id = ?
@@ -1133,10 +1524,13 @@ def create_app():
 		if session.get("role") not in ("admin", "moderator"):
 			return redirect(url_for("home"))
 		with get_db() as connection:
-			group = connection.execute("SELECT id FROM groups WHERE id = ?", (group_id,)).fetchone()
+			group = connection.execute("SELECT id, system_generated FROM groups WHERE id = ?", (group_id,)).fetchone()
 			if not group:
 				flash("Group not found.")
 				return redirect(safe_referrer(url_for("groups_page")))
+			if group["system_generated"] == 1:
+				flash("Memberships for system-generated groups are managed automatically based on Department and Location master data.")
+				return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 			for raw_user_id in request.form.getlist("selected_users"):
 				user_id = int(raw_user_id)
 				connection.execute(
@@ -1153,6 +1547,10 @@ def create_app():
 		user_id = request.form.get("user_id")
 		if user_id:
 			with get_db() as connection:
+				grp = connection.execute("SELECT system_generated FROM groups WHERE id = ?", (group_id,)).fetchone()
+				if grp and grp["system_generated"] == 1:
+					flash("Memberships for system-generated groups are managed automatically based on Department and Location master data.")
+					return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 				connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, int(user_id)))
 		flash("User removed from group. Existing course access remains unchanged.")
 		return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
@@ -1264,65 +1662,225 @@ def create_app():
 			conn.execute("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?", (notif_id, session["user_id"]))
 		return jsonify({"success": True})
 
+	def get_reports_analytics_data(conn, start_date=None, end_date=None, preset=None):
+		import datetime
+		today = datetime.date.today()
+
+		if preset == "today":
+			start_date = today.isoformat()
+			end_date = today.isoformat()
+		elif preset == "7d":
+			start_date = (today - datetime.timedelta(days=7)).isoformat()
+			end_date = today.isoformat()
+		elif preset == "30d":
+			start_date = (today - datetime.timedelta(days=30)).isoformat()
+			end_date = today.isoformat()
+		elif preset == "90d":
+			start_date = (today - datetime.timedelta(days=90)).isoformat()
+			end_date = today.isoformat()
+		elif preset == "this_year":
+			start_date = f"{today.year}-01-01"
+			end_date = today.isoformat()
+		elif preset == "all":
+			start_date = None
+			end_date = None
+
+		if start_date: start_date = str(start_date).strip() or None
+		if end_date: end_date = str(end_date).strip() or None
+
+		def make_date_where(col_name, has_where=False):
+			conds = []
+			params = []
+			if start_date:
+				conds.append(f"DATE({col_name}) >= ?")
+				params.append(start_date)
+			if end_date:
+				conds.append(f"DATE({col_name}) <= ?")
+				params.append(end_date)
+			if not conds:
+				return "", []
+			prefix = " AND " if has_where else " WHERE "
+			return prefix + " AND ".join(conds), params
+
+		# 1. User Stats
+		u_w, u_p = make_date_where("created_at")
+		u_act_w, u_act_p = make_date_where("created_at", has_where=True)
+		total_users = conn.execute(f"SELECT COUNT(*) FROM users{u_w}", u_p).fetchone()[0]
+		active_users = conn.execute(f"SELECT COUNT(*) FROM users WHERE is_active = 1{u_act_w}", u_act_p).fetchone()[0]
+
+		# 2. Course Stats
+		c_w, c_p = make_date_where("created_at")
+		c_pub_w, c_pub_p = make_date_where("created_at", has_where=True)
+		total_courses = conn.execute(f"SELECT COUNT(*) FROM courses{c_w}", c_p).fetchone()[0]
+		active_courses = conn.execute(f"SELECT COUNT(*) FROM courses WHERE status = 'published'{c_pub_w}", c_pub_p).fetchone()[0]
+
+		# 3. Assessment Stats & Pass/Fail Ratio
+		a_w, a_p = make_date_where("started_at")
+		total_attempts = conn.execute(f"SELECT COUNT(*) FROM assessment_attempts{a_w}", a_p).fetchone()[0]
+		
+		a_pass_w, a_pass_p = make_date_where("started_at", has_where=True)
+		passed_attempts = conn.execute(f"SELECT COUNT(*) FROM assessment_attempts WHERE result = 'pass'{a_pass_w}", a_pass_p).fetchone()[0]
+		failed_attempts = total_attempts - passed_attempts
+		pass_rate = round((passed_attempts / total_attempts * 100) if total_attempts > 0 else 0, 1)
+
+		# 4. Rewards Stats
+		r_w, r_p = make_date_where("created_at")
+		points_row = conn.execute(f"SELECT SUM(points) FROM reward_transactions{r_w}", r_p).fetchone()
+		total_points_issued = (points_row[0] if points_row and points_row[0] is not None else None)
+		if total_points_issued is None:
+			total_points_issued = conn.execute("SELECT SUM(total_earned) FROM user_wallets").fetchone()[0] or 0
+
+		# 5. Plot 1: Completions by Category
+		cert_w, cert_p = make_date_where("cc.created_at")
+		cat_data = conn.execute(f"""
+			SELECT c.category, COUNT(cc.id) as completions 
+			FROM courses c 
+			LEFT JOIN course_certifications cc ON c.id = cc.course_id {cert_w}
+			GROUP BY c.category
+			ORDER BY completions DESC
+		""", cert_p).fetchall()
+		chart_categories = [row[0] or "General" for row in cat_data]
+		chart_completions = [row[1] for row in cat_data]
+
+		# 6. Plot 3: Course Assignment Progress Breakdown
+		ca_w, ca_p = make_date_where("ca.updated_at")
+		progress_counts = {
+			"not_started": 0,
+			"in_progress": 0,
+			"completed": 0,
+			"assessment_failed": 0
+		}
+		ca_rows = conn.execute(f"""
+			SELECT ca.status, COUNT(*) as cnt
+			FROM course_assignments ca
+			{ca_w}
+			GROUP BY ca.status
+		""", ca_p).fetchall()
+		for r in ca_rows:
+			st = (r[0] or "not_started").lower()
+			if st in progress_counts:
+				progress_counts[st] = r[1]
+
+		# 7. Plot 4: Community Activity Metrics
+		p_w, p_p = make_date_where("created_at", has_where=True)
+		post_count = conn.execute(f"SELECT COUNT(*) FROM posts WHERE status = 'PUBLISHED'{p_w}", p_p).fetchone()[0]
+		
+		comm_w, comm_p = make_date_where("created_at", has_where=True)
+		comment_count = conn.execute(f"SELECT COUNT(*) FROM post_comments WHERE status = 'active'{comm_w}", comm_p).fetchone()[0]
+		
+		rat_w, rat_p = make_date_where("created_at")
+		rating_count = conn.execute(f"SELECT COUNT(*) FROM post_ratings{rat_w}", rat_p).fetchone()[0]
+
+		# 8. Plot 5: Reward Points Issued by Source / Type
+		rt_w, rt_p = make_date_where("created_at")
+		reward_breakdown = conn.execute(f"""
+			SELECT COALESCE(NULLIF(transaction_type, ''), 'General') as tx_type, SUM(points) as pts
+			FROM reward_transactions
+			{rt_w}
+			GROUP BY tx_type
+			ORDER BY pts DESC
+		""", rt_p).fetchall()
+		reward_types = [r[0].replace('_', ' ').title() for r in reward_breakdown]
+		reward_points = [r[1] for r in reward_breakdown]
+
+		# 9. Plot 6: Support SLA & Resolution Metrics
+		support_counts = {"Open": 0, "In Progress": 0, "Resolved": 0, "SLA Breached": 0}
+		try:
+			sup_w, sup_p = make_date_where("created_at")
+			sup_rows = conn.execute(f"""
+				SELECT status, is_sla_breached, COUNT(*) as cnt
+				FROM support_issues
+				{sup_w}
+				GROUP BY status, is_sla_breached
+			""", sup_p).fetchall()
+			for r in sup_rows:
+				st = r[0]
+				breached = r[1]
+				if breached:
+					support_counts["SLA Breached"] += r[2]
+				elif st in support_counts:
+					support_counts[st] += r[2]
+		except Exception:
+			pass
+
+		# 10. Leaderboard: Top Learners
+		tl_w, tl_p = make_date_where("created_at")
+		top_learners = conn.execute(f"""
+			SELECT user_name, COUNT(*) as certs 
+			FROM course_certifications 
+			{tl_w}
+			GROUP BY user_id, user_name 
+			ORDER BY certs DESC 
+			LIMIT 5
+		""", tl_p).fetchall()
+
+		# 11. Recent Activity
+		act_w, act_p = make_date_where("created_at")
+		recent_activity = conn.execute(f"SELECT * FROM audit_logs {act_w} ORDER BY created_at DESC LIMIT 5", act_p).fetchall()
+
+		return {
+			"start_date": start_date or "",
+			"end_date": end_date or "",
+			"preset": preset or "all",
+			"total_users": total_users,
+			"active_users": active_users,
+			"total_courses": total_courses,
+			"active_courses": active_courses,
+			"total_attempts": total_attempts,
+			"passed_attempts": passed_attempts,
+			"failed_attempts": failed_attempts,
+			"pass_rate": pass_rate,
+			"total_points_issued": total_points_issued,
+			"chart_categories": chart_categories,
+			"chart_completions": chart_completions,
+			"progress_counts": progress_counts,
+			"community_metrics": {
+				"posts": post_count,
+				"comments": comment_count,
+				"ratings": rating_count
+			},
+			"reward_breakdown": {
+				"types": reward_types,
+				"points": reward_points
+			},
+			"support_counts": support_counts,
+			"top_learners": [dict(r) for r in top_learners],
+			"recent_activity": [dict(r) for r in recent_activity]
+		}
+
+
 	@app.get("/admin/reports")
 	@staff_required
 	def admin_reports():
 		"""Render the reporting and analytics dashboard."""
+		start_date = request.args.get("start_date", "").strip()
+		end_date = request.args.get("end_date", "").strip()
+		preset = request.args.get("preset", "all").strip()
+
 		with get_db() as connection:
-			# User Stats
-			total_users = connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-			active_users = connection.execute("SELECT COUNT(*) FROM users WHERE is_active = 1").fetchone()[0]
-			
-			# Course Stats
-			total_courses = connection.execute("SELECT COUNT(*) FROM courses").fetchone()[0]
-			active_courses = connection.execute("SELECT COUNT(*) FROM courses WHERE status = 'published'").fetchone()[0]
-			
-			# Assessment Stats
-			total_attempts = connection.execute("SELECT COUNT(*) FROM assessment_attempts").fetchone()[0]
-			passed_attempts = connection.execute("SELECT COUNT(*) FROM assessment_attempts WHERE result = 'pass'").fetchone()[0]
-			pass_rate = round((passed_attempts / total_attempts * 100) if total_attempts > 0 else 0, 1)
-			
-			# Rewards Stats
-			total_points_issued = connection.execute("SELECT SUM(total_earned) FROM user_wallets").fetchone()[0] or 0
-			
-			# Chart Data: Completions by Category
-			cat_data = connection.execute("""
-				SELECT c.category, COUNT(cc.id) as completions 
-				FROM courses c 
-				LEFT JOIN course_certifications cc ON c.id = cc.course_id 
-				GROUP BY c.category
-			""").fetchall()
-			categories = [row[0] for row in cat_data]
-			completions = [row[1] for row in cat_data]
-			
-			# Leaderboard: Top Learners
-			top_learners = connection.execute("""
-				SELECT user_name, COUNT(*) as certs 
-				FROM course_certifications 
-				GROUP BY user_id, user_name 
-				ORDER BY certs DESC 
-				LIMIT 5
-			""").fetchall()
-			
-			# Recent Activity
-			recent_activity = connection.execute("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 5").fetchall()
-			
-		return render_template("reports.html", 
-			total_users=total_users, 
-			active_users=active_users,
-			total_courses=total_courses,
-			active_courses=active_courses,
-			total_attempts=total_attempts,
-			pass_rate=pass_rate,
-			total_points_issued=total_points_issued,
-			chart_categories=categories,
-			chart_completions=completions,
-			top_learners=[dict(row) for row in top_learners],
-			recent_activity=[dict(row) for row in recent_activity],
-			user=session.get("user"), 
+			analytics_data = get_reports_analytics_data(connection, start_date, end_date, preset)
+
+		return render_template("reports.html",
+			**analytics_data,
+			user=session.get("user"),
 			role=session.get("role"),
+			actual_role=session.get("actual_role"),
 			profile_picture=session.get("profile_picture")
 		)
+
+
+	@app.get("/api/admin/reports/analytics")
+	@staff_required
+	def get_admin_reports_analytics_api():
+		"""API returning JSON analytics data for dynamic AJAX date filter updates."""
+		start_date = request.args.get("start_date", "").strip()
+		end_date = request.args.get("end_date", "").strip()
+		preset = request.args.get("preset", "all").strip()
+
+		with get_db() as connection:
+			analytics_data = get_reports_analytics_data(connection, start_date, end_date, preset)
+
+		return jsonify(analytics_data)
 
 
 	@app.route("/admin", methods=["GET", "POST"])
@@ -1359,11 +1917,24 @@ def create_app():
 								elif dup["email"] == email: flash("Email already exists.")
 								else: flash("Username already exists.")
 							else:
+								pic = request.files.get("profile_picture")
+								pic_filename = ""
+								if pic and pic.filename:
+									try:
+										import os
+										from uuid import uuid4
+										ext = os.path.splitext(pic.filename)[1].lower()
+										if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+											pic_filename = uuid4().hex + ext
+											pic.save(os.path.join(UPLOAD_FOLDER, pic_filename))
+									except Exception:
+										pass
 								cursor = connection.execute(
-									"INSERT INTO users (full_name, username, password_hash, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-									(full_name, username, generate_password_hash(password), role, employee_id, email, phone_number, department_id, position_id, location_id, about_me),
+									"INSERT INTO users (full_name, username, password_hash, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, profile_picture, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+									(full_name, username, generate_password_hash(password), role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, pic_filename),
 								)
 								new_user_id = cursor.lastrowid
+								sync_user_groups(connection, new_user_id)
 
 								flash("User added successfully.")
 					except sqlite3.IntegrityError:
@@ -1388,6 +1959,19 @@ def create_app():
 					about_me = request.form.get("about_me", "").strip()
 					interests = request.form.getlist("interests")
 					
+					pic = request.files.get("profile_picture")
+					pic_filename = None
+					if pic and pic.filename:
+						try:
+							import os
+							from uuid import uuid4
+							ext = os.path.splitext(pic.filename)[1].lower()
+							if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+								pic_filename = uuid4().hex + ext
+								pic.save(os.path.join(UPLOAD_FOLDER, pic_filename))
+						except Exception:
+							pass
+
 					if not full_name or not username or not employee_id or not email or not phone_number or not location_id:
 						flash("Employee ID, Email, Phone Number, Location, Name, and Username are mandatory.")
 					else:
@@ -1398,17 +1982,25 @@ def create_app():
 								elif dup["email"] == email: flash("Email already in use.")
 								else: flash("Username already in use.")
 							else:
-								connection.execute(
-									"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ? WHERE id = ?",
-									(full_name, username, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, user_id),
-								)
+								if pic_filename:
+									connection.execute(
+										"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ?, profile_picture = ? WHERE id = ?",
+										(full_name, username, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, pic_filename, user_id),
+									)
+								else:
+									connection.execute(
+										"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ? WHERE id = ?",
+										(full_name, username, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, user_id),
+									)
 
+								sync_user_groups(connection, int(user_id))
 								flash("User updated successfully.")
 			elif action == "add_course":
 				name = request.form.get("course_name", "").strip()
 				description = request.form.get("description", "").strip()
 				category = request.form.get("category", "General").strip() or "General"
 				content_type = request.form.get("content_type", "")
+				is_compulsory = 1 if (session.get("role") == "admin" and request.form.get("is_compulsory") in ("1", "true", "on", "yes")) else 0
 				try:
 					content_url = content_location("course_file")
 				except ValueError as error:
@@ -1419,18 +2011,30 @@ def create_app():
 				else:
 					with get_db() as connection:
 						cursor = connection.execute(
-							"INSERT INTO courses (name, description, category, content_type, content_url, created_by) VALUES (?, ?, ?, ?, ?, ?)",
-							(name, description, category, content_type, content_url, session["user_id"]),
+							"INSERT INTO courses (name, description, category, content_type, content_url, created_by, is_compulsory) VALUES (?, ?, ?, ?, ?, ?, ?)",
+							(name, description, category, content_type, content_url, session["user_id"], is_compulsory),
 						)
-						connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)", (session["user_id"], cursor.lastrowid))
+						new_course_id = cursor.lastrowid
+						connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)", (session["user_id"], new_course_id))
+						if is_compulsory:
+							assign_compulsory_course_to_all(connection, new_course_id)
 					flash("Course created successfully.")
 			elif action == "update_course":
 				with get_db() as connection:
-					if course_is_manageable(connection, request.form["record_id"], session["user_id"], session["role"]):
+					course_id = request.form["record_id"]
+					if course_is_manageable(connection, course_id, session["user_id"], session["role"]):
+						existing_c = connection.execute("SELECT is_compulsory FROM courses WHERE id = ?", (course_id,)).fetchone()
+						is_compulsory = existing_c["is_compulsory"] if existing_c else 0
+						if session.get("role") == "admin":
+							is_compulsory = 1 if request.form.get("is_compulsory") in ("1", "true", "on", "yes") else 0
+
+						status = request.form.get("status", "published")
 						connection.execute(
-							"UPDATE courses SET name = ?, description = ?, category = ?, status = ? WHERE id = ?",
-							(request.form["name"].strip(), request.form.get("description", "").strip(), request.form.get("category", "General").strip(), request.form.get("status", "published"), request.form["record_id"]),
+							"UPDATE courses SET name = ?, description = ?, category = ?, status = ?, is_compulsory = ? WHERE id = ?",
+							(request.form["name"].strip(), request.form.get("description", "").strip(), request.form.get("category", "General").strip(), status, is_compulsory, course_id),
 						)
+						if is_compulsory and status in ("published", "active"):
+							assign_compulsory_course_to_all(connection, course_id)
 						flash("Course updated successfully.")
 			elif action == "add_bank":
 				with get_db() as connection:
@@ -1567,7 +2171,7 @@ def create_app():
 					flash("That course assignment could not be completed.")
 
 		with get_db() as connection:
-			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interest ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
+			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, u.profile_picture, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interest ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
 			master_depts = connection.execute("SELECT department_id as id, department_name as name FROM departments WHERE status = 'Active' ORDER BY department_name").fetchall()
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE status = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE status = 'active' ORDER BY name").fetchall()
@@ -1847,7 +2451,7 @@ def create_app():
 					(SELECT COUNT(DISTINCT student_id) FROM course_assignments WHERE course_id = ?) AS enrolled_count
 			""", (course_id, course_id, course_id)).fetchone()
 			feedbacks = connection.execute("""
-				SELECT cc.feedback_rating, cc.feedback_comments, cc.feedback_submitted_at, u.full_name as reviewer_name
+				SELECT cc.feedback_rating, cc.feedback_comments, cc.feedback_submitted_at, u.full_name as reviewer_name, u.profile_picture as reviewer_profile_picture
 				FROM course_certifications cc
 				JOIN users u ON cc.user_id = u.id
 				WHERE cc.course_id = ? AND cc.feedback_comments IS NOT NULL AND cc.feedback_comments != ''
@@ -2215,15 +2819,20 @@ def create_app():
 				flash(e)
 			return redirect(safe_referrer(url_for("courses_page")))
 
+		is_compulsory = 1 if (session.get("role") == "admin" and request.form.get("is_compulsory") in ("1", "true", "on", "yes")) else 0
+
 		with get_db() as connection:
 			cursor = connection.execute(
-				"INSERT INTO courses (name, description, category, content_type, content_url, created_by, status, tags, duration_minutes, difficulty, thumbnail_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-				(name, description, category, content_type, content_url, session["user_id"], status, tags, duration_minutes, difficulty, thumbnail_color)
+				"INSERT INTO courses (name, description, category, content_type, content_url, created_by, status, tags, duration_minutes, difficulty, thumbnail_color, is_compulsory) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				(name, description, category, content_type, content_url, session["user_id"], status, tags, duration_minutes, difficulty, thumbnail_color, is_compulsory)
 			)
+			new_course_id = cursor.lastrowid
 			connection.execute(
 				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)",
-				(session["user_id"], cursor.lastrowid)
+				(session["user_id"], new_course_id)
 			)
+			if is_compulsory and status in ("published", "active"):
+				assign_compulsory_course_to_all(connection, new_course_id)
 		flash(f"Course '{name}' created successfully.")
 		return redirect(safe_referrer(url_for("courses_page")))
 
@@ -2237,13 +2846,17 @@ def create_app():
 				return redirect(safe_referrer(url_for("courses_page")))
 			
 			# Get existing course to check current content
-			existing = connection.execute("SELECT content_url, content_type FROM courses WHERE id = ?", (course_id,)).fetchone()
+			existing = connection.execute("SELECT content_url, content_type, is_compulsory FROM courses WHERE id = ?", (course_id,)).fetchone()
 			if not existing:
 				flash("Course not found.")
 				return redirect(safe_referrer(url_for("courses_page")))
 
 			source_type = request.form.get("source_type", "url")
 			status = request.form.get("status", "draft")
+
+			is_compulsory = existing["is_compulsory"] if existing else 0
+			if session.get("role") == "admin":
+				is_compulsory = 1 if request.form.get("is_compulsory") in ("1", "true", "on", "yes") else 0
 
 			new_url = None
 			content_type = existing["content_type"]
@@ -2277,7 +2890,7 @@ def create_app():
 					return redirect(safe_referrer(url_for("courses_page")))
 
 			connection.execute(
-				"UPDATE courses SET name=?, description=?, category=?, status=?, tags=?, duration_minutes=?, difficulty=?, thumbnail_color=?, content_type=?, content_url=? WHERE id=?",
+				"UPDATE courses SET name=?, description=?, category=?, status=?, tags=?, duration_minutes=?, difficulty=?, thumbnail_color=?, content_type=?, content_url=?, is_compulsory=? WHERE id=?",
 				(
 					request.form.get("name", "").strip(),
 					request.form.get("description", "").strip(),
@@ -2289,9 +2902,12 @@ def create_app():
 					request.form.get("thumbnail_color", "#6366f1"),
 					content_type,
 					new_url,
+					is_compulsory,
 					course_id
 				)
 			)
+			if is_compulsory and status in ("published", "active"):
+				assign_compulsory_course_to_all(connection, course_id)
 			connection.execute(
 				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'update', 'course', ?)",
 				(session["user_id"], course_id)
@@ -2429,6 +3045,7 @@ def create_app():
 					"UPDATE users SET full_name = ?, email = ?, phone_number = ?, employee_id = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ?, profile_picture = ? WHERE id = ?",
 					(full_name, email, phone_number, employee_id, department_id, position_id, location_id, about_me, pic_filename, session["user_id"])
 				)
+				sync_user_groups(connection, session["user_id"])
 
 					
 			session["user"] = full_name
@@ -2878,7 +3495,7 @@ def create_app():
 		sort = request.args.get("sort", "newest")
 		
 		sql = """
-			SELECT p.*, u.full_name AS creator_name, u.role,
+			SELECT p.*, u.full_name AS creator_name, u.role, u.profile_picture AS creator_profile_picture,
 				   (SELECT ROUND(AVG(r.rating), 1) FROM post_ratings r WHERE r.post_id = p.id) AS avg_rating,
 				   (SELECT COUNT(*) FROM post_ratings r WHERE r.post_id = p.id) AS rating_count,
 				   (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.id) AS comment_count
@@ -2927,7 +3544,7 @@ def create_app():
 		
 		with get_db() as connection:
 			post = connection.execute(
-				"""SELECT p.*, u.full_name AS creator_name, u.role,
+				"""SELECT p.*, u.full_name AS creator_name, u.role, u.profile_picture AS creator_profile_picture,
 						  (SELECT ROUND(AVG(r.rating), 1) FROM post_ratings r WHERE r.post_id = p.id) AS avg_rating,
 						  (SELECT COUNT(*) FROM post_ratings r WHERE r.post_id = p.id) AS rating_count
 				   FROM posts p
@@ -2954,7 +3571,7 @@ def create_app():
 			user_rating = connection.execute("SELECT * FROM post_ratings WHERE post_id = ? AND user_id = ?", (post_id, user_id)).fetchone()
 			
 			comments = connection.execute(
-				"""SELECT c.*, u.full_name, u.role, r.rating
+				"""SELECT c.*, u.full_name, u.role, u.profile_picture, r.rating
 				   FROM post_comments c
 				   JOIN users u ON u.id = c.user_id
 				   LEFT JOIN post_ratings r ON r.post_id = c.post_id AND r.user_id = c.user_id
@@ -3765,7 +4382,7 @@ def create_app():
 			total_records = conn.execute(count_sql, params).fetchone()["total"]
 	
 			data_sql = f"""
-				SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me,
+				SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, u.profile_picture,
 				       COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids,
 					   COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids
 				FROM users u
@@ -4110,12 +4727,16 @@ def create_app():
 		if status not in ("DRAFT", "PUBLISHED"):
 			return {"error": "Invalid status. Must be DRAFT or PUBLISHED."}, 400
 			
+		is_compulsory = 1 if (g.api_user.get("role") == "admin" and bool(data.get("is_compulsory"))) else 0
+
 		with get_db() as connection:
 			try:
 				course_id = connection.execute(
-					"INSERT INTO courses (name, description, category, content_type, content_url, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
-					(name, description, category, content_type, content_url, status, g.api_user["id"])
+					"INSERT INTO courses (name, description, category, content_type, content_url, status, created_by, is_compulsory) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+					(name, description, category, content_type, content_url, status.lower(), g.api_user["id"], is_compulsory)
 				).lastrowid
+				if is_compulsory and status.lower() in ("published", "active"):
+					assign_compulsory_course_to_all(connection, course_id)
 			except Exception as e:
 				return {"error": f"Database insertion failed: {str(e)}"}, 500
 		return {"message": "Course created successfully.", "course_id": course_id}, 201
@@ -4797,7 +5418,8 @@ def create_app():
 	                    if not name or not code:
 	                        flash("Department Name and Code are mandatory.")
 	                    else:
-	                        conn.execute("INSERT INTO departments (department_name, department_code, description, status, created_by) VALUES (?, ?, ?, ?, ?)", (name, code, desc, status, user_id))
+	                        dept_id = conn.execute("INSERT INTO departments (department_name, department_code, description, status, created_by) VALUES (?, ?, ?, ?, ?)", (name, code, desc, status, user_id)).lastrowid
+	                        sync_department_group(conn, dept_id)
 	                        flash("Department created successfully.")
 	                        
 	                elif action == "edit_department":
@@ -4810,12 +5432,14 @@ def create_app():
 	                        flash("Department Name and Code are mandatory.")
 	                    else:
 	                        conn.execute("UPDATE departments SET department_name = ?, department_code = ?, description = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (name, code, desc, status, user_id, dept_id))
+	                        sync_department_group(conn, int(dept_id))
 	                        flash("Department updated successfully.")
 	                        
 	                elif action == "toggle_department":
 	                    dept_id = request.form.get("record_id")
 	                    new_status = request.form.get("status")
 	                    conn.execute("UPDATE departments SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (new_status, user_id, dept_id))
+	                    sync_department_group(conn, int(dept_id))
 	                    flash(f"Department marked as {new_status}.")
 
 	                elif action == "add_location":
@@ -4830,7 +5454,8 @@ def create_app():
 	                    if not name or not code or not city or not country:
 	                        flash("Location Name, Code, City, and Country are mandatory.")
 	                    else:
-	                        conn.execute("INSERT INTO locations (location_name, location_code, city, country, address, state, postal_code, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (name, code, city, country, address, state, postal_code, status, user_id))
+	                        loc_id = conn.execute("INSERT INTO locations (location_name, location_code, city, country, address, state, postal_code, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (name, code, city, country, address, state, postal_code, status, user_id)).lastrowid
+	                        sync_location_group(conn, loc_id)
 	                        flash("Location created successfully.")
 	                        
 	                elif action == "edit_location":
@@ -4847,12 +5472,14 @@ def create_app():
 	                        flash("Location Name, Code, City, and Country are mandatory.")
 	                    else:
 	                        conn.execute("UPDATE locations SET location_name = ?, location_code = ?, city = ?, country = ?, address = ?, state = ?, postal_code = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (name, code, city, country, address, state, postal_code, status, user_id, loc_id))
+	                        sync_location_group(conn, int(loc_id))
 	                        flash("Location updated successfully.")
 	                        
 	                elif action == "toggle_location":
 	                    loc_id = request.form.get("record_id")
 	                    new_status = request.form.get("status")
 	                    conn.execute("UPDATE locations SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (new_status, user_id, loc_id))
+	                    sync_location_group(conn, int(loc_id))
 	                    flash(f"Location marked as {new_status}.")
 	                elif action == "add_interest":
 	                    name = request.form.get("interest_name", "").strip()
@@ -4917,6 +5544,7 @@ def api_add_department():
                 "INSERT INTO departments (department_name, department_code, created_by) VALUES (?, ?, ?)",
                 (name, code, session.get("user_id", getattr(g, "api_user", {}).get("id")))
             ).lastrowid
+            sync_department_group(connection, dept_id)
             return {"message": "Department added.", "id": dept_id, "name": name}, 201
         except sqlite3.IntegrityError:
             return {"error": "Department already exists."}, 409
@@ -4954,6 +5582,7 @@ def api_add_location():
                 "INSERT INTO locations (location_name, location_code, city, country, created_by) VALUES (?, ?, ?, ?, ?)",
                 (name, code, name, 'India', session.get("user_id", getattr(g, "api_user", {}).get("id")))
             ).lastrowid
+            sync_location_group(connection, loc_id)
             return {"message": "Location added.", "id": loc_id, "name": name}, 201
         except sqlite3.IntegrityError:
             return {"error": "Location already exists."}, 409
@@ -4961,6 +5590,7 @@ def api_add_location():
 
 
 if __name__ == "__main__":
+	app = create_app()
 	app.run(debug=True)
 
 

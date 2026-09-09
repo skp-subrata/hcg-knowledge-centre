@@ -1,211 +1,882 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
-{% block title %}Reporting & Analytics | HCG Knowledge Centre{% endblock %}
+{% block title %}Admin Key Reports & Analytics | HCG Knowledge Centre{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-8">
-    <div class="flex items-center justify-between">
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-white">Reporting & Analytics</h1>
-        <button onclick="window.print()" class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-            Print Report
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
+        <div>
+            <div class="eyebrow mb-1">Admin Workspace</div>
+            <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Key Reports Download Center</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Export, download, and review system-wide datasets across LMS content, assessments, rewards, and support SLA performance.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="window.print()" class="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 shadow-sm transition">
+                <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                Print Overview
+            </button>
+        </div>
+    </div>
+
+    <!-- Section Navigation Tabs -->
+    <div class="flex border-b border-slate-200 dark:border-slate-800">
+        <button id="tab-btn-downloads" onclick="switchReportTab('downloads')" class="px-5 py-3 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 flex items-center gap-2 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Key Reports Download Center
+            <span class="ml-1 px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">11 Reports</span>
+        </button>
+        <button id="tab-btn-analytics" onclick="switchReportTab('analytics')" class="px-5 py-3 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-2 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            Analytics & KPIs Overview
         </button>
     </div>
 
-    <!-- Top KPI Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <!-- Users Card -->
-        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-            <div class="flex items-center gap-4">
-                <div class="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                </div>
+    <!-- TAB 1: DOWNLOAD KEY REPORTS CENTER -->
+    <div id="tab-content-downloads" class="space-y-6">
+        <!-- Search and Filter Bar -->
+        <div class="bg-white dark:bg-slate-800 p-4 md:p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <!-- Search Input -->
+            <div class="relative flex-1 max-w-md">
+                <svg class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input 
+                    type="text" 
+                    id="reportSearchInput" 
+                    onkeyup="filterReportCards()"
+                    placeholder="Search reports by title, category, or keyword..." 
+                    class="w-full pl-10 pr-4 py-2.5 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                >
+            </div>
+
+            <!-- Category Chips -->
+            <div class="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+                <button onclick="filterReportCategory('all')" class="report-cat-btn active px-3 py-1.5 rounded-lg bg-indigo-600 text-white shadow-sm transition" data-cat="all">All (11)</button>
+                <button onclick="filterReportCategory('lms')" class="report-cat-btn px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition" data-cat="lms">LMS & Content (4)</button>
+                <button onclick="filterReportCategory('assessment')" class="report-cat-btn px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition" data-cat="assessment">Assessments (1)</button>
+                <button onclick="filterReportCategory('rewards')" class="report-cat-btn px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition" data-cat="rewards">Rewards (5)</button>
+                <button onclick="filterReportCategory('support')" class="report-cat-btn px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition" data-cat="support">Support & SLA (1)</button>
+            </div>
+        </div>
+
+        <!-- Reports Cards Grid -->
+        <div id="reportsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            <!-- Report 1: Content Master -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="lms" data-keywords="content master course list inventory metadata">
                 <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Users</p>
-                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white">{{ total_users }}</h3>
-                </div>
-            </div>
-            <p class="mt-4 text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ active_users }} Active Accounts</p>
-        </div>
-
-        <!-- Courses Card -->
-        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-            <div class="flex items-center gap-4">
-                <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Courses</p>
-                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white">{{ total_courses }}</h3>
-                </div>
-            </div>
-            <p class="mt-4 text-xs font-medium text-indigo-600 dark:text-indigo-400">{{ active_courses }} Published</p>
-        </div>
-
-        <!-- Assessments Card -->
-        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-            <div class="flex items-center gap-4">
-                <div class="p-3 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Pass Rate</p>
-                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white">{{ pass_rate }}%</h3>
-                </div>
-            </div>
-            <p class="mt-4 text-xs font-medium text-slate-500 dark:text-slate-400">From {{ total_attempts }} total attempts</p>
-        </div>
-
-        <!-- Rewards Card -->
-        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-            <div class="flex items-center gap-4">
-                <div class="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Points Issued</p>
-                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white">{{ total_points_issued }}</h3>
-                </div>
-            </div>
-            <p class="mt-4 text-xs font-medium text-amber-600 dark:text-amber-400">Total gamification points</p>
-        </div>
-    </div>
-
-    <!-- Charts Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Bar Chart -->
-        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">Course Completions by Category</h3>
-            <div class="relative h-72">
-                <canvas id="categoryChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Doughnut Chart -->
-        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">Overall Exam Pass vs Fail Ratio</h3>
-            <div class="relative h-72 flex justify-center">
-                <canvas id="passFailChart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bottom Row (Tables) -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Top Learners -->
-        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <svg class="w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                Top Learners
-            </h3>
-            <div class="space-y-4">
-                {% for learner in top_learners %}
-                <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
-                            {{ loop.index }}
-                        </div>
-                        <span class="font-medium text-slate-700 dark:text-slate-300">{{ learner.user_name }}</span>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40">LMS Content</span>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase">.CSV</span>
                     </div>
-                    <span class="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold rounded-full">
-                        {{ learner.certs }} Certs
-                    </span>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">Content Master Inventory</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Complete course catalog export including titles, author info, categories, difficulty, duration, and publication status.</p>
                 </div>
-                {% else %}
-                <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No certifications issued yet.</p>
-                {% endfor %}
+                <a href="/admin/reports/content-master/download" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:bg-indigo-600 dark:hover:bg-indigo-600 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download CSV
+                </a>
+            </div>
+
+            <!-- Report 2: Content Engagement -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="lms" data-keywords="content engagement enrollment views ratings feedback completion">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40">LMS Content</span>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase">.CSV</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">Content Engagement & Ratings</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Course usage metrics detailing student enrollments, views, completion rates, and feedback ratings.</p>
+                </div>
+                <a href="/admin/reports/content-engagement/download" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:bg-indigo-600 dark:hover:bg-indigo-600 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download CSV
+                </a>
+            </div>
+
+            <!-- Report 3: Content Approval Queue -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="lms" data-keywords="content approval queue moderation author submissions draft">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40">LMS Content</span>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase">.CSV</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">Content Approval Queue</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Moderation logs tracking pending, approved, and rejected course creation requests.</p>
+                </div>
+                <a href="/admin/reports/content-approval/download" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:bg-indigo-600 dark:hover:bg-indigo-600 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download CSV
+                </a>
+            </div>
+
+            <!-- Report 4: User Content & Submissions -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="lms" data-keywords="user content posts comments community submissions feedback">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40">LMS Content</span>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase">.CSV</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">User Content & Posts</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Export of user-submitted community posts, discussions, comments, and submitted feedback.</p>
+                </div>
+                <a href="/admin/reports/user-content/download" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:bg-indigo-600 dark:hover:bg-indigo-600 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download CSV
+                </a>
+            </div>
+
+            <!-- Report 5: Assessment Exam Results -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="assessment" data-keywords="assessment exam quiz scores results attempts pass fail student">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">Assessments</span>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase">.CSV</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">Assessment Results & Scores</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Detailed student examination attempt logs, percentage scores, pass/fail results, and attempt numbers.</p>
+                </div>
+                <a href="/admin/reports/assessment-results/download" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:bg-indigo-600 dark:hover:bg-indigo-600 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download CSV
+                </a>
+            </div>
+
+            <!-- Report 6: User Reward Balances -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="rewards" data-keywords="rewards points wallet balance badge gamification user">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">Rewards</span>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase">.CSV</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">User Reward Balances</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Current user wallet balances, lifetime points earned, redeemed points, and current rank badge tiers.</p>
+                </div>
+                <a href="/admin/reports/user-rewards/download" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:bg-indigo-600 dark:hover:bg-indigo-600 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download CSV
+                </a>
+            </div>
+
+            <!-- Report 7: Reward Transactions Audit Log -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="rewards" data-keywords="reward transactions audit ledger points mint event log">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">Rewards</span>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase">.CSV</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">Reward Transactions Audit Ledger</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Complete audit transaction ledger recording point minting, administrative adjustments, and redemptions.</p>
+                </div>
+                <a href="/admin/reports/reward-transactions/download" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:bg-indigo-600 dark:hover:bg-indigo-600 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download CSV
+                </a>
+            </div>
+
+            <!-- Report 8: Reward Sources Matrix -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="rewards" data-keywords="reward sources matrix rule multiplier points config">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">Rewards</span>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase">.CSV</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">Reward Sources & Rule Matrix</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Configured reward source rules, point values, multipliers, and event activity parameter settings.</p>
+                </div>
+                <a href="/admin/reports/reward-sources/download" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:bg-indigo-600 dark:hover:bg-indigo-600 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download CSV
+                </a>
+            </div>
+
+            <!-- Report 9: Course Owner Rewards -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="rewards" data-keywords="course owner creator rewards royalty enrollment rating points">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">Rewards</span>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase">.CSV</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">Course Owner Earned Rewards</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Points accrued by course creators based on course student enrollments and ratings.</p>
+                </div>
+                <a href="/admin/reports/course-owner-rewards/download" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:bg-indigo-600 dark:hover:bg-indigo-600 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download CSV
+                </a>
+            </div>
+
+            <!-- Report 10: Community Content Earned Rewards -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="rewards" data-keywords="community content earned rewards posts upvote contributor">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">Rewards</span>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase">.CSV</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">Community Content Earned Rewards</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Reward points awarded to community authors for upvotes and high-quality forum posts.</p>
+                </div>
+                <a href="/admin/reports/community-content-rewards/download" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:bg-indigo-600 dark:hover:bg-indigo-600 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Download CSV
+                </a>
+            </div>
+
+            <!-- Report 11: Support SLA & Resolution Analytics -->
+            <div class="report-card bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:shadow-md transition group" data-category="support" data-keywords="support sla turnaround time tat resolution issues helpdesk tickets">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40">Support SLA</span>
+                        <span class="text-[11px] font-bold text-purple-600 dark:text-purple-400 uppercase">Dashboard UI</span>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition mb-1">Support SLA & Resolution Analytics</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Dedicated support reports panel tracking turnaround time (TAT), first response metrics, and SLA breaches.</p>
+                </div>
+                <a href="/support/admin/reports" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    View SLA Reports Dashboard
+                </a>
+            </div>
+
+        </div>
+
+        <!-- No Results Empty State -->
+        <div id="noReportsState" class="hidden bg-white dark:bg-slate-800 p-12 text-center rounded-2xl border border-slate-100 dark:border-slate-800">
+            <svg class="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            <h4 class="text-base font-bold text-slate-800 dark:text-slate-200">No matching reports found</h4>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Try adjusting your search query or selecting a different category filter.</p>
+        </div>
+    </div>
+
+    <!-- TAB 2: ANALYTICS & KPIS OVERVIEW -->
+    <div id="tab-content-analytics" class="space-y-8 hidden">
+        <!-- Custom Date Range & Preset Filter Bar -->
+        <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        Custom Date Filter & Analytics Range
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" id="dateFilterBadge">
+                        Showing analytics for: <span class="font-bold text-indigo-600 dark:text-indigo-400" id="activeFilterRangeText">All Time</span>
+                    </p>
+                </div>
+
+                <!-- Date Inputs & Action Buttons -->
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs font-semibold text-slate-500 dark:text-slate-400">From:</label>
+                        <input type="date" id="analyticsStartDate" value="{{ start_date or '' }}" class="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs font-semibold text-slate-500 dark:text-slate-400">To:</label>
+                        <input type="date" id="analyticsEndDate" value="{{ end_date or '' }}" class="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                    </div>
+                    <button onclick="applyCustomDateFilter()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition">
+                        Apply Filter
+                    </button>
+                    <button onclick="resetAnalyticsDateFilter()" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition">
+                        Reset
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Preset Buttons -->
+            <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800/60">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Quick Ranges:</span>
+                <button onclick="selectDatePreset('all')" class="preset-btn active px-3 py-1 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow-sm transition" data-preset="all">All Time</button>
+                <button onclick="selectDatePreset('today')" class="preset-btn px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" data-preset="today">Today</button>
+                <button onclick="selectDatePreset('7d')" class="preset-btn px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" data-preset="7d">Last 7 Days</button>
+                <button onclick="selectDatePreset('30d')" class="preset-btn px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" data-preset="30d">Last 30 Days</button>
+                <button onclick="selectDatePreset('90d')" class="preset-btn px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" data-preset="90d">Last 90 Days</button>
+                <button onclick="selectDatePreset('this_year')" class="preset-btn px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" data-preset="this_year">This Year</button>
             </div>
         </div>
 
-        <!-- Recent Activity Feed -->
-        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">Recent System Activity</h3>
-            <div class="space-y-4">
-                {% for log in recent_activity %}
-                <div class="border-l-2 border-indigo-200 dark:border-indigo-800 pl-4 py-1">
-                    <p class="text-sm text-slate-700 dark:text-slate-300">
-                        <span class="font-semibold">{{ log.action }}</span> on <span class="font-medium text-indigo-600 dark:text-indigo-400">{{ log.entity_type }} #{{ log.entity_id }}</span>
-                    </p>
-                    <p class="text-xs text-slate-500 dark:text-slate-500 mt-1">{{ log.created_at }}</p>
+        <!-- Top KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Users Card -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Users</p>
+                        <h3 id="kpi-total-users" class="text-2xl font-bold text-slate-900 dark:text-white">{{ total_users }}</h3>
+                    </div>
                 </div>
-                {% else %}
-                <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No audit logs found.</p>
-                {% endfor %}
+                <p id="kpi-active-users" class="mt-4 text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ active_users }} Active Accounts</p>
+            </div>
+
+            <!-- Courses Card -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Courses</p>
+                        <h3 id="kpi-total-courses" class="text-2xl font-bold text-slate-900 dark:text-white">{{ total_courses }}</h3>
+                    </div>
+                </div>
+                <p id="kpi-published-courses" class="mt-4 text-xs font-medium text-indigo-600 dark:text-indigo-400">{{ active_courses }} Published</p>
+            </div>
+
+            <!-- Assessments Card -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Pass Rate</p>
+                        <h3 id="kpi-pass-rate" class="text-2xl font-bold text-slate-900 dark:text-white">{{ pass_rate }}%</h3>
+                    </div>
+                </div>
+                <p id="kpi-total-attempts" class="mt-4 text-xs font-medium text-slate-500 dark:text-slate-400">From {{ total_attempts }} total attempts</p>
+            </div>
+
+            <!-- Rewards Card -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Points Issued</p>
+                        <h3 id="kpi-points-issued" class="text-2xl font-bold text-slate-900 dark:text-white">{{ total_points_issued }}</h3>
+                    </div>
+                </div>
+                <p class="mt-4 text-xs font-medium text-amber-600 dark:text-amber-400">Total gamification points</p>
+            </div>
+        </div>
+
+        <!-- 6 Visual Analytics Plots Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Plot 1: Course Completions by Category -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center justify-between">
+                    <span>Course Completions by Category</span>
+                    <span class="text-[11px] font-medium text-slate-400 uppercase">LMS Report</span>
+                </h3>
+                <div class="relative h-64">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Plot 2: Exam Pass vs Fail Ratio -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center justify-between">
+                    <span>Assessment Exam Pass vs Fail Ratio</span>
+                    <span class="text-[11px] font-medium text-slate-400 uppercase">Assessment Report</span>
+                </h3>
+                <div class="relative h-64 flex justify-center">
+                    <canvas id="passFailChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Plot 3: Course Assignment Progress Breakdown -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center justify-between">
+                    <span>Student Course Assignment Progress</span>
+                    <span class="text-[11px] font-medium text-slate-400 uppercase">Enrollment Report</span>
+                </h3>
+                <div class="relative h-64 flex justify-center">
+                    <canvas id="progressChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Plot 4: Community Forum & Rating Activity -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center justify-between">
+                    <span>Community Posts, Comments & Ratings</span>
+                    <span class="text-[11px] font-medium text-slate-400 uppercase">User Content Report</span>
+                </h3>
+                <div class="relative h-64">
+                    <canvas id="communityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Plot 5: Reward Points Issued by Source / Type -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center justify-between">
+                    <span>Reward Points Issued by Transaction Type</span>
+                    <span class="text-[11px] font-medium text-slate-400 uppercase">Rewards Report</span>
+                </h3>
+                <div class="relative h-64">
+                    <canvas id="rewardsChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Plot 6: Support SLA & Ticket Status -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center justify-between">
+                    <span>Support SLA & Ticket Resolution Status</span>
+                    <span class="text-[11px] font-medium text-slate-400 uppercase">Support SLA Report</span>
+                </h3>
+                <div class="relative h-64 flex justify-center">
+                    <canvas id="supportSlaChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Row (Tables) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Top Learners -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                    Top Learners
+                </h3>
+                <div id="top-learners-container" class="space-y-4">
+                    {% for learner in top_learners %}
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
+                                {{ loop.index }}
+                            </div>
+                            <span class="font-medium text-slate-700 dark:text-slate-300">{{ learner.user_name }}</span>
+                        </div>
+                        <span class="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold rounded-full">
+                            {{ learner.certs }} Certs
+                        </span>
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No certifications issued yet in selected range.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Recent Activity Feed -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-6">Recent System Activity</h3>
+                <div id="recent-activity-container" class="space-y-4">
+                    {% for log in recent_activity %}
+                    <div class="border-l-2 border-indigo-200 dark:border-indigo-800 pl-4 py-1">
+                        <p class="text-sm text-slate-700 dark:text-slate-300">
+                            <span class="font-semibold">{{ log.action }}</span> on <span class="font-medium text-indigo-600 dark:text-indigo-400">{{ log.entity_type }} #{{ log.entity_id }}</span>
+                        </p>
+                        <p class="text-xs text-slate-500 dark:text-slate-500 mt-1">{{ log.created_at }}</p>
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No audit logs found in selected range.</p>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Chart.js CDN -->
+<!-- Chart.js CDN & Interactive Analytics Script -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    const textColor = isDarkMode ? '#94a3b8' : '#64748b'; // slate-400 or slate-500
-    const gridColor = isDarkMode ? '#334155' : '#f1f5f9'; // slate-700 or slate-100
-    
-    // Category Completions Bar Chart
-    const ctxCat = document.getElementById('categoryChart').getContext('2d');
-    const categoryChart = new Chart(ctxCat, {
-        type: 'bar',
-        data: {
-            labels: {{ chart_categories | tojson | safe }},
-            datasets: [{
-                label: 'Course Completions',
-                data: {{ chart_completions | tojson | safe }},
-                backgroundColor: 'rgba(99, 102, 241, 0.8)', // indigo-500
-                borderRadius: 4,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: textColor, precision: 0 },
-                    grid: { color: gridColor }
-                },
-                x: {
-                    ticks: { color: textColor },
-                    grid: { display: false }
-                }
-            },
-            plugins: {
-                legend: { display: false }
-            }
+    function switchReportTab(tab) {
+        const btnDownloads = document.getElementById('tab-btn-downloads');
+        const btnAnalytics = document.getElementById('tab-btn-analytics');
+        const contentDownloads = document.getElementById('tab-content-downloads');
+        const contentAnalytics = document.getElementById('tab-content-analytics');
+
+        if (tab === 'downloads') {
+            btnDownloads.className = 'px-5 py-3 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 flex items-center gap-2 transition-all';
+            btnAnalytics.className = 'px-5 py-3 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-2 transition-all';
+            contentDownloads.classList.remove('hidden');
+            contentAnalytics.classList.add('hidden');
+        } else {
+            btnAnalytics.className = 'px-5 py-3 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 flex items-center gap-2 transition-all';
+            btnDownloads.className = 'px-5 py-3 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-2 transition-all';
+            contentAnalytics.classList.remove('hidden');
+            contentDownloads.classList.add('hidden');
         }
+    }
+
+    let activeCategory = 'all';
+
+    function filterReportCategory(cat) {
+        activeCategory = cat;
+        document.querySelectorAll('.report-cat-btn').forEach(btn => {
+            if (btn.getAttribute('data-cat') === cat) {
+                btn.className = 'report-cat-btn active px-3 py-1.5 rounded-lg bg-indigo-600 text-white shadow-sm transition';
+            } else {
+                btn.className = 'report-cat-btn px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition';
+            }
+        });
+        filterReportCards();
+    }
+
+    function filterReportCards() {
+        const query = (document.getElementById('reportSearchInput').value || '').toLowerCase();
+        const cards = document.querySelectorAll('.report-card');
+        let visibleCount = 0;
+
+        cards.forEach(card => {
+            const cat = card.getAttribute('data-category');
+            const keywords = (card.getAttribute('data-keywords') || '').toLowerCase();
+            const textContent = card.textContent.toLowerCase();
+
+            const matchesCategory = (activeCategory === 'all' || cat === activeCategory);
+            const matchesQuery = !query || keywords.includes(query) || textContent.includes(query);
+
+            if (matchesCategory && matchesQuery) {
+                card.style.display = 'flex';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        const noState = document.getElementById('noReportsState');
+        if (visibleCount === 0) {
+            noState.classList.remove('hidden');
+        } else {
+            noState.classList.add('hidden');
+        }
+    }
+
+    // --- Chart Styling & Global State ---
+    const isDarkMode = document.documentElement.classList.contains('dark');
+    const textColor = isDarkMode ? '#94a3b8' : '#64748b';
+    const gridColor = isDarkMode ? '#334155' : '#f1f5f9';
+
+    let currentPreset = '{{ preset or "all" }}';
+    let currentStartDate = '{{ start_date or "" }}';
+    let currentEndDate = '{{ end_date or "" }}';
+
+    // Chart instances
+    let categoryChart, passFailChart, progressChart, communityChart, rewardsChart, supportSlaChart;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initAllCharts();
     });
 
-    // Pass vs Fail Doughnut Chart
-    const ctxPass = document.getElementById('passFailChart').getContext('2d');
-    const passRate = {{ pass_rate }};
-    const failRate = 100 - passRate;
-    
-    const passFailChart = new Chart(ctxPass, {
-        type: 'doughnut',
-        data: {
-            labels: ['Pass', 'Fail'],
-            datasets: [{
-                data: [passRate, failRate],
-                backgroundColor: [
-                    'rgba(16, 185, 129, 0.8)', // emerald-500
-                    'rgba(239, 68, 68, 0.8)'   // red-500
-                ],
-                borderWidth: 0,
-                hoverOffset: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { color: textColor, padding: 20 }
-                }
+    function initAllCharts() {
+        // Plot 1: Category Completions Bar Chart
+        const ctxCat = document.getElementById('categoryChart').getContext('2d');
+        categoryChart = new Chart(ctxCat, {
+            type: 'bar',
+            data: {
+                labels: {{ chart_categories | tojson | safe }},
+                datasets: [{
+                    label: 'Course Completions',
+                    data: {{ chart_completions | tojson | safe }},
+                    backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                    borderRadius: 6,
+                }]
             },
-            cutout: '70%'
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } },
+                    x: { ticks: { color: textColor }, grid: { display: false } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Plot 2: Pass vs Fail Doughnut Chart
+        const ctxPass = document.getElementById('passFailChart').getContext('2d');
+        passFailChart = new Chart(ctxPass, {
+            type: 'doughnut',
+            data: {
+                labels: ['Pass', 'Fail'],
+                datasets: [{
+                    data: [{{ passed_attempts or 0 }}, {{ failed_attempts or 0 }}],
+                    backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(239, 68, 68, 0.8)'],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { color: textColor, padding: 15 } } },
+                cutout: '65%'
+            }
+        });
+
+        // Plot 3: Course Assignment Progress Doughnut Chart
+        const ctxProg = document.getElementById('progressChart').getContext('2d');
+        const progData = {{ progress_counts | tojson | safe }};
+        progressChart = new Chart(ctxProg, {
+            type: 'doughnut',
+            data: {
+                labels: ['Not Started', 'In Progress', 'Completed', 'Assessment Failed'],
+                datasets: [{
+                    data: [progData.not_started || 0, progData.in_progress || 0, progData.completed || 0, progData.assessment_failed || 0],
+                    backgroundColor: [
+                        'rgba(148, 163, 184, 0.8)',
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { color: textColor, padding: 15 } } },
+                cutout: '65%'
+            }
+        });
+
+        // Plot 4: Community Metrics Bar Chart
+        const ctxComm = document.getElementById('communityChart').getContext('2d');
+        const commData = {{ community_metrics | tojson | safe }};
+        communityChart = new Chart(ctxComm, {
+            type: 'bar',
+            data: {
+                labels: ['Published Posts', 'User Comments', 'Post Ratings'],
+                datasets: [{
+                    label: 'Activity Count',
+                    data: [commData.posts || 0, commData.comments || 0, commData.ratings || 0],
+                    backgroundColor: [
+                        'rgba(168, 85, 247, 0.8)',
+                        'rgba(14, 165, 233, 0.8)',
+                        'rgba(245, 158, 11, 0.8)'
+                    ],
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } },
+                    x: { ticks: { color: textColor }, grid: { display: false } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Plot 5: Reward Points Issued Bar Chart
+        const ctxRew = document.getElementById('rewardsChart').getContext('2d');
+        const rewData = {{ reward_breakdown | tojson | safe }};
+        rewardsChart = new Chart(ctxRew, {
+            type: 'bar',
+            data: {
+                labels: rewData.types && rewData.types.length ? rewData.types : ['General'],
+                datasets: [{
+                    label: 'Points Issued',
+                    data: rewData.points && rewData.points.length ? rewData.points : [{{ total_points_issued or 0 }}],
+                    backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: textColor, precision: 0 }, grid: { color: gridColor } },
+                    x: { ticks: { color: textColor }, grid: { display: false } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Plot 6: Support SLA & Status Doughnut Chart
+        const ctxSup = document.getElementById('supportSlaChart').getContext('2d');
+        const supData = {{ support_counts | tojson | safe }};
+        supportSlaChart = new Chart(ctxSup, {
+            type: 'doughnut',
+            data: {
+                labels: ['Open', 'In Progress', 'Resolved', 'SLA Breached'],
+                datasets: [{
+                    data: [supData.Open || 0, supData["In Progress"] || 0, supData.Resolved || 0, supData["SLA Breached"] || 0],
+                    backgroundColor: [
+                        'rgba(245, 158, 11, 0.8)',
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { color: textColor, padding: 15 } } },
+                cutout: '65%'
+            }
+        });
+    }
+
+    // --- Dynamic Date Filtering AJAX Handlers ---
+    function selectDatePreset(preset) {
+        currentPreset = preset;
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            if (btn.getAttribute('data-preset') === preset) {
+                btn.className = 'preset-btn active px-3 py-1 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow-sm transition';
+            } else {
+                btn.className = 'preset-btn px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition';
+            }
+        });
+
+        // Clear custom inputs when preset is clicked
+        if (preset !== 'custom') {
+            document.getElementById('analyticsStartDate').value = '';
+            document.getElementById('analyticsEndDate').value = '';
+            currentStartDate = '';
+            currentEndDate = '';
         }
-    });
+        fetchAnalyticsData();
+    }
+
+    function applyCustomDateFilter() {
+        const start = document.getElementById('analyticsStartDate').value;
+        const end = document.getElementById('analyticsEndDate').value;
+        currentStartDate = start;
+        currentEndDate = end;
+        currentPreset = 'custom';
+
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.className = 'preset-btn px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition';
+        });
+
+        fetchAnalyticsData();
+    }
+
+    function resetAnalyticsDateFilter() {
+        document.getElementById('analyticsStartDate').value = '';
+        document.getElementById('analyticsEndDate').value = '';
+        currentStartDate = '';
+        currentEndDate = '';
+        selectDatePreset('all');
+    }
+
+    async function fetchAnalyticsData() {
+        const textLabel = document.getElementById('activeFilterRangeText');
+        if (textLabel) {
+            if (currentPreset === 'custom' && (currentStartDate || currentEndDate)) {
+                textLabel.textContent = `Custom (${currentStartDate || 'Start'} to ${currentEndDate || 'Present'})`;
+            } else {
+                const presetNames = {
+                    'all': 'All Time',
+                    'today': 'Today',
+                    '7d': 'Last 7 Days',
+                    '30d': 'Last 30 Days',
+                    '90d': 'Last 90 Days',
+                    'this_year': 'This Year'
+                };
+                textLabel.textContent = presetNames[currentPreset] || 'Custom';
+            }
+        }
+
+        const url = `/api/admin/reports/analytics?preset=${encodeURIComponent(currentPreset)}&start_date=${encodeURIComponent(currentStartDate)}&end_date=${encodeURIComponent(currentEndDate)}`;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            updateAnalyticsDashboard(data);
+        } catch (err) {
+            console.error('Failed to update analytics dashboard:', err);
+        }
+    }
+
+    function updateAnalyticsDashboard(data) {
+        // Update KPIs
+        document.getElementById('kpi-total-users').textContent = data.total_users;
+        document.getElementById('kpi-active-users').textContent = `${data.active_users} Active Accounts`;
+        document.getElementById('kpi-total-courses').textContent = data.total_courses;
+        document.getElementById('kpi-published-courses').textContent = `${data.active_courses} Published`;
+        document.getElementById('kpi-pass-rate').textContent = `${data.pass_rate}%`;
+        document.getElementById('kpi-total-attempts').textContent = `From ${data.total_attempts} total attempts`;
+        document.getElementById('kpi-points-issued').textContent = data.total_points_issued;
+
+        // Chart 1: Categories
+        if (categoryChart) {
+            categoryChart.data.labels = data.chart_categories;
+            categoryChart.data.datasets[0].data = data.chart_completions;
+            categoryChart.update();
+        }
+
+        // Chart 2: Pass vs Fail
+        if (passFailChart) {
+            passFailChart.data.datasets[0].data = [data.passed_attempts, data.failed_attempts];
+            passFailChart.update();
+        }
+
+        // Chart 3: Progress
+        if (progressChart) {
+            progressChart.data.datasets[0].data = [
+                data.progress_counts.not_started || 0,
+                data.progress_counts.in_progress || 0,
+                data.progress_counts.completed || 0,
+                data.progress_counts.assessment_failed || 0
+            ];
+            progressChart.update();
+        }
+
+        // Chart 4: Community
+        if (communityChart) {
+            communityChart.data.datasets[0].data = [
+                data.community_metrics.posts || 0,
+                data.community_metrics.comments || 0,
+                data.community_metrics.ratings || 0
+            ];
+            communityChart.update();
+        }
+
+        // Chart 5: Rewards
+        if (rewardsChart) {
+            rewardsChart.data.labels = data.reward_breakdown.types && data.reward_breakdown.types.length ? data.reward_breakdown.types : ['General'];
+            rewardsChart.data.datasets[0].data = data.reward_breakdown.points && data.reward_breakdown.points.length ? data.reward_breakdown.points : [data.total_points_issued || 0];
+            rewardsChart.update();
+        }
+
+        // Chart 6: Support SLA
+        if (supportSlaChart) {
+            supportSlaChart.data.datasets[0].data = [
+                data.support_counts.Open || 0,
+                data.support_counts["In Progress"] || 0,
+                data.support_counts.Resolved || 0,
+                data.support_counts["SLA Breached"] || 0
+            ];
+            supportSlaChart.update();
+        }
+
+        // Update Top Learners Table
+        const learnersEl = document.getElementById('top-learners-container');
+        if (learnersEl) {
+            if (!data.top_learners || data.top_learners.length === 0) {
+                learnersEl.innerHTML = '<p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No certifications issued yet in selected range.</p>';
+            } else {
+                learnersEl.innerHTML = data.top_learners.map((learner, idx) => `
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
+                                ${idx + 1}
+                            </div>
+                            <span class="font-medium text-slate-700 dark:text-slate-300">${escapeHtml(learner.user_name)}</span>
+                        </div>
+                        <span class="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold rounded-full">
+                            ${learner.certs} Certs
+                        </span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Update Recent System Activity Feed
+        const activityEl = document.getElementById('recent-activity-container');
+        if (activityEl) {
+            if (!data.recent_activity || data.recent_activity.length === 0) {
+                activityEl.innerHTML = '<p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No audit logs found in selected range.</p>';
+            } else {
+                activityEl.innerHTML = data.recent_activity.map(log => `
+                    <div class="border-l-2 border-indigo-200 dark:border-indigo-800 pl-4 py-1">
+                        <p class="text-sm text-slate-700 dark:text-slate-300">
+                            <span class="font-semibold">${escapeHtml(log.action)}</span> on <span class="font-medium text-indigo-600 dark:text-indigo-400">${escapeHtml(log.entity_type)} #${log.entity_id || ''}</span>
+                        </p>
+                        <p class="text-xs text-slate-500 dark:text-slate-500 mt-1">${escapeHtml(log.created_at || '')}</p>
+                    </div>
+                `).join('');
+            }
+        }
+    }
 </script>
 {% endblock %}

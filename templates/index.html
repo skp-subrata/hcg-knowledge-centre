@@ -170,6 +170,11 @@
                 <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
                     {{ course.content_type }}
                 </span>
+                {% if course.is_compulsory %}
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                    COMPULSORY
+                </span>
+                {% endif %}
                 <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
                     {{ (course.progress_status or 'Not Started').replace('_', ' ') }}
                 </span>
@@ -255,6 +260,11 @@
                       <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                           {{ course.content_type }}
                       </span>
+                      {% if course.is_compulsory %}
+                      <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                          COMPULSORY
+                      </span>
+                      {% endif %}
                   </div>
                   <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 ml-2" style="background-color: {{ course.thumbnail_color or '#6366f1' }}">
                       {{ course.name[:2]|upper }}

@@ -105,6 +105,15 @@
         </div>
     </div>
 
+    <!-- Group Filter Tabs -->
+    <div class="flex flex-wrap gap-2 mb-6 border-b border-slate-200 dark:border-slate-800 pb-4">
+        <a href="{{ url_for('groups_page', filter_type='all') }}" class="px-4 py-2 rounded-full text-sm font-medium transition-colors {% if filter_type == 'all' or not filter_type %}bg-indigo-600 text-white{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}">All</a>
+        <a href="{{ url_for('groups_page', filter_type='manual') }}" class="px-4 py-2 rounded-full text-sm font-medium transition-colors {% if filter_type == 'manual' %}bg-indigo-600 text-white{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}">Manual Groups</a>
+        <a href="{{ url_for('groups_page', filter_type='department') }}" class="px-4 py-2 rounded-full text-sm font-medium transition-colors {% if filter_type == 'department' %}bg-indigo-600 text-white{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}">Department Groups</a>
+        <a href="{{ url_for('groups_page', filter_type='location') }}" class="px-4 py-2 rounded-full text-sm font-medium transition-colors {% if filter_type == 'location' %}bg-indigo-600 text-white{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}">Location Groups</a>
+        <a href="{{ url_for('groups_page', filter_type='all_users') }}" class="px-4 py-2 rounded-full text-sm font-medium transition-colors {% if filter_type == 'all_users' %}bg-indigo-600 text-white{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}">All Users</a>
+    </div>
+
     <form method="post" action="{{ url_for('upload_group_members') }}" enctype="multipart/form-data" class="flex flex-col md:flex-row gap-3 mb-6">
         <select name="group_id" class="form-input md:w-72" required>
             <option value="">Select group</option>
@@ -121,14 +130,19 @@
         <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/20 dark:bg-black/20 p-5">
             <div class="flex items-start justify-between gap-3 mb-3">
                 <div>
-                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-50">{{ group.name }}</h3>
+                    <div class="flex items-center gap-2 mb-1">
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-50">{{ group.name }}</h3>
+                        {% if group.system_generated == 1 %}
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 uppercase tracking-wider">SYSTEM</span>
+                        {% endif %}
+                    </div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">{{ group.group_type or 'General' }} · {{ group.status|title }}</p>
                 </div>
-                <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">{{ group.member_count or 0 }} members</span>
+                <span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 shrink-0">{{ group.member_count or 0 }} members</span>
             </div>
             <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">{{ group.description or 'No description provided.' }}</p>
             <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-4">
-                <span>Created by: {{ group.creator_name }}</span>
+                <span>Owner: {% if group.system_generated == 1 %}Admin{% else %}{{ group.creator_name }}{% endif %}</span>
                 <span>{{ group.course_count or 0 }} courses</span>
             </div>
             <a href="{{ url_for('group_detail', group_id=group.id) }}" class="btn-secondary w-full justify-center py-2.5 rounded-full">Open Group</a>
