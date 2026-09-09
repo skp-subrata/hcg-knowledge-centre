@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Live Training & Zoom Settings | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto mb-8">
+    <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-2">Live Training & Video Integration Settings</h1>
+    <p class="text-slate-500 dark:text-slate-400 text-sm">Configure Zoom Server-to-Server OAuth credentials, webhook verification, and attendance defaults.</p>
+</div>
+
+<form method="post" class="max-w-3xl mx-auto space-y-6">
+    <!-- Zoom OAuth Credentials Card -->
+    <div class="glass-panel p-6 sm:p-8 bg-white/50 dark:bg-slate-900/50 space-y-5">
+        <div class="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                Zoom
+            </div>
+            <div>
+                <h2 class="text-sm font-bold text-slate-900 dark:text-slate-50">Zoom Server-to-Server OAuth</h2>
+                <p class="text-[11px] text-slate-400">Used for automatic meeting creation and participant reporting</p>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label class="form-label">Zoom Account ID</label>
+                <input type="text" name="zoom_account_id" value="{{ settings.zoom_account_id or '' }}" placeholder="e.g. abcd1234efgh5678" class="form-input text-xs font-mono">
+            </div>
+
+            <div>
+                <label class="form-label">Zoom Client ID</label>
+                <input type="text" name="zoom_client_id" value="{{ settings.zoom_client_id or '' }}" placeholder="e.g. QxW9_AbCdEfG" class="form-input text-xs font-mono">
+            </div>
+
+            <div>
+                <label class="form-label">Zoom Client Secret</label>
+                <input type="password" name="zoom_client_secret" value="{{ settings.zoom_client_secret or '' }}" placeholder="••••••••••••••••••••••••••••••" class="form-input text-xs font-mono">
+            </div>
+
+            <div>
+                <label class="form-label">Zoom Webhook Secret Token (For CRC Validation)</label>
+                <input type="password" name="zoom_webhook_secret" value="{{ settings.zoom_webhook_secret or '' }}" placeholder="••••••••••••••••••••••••••••••" class="form-input text-xs font-mono">
+                <span class="text-[11px] text-slate-400 block mt-1">Webhook Endpoint URL to configure in Zoom App Marketplace: <code>{{ request.host_url }}api/webhooks/zoom</code></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Policy Defaults -->
+    <div class="glass-panel p-6 sm:p-8 bg-white/50 dark:bg-slate-900/50 space-y-5">
+        <h2 class="text-sm font-bold text-slate-900 dark:text-slate-50 border-b border-slate-100 dark:border-slate-800 pb-3">
+            Global Attendance Defaults
+        </h2>
+
+        <div>
+            <label class="form-label">Default Minimum Attendance Required (%)</label>
+            <input type="number" name="default_min_attendance" min="10" max="100" value="{{ settings.default_min_attendance or '75' }}" class="form-input w-48 text-xs font-bold">
+            <span class="text-[11px] text-slate-400 block mt-1">Learners must attend at least this percentage of the scheduled session duration to be marked <strong>PRESENT</strong>.</span>
+        </div>
+    </div>
+
+    <div class="flex justify-end gap-3">
+        <a href="{{ url_for('admin_panel') }}" class="btn-secondary py-2.5 px-6 rounded-2xl text-xs font-bold">
+            Cancel
+        </a>
+        <button type="submit" class="btn-primary py-2.5 px-8 rounded-2xl text-xs font-bold shadow-lg">
+            Save Integration Settings
+        </button>
+    </div>
+</form>
+{% endblock %}

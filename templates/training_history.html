@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}My Live Trainings | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+        <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-2">My Live Training Record</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-sm">View all live sessions you were scheduled for, attendance percentages, and participation history.</p>
+    </div>
+    <a href="{{ url_for('training_calendar') }}" class="btn-secondary py-2.5 px-5 rounded-xl text-xs font-bold gap-2">
+        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        Training Calendar
+    </a>
+</div>
+
+<div class="max-w-5xl mx-auto space-y-4">
+    {% if trainings %}
+        <div class="glass-panel overflow-hidden bg-white/50 dark:bg-slate-900/50">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="border-b border-slate-200/60 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/40 dark:bg-slate-950/20">
+                            <th class="py-4 px-4">Live Training</th>
+                            <th class="py-4 px-4">Scheduled Date</th>
+                            <th class="py-4 px-4">Trainer</th>
+                            <th class="py-4 px-4">Duration Attended</th>
+                            <th class="py-4 px-4">Attendance %</th>
+                            <th class="py-4 px-4">Attendance Result</th>
+                            <th class="py-4 px-4 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        {% for t in trainings %}
+                        <tr class="hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-colors">
+                            <td class="py-4 px-4">
+                                <a href="{{ url_for('training_detail', session_id=t.id) }}" class="font-bold text-slate-900 dark:text-slate-100 hover:text-indigo-600 block">
+                                    {{ t.title }}
+                                </a>
+                                {% if t.course_name %}
+                                <span class="text-[10px] text-slate-400">Course: {{ t.course_name }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-4 px-4 text-slate-600 dark:text-slate-300 font-medium">
+                                {{ t.scheduled_start }}
+                            </td>
+                            <td class="py-4 px-4 text-slate-600 dark:text-slate-300">
+                                {{ t.trainer_name or 'Assigned Trainer' }}
+                            </td>
+                            <td class="py-4 px-4 font-bold text-slate-800 dark:text-slate-200">
+                                {{ t.total_duration_minutes }} min
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-16 bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                        <div class="bg-indigo-600 h-full rounded-full" style="width: {{ [t.attendance_percentage, 100]|min }}%"></div>
+                                    </div>
+                                    <span class="font-bold text-slate-800 dark:text-slate-200">{{ t.attendance_percentage }}%</span>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider
+                                    {% if t.attendance_status == 'PRESENT' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300
+                                    {% elif t.attendance_status == 'ABSENT' %}bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300
+                                    {% elif t.attendance_status == 'IN_PROGRESS' %}bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 animate-pulse
+                                    {% else %}bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300{% endif %}">
+                                    {{ t.attendance_status }}
+                                </span>
+                            </td>
+                            <td class="py-4 px-4 text-right">
+                                {% if t.status in ('SCHEDULED', 'LIVE') %}
+                                <a href="{{ url_for('join_training', session_id=t.id) }}" target="_blank" class="btn-primary py-1.5 px-3.5 rounded-lg text-xs font-bold">
+                                    Join Now
+                                </a>
+                                {% else %}
+                                <a href="{{ url_for('training_detail', session_id=t.id) }}" class="text-xs font-bold text-indigo-600 hover:underline">
+                                    View Details
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="glass-panel p-12 text-center bg-white/40 dark:bg-slate-900/40">
+            <svg class="w-16 h-16 mx-auto mb-4 text-indigo-400 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+            <h3 class="text-lg font-bold text-slate-800 dark:text-slate-200">No training history yet</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">You have not been assigned to any completed live training sessions yet.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

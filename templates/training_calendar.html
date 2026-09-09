@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}Training Calendar | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-2">Live Training Calendar</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-lg">Schedule, manage, and join interactive virtual classroom sessions.</p>
+    </div>
+    {% if role in ('admin', 'moderator') %}
+    <div class="flex items-center gap-3">
+        <a href="{{ url_for('training_reports') }}" class="btn-secondary py-2.5 px-5 rounded-2xl text-xs font-bold gap-2">
+            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            Reports & Analytics
+        </a>
+        <a href="{{ url_for('create_training') }}" class="btn-primary py-2.5 px-5 rounded-2xl text-xs font-bold gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Schedule Training
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Filters Bar -->
+<div class="glass-panel p-4 mb-6 bg-white/40 dark:bg-slate-900/40 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 mr-2">Filter:</span>
+        <a href="{{ url_for('training_calendar', filter='my', view=view_mode, course_id=selected_course_id) }}" 
+           class="px-4 py-2 rounded-xl text-xs font-bold transition-all {% if filter_type == 'my' %}bg-indigo-600 text-white shadow-md{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}">
+            My Trainings
+        </a>
+        {% if role in ('admin', 'moderator') %}
+        <a href="{{ url_for('training_calendar', filter='all', view=view_mode, course_id=selected_course_id) }}" 
+           class="px-4 py-2 rounded-xl text-xs font-bold transition-all {% if filter_type == 'all' %}bg-indigo-600 text-white shadow-md{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}">
+            All Sessions
+        </a>
+        {% endif %}
+        <a href="{{ url_for('training_calendar', filter='upcoming', view=view_mode, course_id=selected_course_id) }}" 
+           class="px-4 py-2 rounded-xl text-xs font-bold transition-all {% if filter_type == 'upcoming' %}bg-indigo-600 text-white shadow-md{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}">
+            Upcoming
+        </a>
+        <a href="{{ url_for('training_calendar', filter='completed', view=view_mode, course_id=selected_course_id) }}" 
+           class="px-4 py-2 rounded-xl text-xs font-bold transition-all {% if filter_type == 'completed' %}bg-indigo-600 text-white shadow-md{% else %}bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}">
+            Completed
+        </a>
+    </div>
+
+    <div class="flex items-center gap-3">
+        <form method="get" class="flex items-center gap-2">
+            <input type="hidden" name="filter" value="{{ filter_type }}">
+            <input type="hidden" name="view" value="{{ view_mode }}">
+            <select name="course_id" onchange="this.form.submit()" class="form-input text-xs py-1.5 px-3 h-10 rounded-xl">
+                <option value="">All Linked Courses</option>
+                {% for c in courses %}
+                <option value="{{ c.id }}" {% if selected_course_id|string == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </form>
+
+        <div class="flex bg-slate-200/60 dark:bg-slate-800/60 p-1 rounded-xl">
+            <button onclick="switchView('agenda')" id="view-btn-agenda" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all bg-white dark:bg-slate-900 shadow-sm text-indigo-600 dark:text-indigo-400">List View</button>
+            <button onclick="switchView('calendar')" id="view-btn-calendar" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900">Calendar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Sessions Content List (Agenda View) -->
+<div id="agenda-view-container" class="space-y-4">
+    {% if sessions %}
+        {% for s in sessions %}
+        <div class="glass-panel p-6 bg-white/50 dark:bg-slate-900/50 hover:border-indigo-500/40 transition-all duration-300">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="space-y-2">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider 
+                            {% if s.status == 'LIVE' %}bg-red-500 text-white animate-pulse
+                            {% elif s.status == 'SCHEDULED' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300
+                            {% elif s.status == 'COMPLETED' %}bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300
+                            {% else %}bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300{% endif %}">
+                            {{ s.status }}
+                        </span>
+                        
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200/40">
+                            {% if s.meeting_provider == 'zoom' %}Zoom Video Conference
+                            {% elif s.meeting_provider in ('google_meet', 'meet') %}Google Meet
+                            {% else %}Virtual Live Room{% endif %}
+                        </span>
+
+                        {% if s.course_name %}
+                        <span class="text-xs text-slate-400 dark:text-slate-500">
+                            Course: <strong class="text-slate-700 dark:text-slate-300">{{ s.course_name }}</strong>
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <h3 class="text-xl font-bold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+                        <a href="{{ url_for('training_detail', session_id=s.id) }}" class="hover:text-indigo-600 transition-colors">
+                            {{ s.title }}
+                        </a>
+                    </h3>
+
+                    {% if s.description %}
+                    <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 max-w-2xl">{{ s.description }}</p>
+                    {% endif %}
+
+                    <div class="flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-300 pt-1">
+                        <div class="flex items-center gap-1.5 font-medium">
+                            <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            <span>{{ s.scheduled_start }}</span>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 font-medium">
+                            <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            <span>Trainer: <strong>{{ s.trainer_name or 'Assigned Trainer' }}</strong></span>
+                        </div>
+
+                        {% if s.moderator_name %}
+                        <div class="flex items-center gap-1.5 font-medium">
+                            <span>Mod: <strong>{{ s.moderator_name }}</strong></span>
+                        </div>
+                        {% endif %}
+
+                        <div class="flex items-center gap-1.5 font-medium text-slate-400">
+                            <span>{{ s.participant_count }} Invited</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+                    {% if s.status != 'CANCELLED' %}
+                        {% if s.trainer_id == user_id or role in ('admin', 'moderator') %}
+                        <a href="{{ url_for('training_live_room', session_id=s.id) }}" class="btn-secondary py-2.5 px-4 rounded-xl text-xs font-bold gap-1.5">
+                            <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                            Live Room
+                        </a>
+                        {% endif %}
+
+                        <a href="{{ url_for('join_training', session_id=s.id) }}" target="_blank" class="btn-primary py-2.5 px-6 rounded-xl text-xs font-bold gap-2 shadow-md">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            Join Session
+                        </a>
+                    {% endif %}
+
+                    <a href="{{ url_for('training_detail', session_id=s.id) }}" class="px-4 py-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                        Details
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="glass-panel p-12 text-center bg-white/40 dark:bg-slate-900/40">
+            <svg class="w-16 h-16 mx-auto mb-4 text-indigo-400 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <h3 class="text-lg font-bold text-slate-800 dark:text-slate-200">No training sessions found</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">There are no live training sessions scheduled matching your selected criteria.</p>
+            {% if role in ('admin', 'moderator') %}
+            <div class="mt-6">
+                <a href="{{ url_for('create_training') }}" class="btn-primary py-2.5 px-6 rounded-2xl text-xs font-bold">
+                    Schedule Your First Training
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<!-- Calendar Grid View (Interactive Month Grid) -->
+<div id="calendar-view-container" class="glass-panel p-6 bg-white/50 dark:bg-slate-900/50 hidden">
+    <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200/60 dark:border-slate-800">
+        <h2 id="current-month-label" class="text-xl font-bold text-slate-900 dark:text-slate-50"></h2>
+        <div class="flex items-center gap-2">
+            <button onclick="changeMonth(-1)" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <button onclick="changeMonth(1)" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-7 gap-2 text-center text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+    </div>
+    <div id="calendar-days-grid" class="grid grid-cols-7 gap-2">
+        <!-- Injected via JavaScript -->
+    </div>
+</div>
+
+<script>
+const rawSessions = {{ sessions|tojson }};
+let currentCalendarDate = new Date();
+
+function switchView(view) {
+    const agendaContainer = document.getElementById('agenda-view-container');
+    const calendarContainer = document.getElementById('calendar-view-container');
+    const btnAgenda = document.getElementById('view-btn-agenda');
+    const btnCalendar = document.getElementById('view-btn-calendar');
+
+    if (view === 'calendar') {
+        agendaContainer.classList.add('hidden');
+        calendarContainer.classList.remove('hidden');
+        btnCalendar.classList.add('bg-white', 'dark:bg-slate-900', 'shadow-sm', 'text-indigo-600', 'dark:text-indigo-400');
+        btnCalendar.classList.remove('text-slate-600', 'dark:text-slate-400');
+        btnAgenda.classList.remove('bg-white', 'dark:bg-slate-900', 'shadow-sm', 'text-indigo-600', 'dark:text-indigo-400');
+        btnAgenda.classList.add('text-slate-600', 'dark:text-slate-400');
+        renderMonthCalendar();
+    } else {
+        calendarContainer.classList.add('hidden');
+        agendaContainer.classList.remove('hidden');
+        btnAgenda.classList.add('bg-white', 'dark:bg-slate-900', 'shadow-sm', 'text-indigo-600', 'dark:text-indigo-400');
+        btnAgenda.classList.remove('text-slate-600', 'dark:text-slate-400');
+        btnCalendar.classList.remove('bg-white', 'dark:bg-slate-900', 'shadow-sm', 'text-indigo-600', 'dark:text-indigo-400');
+        btnCalendar.classList.add('text-slate-600', 'dark:text-slate-400');
+    }
+}
+
+function changeMonth(delta) {
+    currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
+    renderMonthCalendar();
+}
+
+function renderMonthCalendar() {
+    const year = currentCalendarDate.getFullYear();
+    const month = currentCalendarDate.getMonth();
+    
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    document.getElementById('current-month-label').innerText = `${monthNames[month]} ${year}`;
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    const grid = document.getElementById('calendar-days-grid');
+    grid.innerHTML = '';
+
+    // Empty cells before day 1
+    for (let i = 0; i < firstDay; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'min-h-[100px] p-2 bg-slate-50/20 dark:bg-slate-900/10 rounded-xl border border-transparent';
+        grid.appendChild(emptyCell);
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const daySessions = rawSessions.filter(s => s.scheduled_start && s.scheduled_start.startsWith(dayStr));
+
+        const cell = document.createElement('div');
+        const isToday = (dayStr === todayStr);
+        cell.className = `min-h-[110px] p-2.5 rounded-2xl border transition-all ${isToday ? 'border-indigo-500 bg-indigo-50/30 dark:bg-indigo-950/20' : 'border-slate-200/50 dark:border-slate-800/80 bg-white/40 dark:bg-slate-950/30'}`;
+
+        let html = `<div class="flex justify-between items-center mb-1.5">
+            <span class="text-xs font-bold ${isToday ? 'w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-sm' : 'text-slate-700 dark:text-slate-300'}">${day}</span>
+            ${daySessions.length ? `<span class="text-[9px] font-black text-indigo-500">${daySessions.length} event(s)</span>` : ''}
+        </div>`;
+
+        html += `<div class="space-y-1 overflow-y-auto max-h-[80px]">`;
+        daySessions.forEach(s => {
+            const timePart = s.scheduled_start.split(' ')[1]?.slice(0, 5) || '';
+            html += `<a href="/training/${s.id}" class="block p-1.5 rounded-lg text-[10px] font-bold bg-indigo-600 text-white truncate hover:bg-indigo-700 transition-colors shadow-sm" title="${s.title} (${timePart})">
+                ${timePart ? timePart + ' ' : ''}${s.title}
+            </a>`;
+        });
+        html += `</div>`;
+
+        cell.innerHTML = html;
+        grid.appendChild(cell);
+    }
+}
+</script>
+{% endblock %}

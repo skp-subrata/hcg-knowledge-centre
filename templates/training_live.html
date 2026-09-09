@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Live Control Room | {{ session_data.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+    <!-- Header Bar -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 glass-panel p-6 bg-white/60 dark:bg-slate-900/60">
+        <div class="space-y-1">
+            <div class="flex items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500 text-white animate-pulse">
+                    ● LIVE SESSION CONTROL
+                </span>
+                <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">{{ session_data.meeting_provider|upper }}</span>
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">{{ session_data.title }}</h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+                Scheduled: {{ session_data.scheduled_start }} &bull; Trainer: <strong>{{ session_data.trainer_name }}</strong>
+            </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="{{ url_for('join_training', session_id=session_data.id) }}" target="_blank" class="btn-primary py-2.5 px-5 rounded-xl text-xs font-bold gap-2 shadow">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                Launch Meeting Room
+            </a>
+
+            <form method="post" action="{{ url_for('reconcile_training_session', session_id=session_data.id) }}" onsubmit="return confirm('End this live session and calculate final attendance for all participants?');">
+                <button type="submit" class="py-2.5 px-5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow transition-all">
+                    End Session & Finalize
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Live Stat Metric Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {% set in_meeting_count = participants | selectattr('is_currently_in_meeting', 'equalto', 1) | list | length %}
+        {% set joined_any_count = participants | rejectattr('first_join_time', 'none') | list | length %}
+        
+        <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 text-center">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Total Enrolled</span>
+            <span class="text-2xl font-black text-slate-900 dark:text-slate-50">{{ participants|length }}</span>
+        </div>
+
+        <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 text-center border-l-4 border-emerald-500">
+            <span class="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block mb-1">Active In Meeting</span>
+            <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{{ in_meeting_count }}</span>
+        </div>
+
+        <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 text-center">
+            <span class="text-[10px] uppercase font-bold text-indigo-500 block mb-1">Attended At Least Once</span>
+            <span class="text-2xl font-black text-indigo-600 dark:text-indigo-400">{{ joined_any_count }}</span>
+        </div>
+
+        <div class="glass-panel p-5 bg-white/40 dark:bg-slate-900/40 text-center">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Not Joined Yet</span>
+            <span class="text-2xl font-black text-slate-500">{{ participants|length - joined_any_count }}</span>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Live Participants Table -->
+        <div class="lg:col-span-2 glass-panel p-6 bg-white/50 dark:bg-slate-900/50 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Live Roster & Attendance Punch</h3>
+                <span class="text-[10px] text-slate-400">Auto-calculated against {{ session_data.min_attendance_percentage }}% criteria</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="border-b border-slate-200/60 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            <th class="py-3 px-3">Learner</th>
+                            <th class="py-3 px-3">Presence</th>
+                            <th class="py-3 px-3">Duration</th>
+                            <th class="py-3 px-3">Att %</th>
+                            <th class="py-3 px-3 text-right">Quick Override</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        {% for p in participants %}
+                        <tr class="hover:bg-slate-50/40 dark:hover:bg-slate-950/20">
+                            <td class="py-3 px-3">
+                                <span class="font-bold text-slate-900 dark:text-slate-100 block">{{ p.full_name }}</span>
+                                <span class="text-[10px] text-slate-400 block">{{ p.employee_id or 'No ID' }} &bull; {{ p.department or 'General' }}</span>
+                            </td>
+                            <td class="py-3 px-3">
+                                {% if p.is_currently_in_meeting %}
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 animate-pulse flex items-center gap-1 w-max">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Connected
+                                </span>
+                                {% elif p.first_join_time %}
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                    Left Meeting
+                                </span>
+                                {% else %}
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+                                    Not Joined
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 px-3 font-medium">{{ p.total_duration_minutes }} min</td>
+                            <td class="py-3 px-3">
+                                <span class="font-bold {% if p.attendance_percentage >= session_data.min_attendance_percentage %}text-emerald-600{% else %}text-slate-600{% endif %}">
+                                    {{ p.attendance_percentage }}%
+                                </span>
+                            </td>
+                            <td class="py-3 px-3 text-right">
+                                <form method="post" action="{{ url_for('manual_training_attendance', session_id=session_data.id) }}" class="inline-flex items-center gap-1">
+                                    <input type="hidden" name="target_user_id" value="{{ p.user_id }}">
+                                    <input type="hidden" name="duration_minutes" value="60">
+                                    <button type="submit" name="status" value="PRESENT" class="px-2 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                                        Mark Present
+                                    </button>
+                                    <button type="submit" name="status" value="ABSENT" class="px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold border border-rose-200">
+                                        Mark Absent
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Real-time Event Stream Log -->
+        <div class="glass-panel p-6 bg-white/50 dark:bg-slate-900/50 space-y-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Join / Leave Activity Feed</h3>
+            
+            <div class="space-y-2 max-h-[450px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                {% for log in logs %}
+                <div class="pt-2 pb-1 space-y-0.5">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-800 dark:text-slate-200">{{ log.full_name }}</span>
+                        <span class="text-[9px] text-slate-400">{{ log.join_time.split(' ')[1][:8] if log.join_time else '' }}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500">
+                        Joined via <strong class="text-indigo-500">{{ log.join_source }}</strong>
+                        {% if log.leave_time %}
+                        &bull; Left at {{ log.leave_time.split(' ')[1][:8] }} ({{ (log.duration_seconds / 60)|round(1) }}m)
+                        {% else %}
+                        &bull; <span class="text-emerald-500 font-bold">Currently in session</span>
+                        {% endif %}
+                    </p>
+                </div>
+                {% else %}
+                <div class="text-center text-slate-400 py-8">
+                    No join/leave activity logs yet.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

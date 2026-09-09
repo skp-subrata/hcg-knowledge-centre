@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import csv
+from datetime import datetime, timedelta
 from io import BytesIO
 from io import StringIO, TextIOWrapper
 from functools import wraps
@@ -13,6 +14,7 @@ from uuid import uuid4
 from flask import Flask, flash, redirect, render_template, request, send_file, send_from_directory, session, url_for, jsonify, abort
 from openpyxl import Workbook, load_workbook
 from storage import save_file
+from meeting_providers import get_meeting_provider, ZoomMeetingProvider
 
 
 DATABASE = Path(os.getenv("LMS_DATABASE", Path(__file__).with_name("users.db")))
@@ -468,6 +470,76 @@ def init_db():
 			('GLOBAL_RESET', 'active', 'FIXED', 0.0, 0),
 			('USER_RESET', 'active', 'FIXED', 0.0, 0);
 			
+			CREATE TABLE IF NOT EXISTS training_sessions (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				title TEXT NOT NULL,
+				description TEXT DEFAULT '',
+				course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+				trainer_id INTEGER NOT NULL REFERENCES users(id),
+				moderator_id INTEGER REFERENCES users(id),
+				organizer_id INTEGER REFERENCES users(id),
+				scheduled_start TEXT NOT NULL,
+				scheduled_end TEXT NOT NULL,
+				timezone TEXT DEFAULT 'Asia/Kolkata',
+				meeting_provider TEXT DEFAULT 'zoom',
+				meeting_id TEXT DEFAULT '',
+				meeting_uuid TEXT DEFAULT '',
+				join_url TEXT DEFAULT '',
+				host_url TEXT DEFAULT '',
+				passcode TEXT DEFAULT '',
+				actual_start TEXT,
+				actual_end TEXT,
+				min_attendance_percentage REAL DEFAULT 75.0,
+				status TEXT CHECK(status IN ('SCHEDULED', 'LIVE', 'COMPLETED', 'CANCELLED')) DEFAULT 'SCHEDULED',
+				created_by INTEGER NOT NULL REFERENCES users(id),
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+			);
+
+			CREATE TABLE IF NOT EXISTS training_participants (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				training_session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				source_type TEXT DEFAULT 'INDIVIDUAL',
+				source_id INTEGER,
+				invited_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				registration_status TEXT DEFAULT 'INVITED',
+				attendance_status TEXT DEFAULT 'PENDING',
+				attendance_percentage REAL DEFAULT 0.0,
+				total_duration_minutes REAL DEFAULT 0.0,
+				first_join_time TEXT,
+				last_leave_time TEXT,
+				rejoin_count INTEGER DEFAULT 0,
+				updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(training_session_id, user_id)
+			);
+
+			CREATE TABLE IF NOT EXISTS training_attendance_logs (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				training_session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				provider TEXT DEFAULT 'zoom',
+				provider_participant_id TEXT DEFAULT '',
+				join_time TEXT NOT NULL,
+				leave_time TEXT,
+				duration_seconds INTEGER DEFAULT 0,
+				join_source TEXT DEFAULT 'LMS_PORTAL',
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP
+			);
+
+			CREATE TABLE IF NOT EXISTS training_settings (
+				setting_key TEXT PRIMARY KEY,
+				setting_value TEXT DEFAULT '',
+				updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+			);
+
+			INSERT OR IGNORE INTO training_settings (setting_key, setting_value) VALUES
+			('zoom_account_id', ''),
+			('zoom_client_id', ''),
+			('zoom_client_secret', ''),
+			('zoom_webhook_secret', ''),
+			('default_min_attendance', '75');
+
 			CREATE INDEX IF NOT EXISTS idx_questions_bank ON questions(question_bank_id);
 			CREATE INDEX IF NOT EXISTS idx_attempt_student ON assessment_attempts(student_id);
 			CREATE INDEX IF NOT EXISTS idx_posts_creator ON posts(created_by);
@@ -475,6 +547,9 @@ def init_db():
 			CREATE INDEX IF NOT EXISTS idx_post_comments_post ON post_comments(post_id);
 			CREATE INDEX IF NOT EXISTS idx_reward_tx_user ON reward_transactions(user_id);
 			CREATE INDEX IF NOT EXISTS idx_reward_tx_src ON reward_transactions(reward_source, source_reference_id);
+			CREATE INDEX IF NOT EXISTS idx_tr_sess_start ON training_sessions(scheduled_start);
+			CREATE INDEX IF NOT EXISTS idx_tr_part_sess_user ON training_participants(training_session_id, user_id);
+			CREATE INDEX IF NOT EXISTS idx_tr_att_logs ON training_attendance_logs(training_session_id, user_id);
 		""")
 		seed_demo_data(connection)
 
@@ -1252,6 +1327,257 @@ def safe_referrer(default_url):
 			return default_url
 		return ref
 	return default_url
+
+
+def get_training_settings(connection):
+	"""Retrieve all live training configuration key-values as a dictionary."""
+	rows = connection.execute("SELECT setting_key, setting_value FROM training_settings").fetchall()
+	return {r["setting_key"]: r["setting_value"] for r in rows}
+
+
+def parse_datetime_flexible(dt_str):
+	"""Parse various ISO and standard date-time formats into datetime object."""
+	if not dt_str:
+		return None
+	dt_str = str(dt_str).strip().replace("T", " ")
+	for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d"):
+		try:
+			return datetime.strptime(dt_str, fmt)
+		except ValueError:
+			pass
+	return None
+
+
+def calculate_participant_attendance(connection, session_id, user_id):
+	"""
+	Calculate exact attendance for a participant across all join/leave intervals.
+	Supports rejoins, handles multiple disjoint intervals, and evaluates pass/fail status.
+	"""
+	sess = connection.execute("SELECT * FROM training_sessions WHERE id = ?", (session_id,)).fetchone()
+	if not sess:
+		return None
+
+	logs = connection.execute(
+		"SELECT * FROM training_attendance_logs WHERE training_session_id = ? AND user_id = ? ORDER BY join_time ASC",
+		(session_id, user_id)
+	).fetchall()
+
+	start_dt = parse_datetime_flexible(sess["scheduled_start"])
+	end_dt = parse_datetime_flexible(sess["scheduled_end"])
+
+	if start_dt and end_dt and end_dt > start_dt:
+		scheduled_seconds = (end_dt - start_dt).total_seconds()
+	else:
+		scheduled_seconds = 3600.0  # fallback 1 hr
+
+	total_attended_seconds = 0
+	first_join = None
+	last_leave = None
+	intervals = []
+
+	now_dt = datetime.now()
+
+	for log in logs:
+		j_dt = parse_datetime_flexible(log["join_time"])
+		if not j_dt:
+			continue
+		if first_join is None or j_dt < first_join:
+			first_join = j_dt
+
+		l_dt = parse_datetime_flexible(log["leave_time"])
+		if not l_dt:
+			# If still open and session is active, cap at now or end_dt
+			if sess["status"] == "LIVE":
+				l_dt = min(now_dt, end_dt) if end_dt else now_dt
+			elif end_dt:
+				l_dt = end_dt
+			else:
+				l_dt = j_dt
+
+		if last_leave is None or l_dt > last_leave:
+			last_leave = l_dt
+
+		# Merge / accumulate interval duration
+		duration = max(0, int((l_dt - j_dt).total_seconds()))
+		if log["duration_seconds"] and log["duration_seconds"] > 0:
+			duration = max(duration, int(log["duration_seconds"]))
+
+		total_attended_seconds += duration
+
+	total_duration_minutes = round(total_attended_seconds / 60.0, 1)
+	attendance_percentage = min(100.0, round((total_attended_seconds / scheduled_seconds) * 100.0, 2))
+	min_percentage = float(sess["min_attendance_percentage"] or 75.0)
+
+	rejoin_count = max(0, len(logs) - 1)
+
+	if len(logs) == 0:
+		attendance_status = "ABSENT" if sess["status"] in ("COMPLETED", "CANCELLED") else "PENDING"
+	else:
+		if sess["status"] == "LIVE":
+			attendance_status = "PRESENT" if attendance_percentage >= min_percentage else "IN_PROGRESS"
+		else:
+			attendance_status = "PRESENT" if attendance_percentage >= min_percentage else "ABSENT"
+
+	first_join_str = first_join.strftime("%Y-%m-%d %H:%M:%S") if first_join else None
+	last_leave_str = last_leave.strftime("%Y-%m-%d %H:%M:%S") if last_leave else None
+
+	connection.execute("""
+		UPDATE training_participants
+		SET attendance_percentage = ?,
+			total_duration_minutes = ?,
+			attendance_status = ?,
+			first_join_time = COALESCE(?, first_join_time),
+			last_leave_time = COALESCE(?, last_leave_time),
+			rejoin_count = ?,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE training_session_id = ? AND user_id = ?
+	""", (attendance_percentage, total_duration_minutes, attendance_status, first_join_str, last_leave_str, rejoin_count, session_id, user_id))
+
+	return {
+		"attendance_percentage": attendance_percentage,
+		"total_duration_minutes": total_duration_minutes,
+		"attendance_status": attendance_status,
+		"rejoin_count": rejoin_count,
+		"first_join_time": first_join_str,
+		"last_leave_time": last_leave_str
+	}
+
+
+def record_participant_join(connection, session_id, user_id, join_source="LMS_PORTAL", provider="zoom", provider_participant_id=""):
+	"""Record a participant joining a session."""
+	now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+	# Ensure participant is enrolled in session
+	existing_part = connection.execute(
+		"SELECT id, registration_status, attendance_status FROM training_participants WHERE training_session_id = ? AND user_id = ?",
+		(session_id, user_id)
+	).fetchone()
+
+	if not existing_part:
+		connection.execute("""
+			INSERT INTO training_participants (training_session_id, user_id, source_type, registration_status, attendance_status)
+			VALUES (?, ?, 'DIRECT_JOIN', 'REGISTERED', 'IN_PROGRESS')
+		""", (session_id, user_id))
+	else:
+		connection.execute(
+			"UPDATE training_participants SET registration_status = 'REGISTERED' WHERE training_session_id = ? AND user_id = ?",
+			(session_id, user_id)
+		)
+
+	# Check for open log
+	open_log = connection.execute(
+		"SELECT id FROM training_attendance_logs WHERE training_session_id = ? AND user_id = ? AND leave_time IS NULL ORDER BY id DESC LIMIT 1",
+		(session_id, user_id)
+	).fetchone()
+
+	if not open_log:
+		connection.execute("""
+			INSERT INTO training_attendance_logs (training_session_id, user_id, provider, provider_participant_id, join_time, join_source)
+			VALUES (?, ?, ?, ?, ?, ?)
+		""", (session_id, user_id, provider, provider_participant_id, now_str, join_source))
+
+	# Update session actual_start if not set
+	connection.execute(
+		"UPDATE training_sessions SET actual_start = COALESCE(actual_start, ?), status = CASE WHEN status = 'SCHEDULED' THEN 'LIVE' ELSE status END WHERE id = ?",
+		(now_str, session_id)
+	)
+
+	calculate_participant_attendance(connection, session_id, user_id)
+
+
+def record_participant_leave(connection, session_id, user_id):
+	"""Record a participant leaving a session."""
+	now_dt = datetime.now()
+	now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+	open_logs = connection.execute(
+		"SELECT id, join_time FROM training_attendance_logs WHERE training_session_id = ? AND user_id = ? AND leave_time IS NULL ORDER BY id DESC",
+		(session_id, user_id)
+	).fetchall()
+
+	for o in open_logs:
+		j_dt = parse_datetime_flexible(o["join_time"])
+		duration = max(0, int((now_dt - j_dt).total_seconds())) if j_dt else 0
+		connection.execute(
+			"UPDATE training_attendance_logs SET leave_time = ?, duration_seconds = ? WHERE id = ?",
+			(now_str, duration, o["id"])
+		)
+
+	calculate_participant_attendance(connection, session_id, user_id)
+
+
+def reconcile_training_attendance(connection, session_id):
+	"""
+	Reconcile training session attendance using logs and provider reports.
+	Finalizes attendance status (PRESENT / ABSENT) against required criteria.
+	"""
+	sess = connection.execute("SELECT * FROM training_sessions WHERE id = ?", (session_id,)).fetchone()
+	if not sess:
+		return False
+
+	now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+	# Close any remaining open logs
+	open_logs = connection.execute(
+		"SELECT id, user_id, join_time FROM training_attendance_logs WHERE training_session_id = ? AND leave_time IS NULL",
+		(session_id,)
+	).fetchall()
+
+	end_dt = parse_datetime_flexible(sess["actual_end"]) or parse_datetime_flexible(sess["scheduled_end"]) or datetime.now()
+	end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+	for o in open_logs:
+		j_dt = parse_datetime_flexible(o["join_time"])
+		duration = max(0, int((end_dt - j_dt).total_seconds())) if j_dt else 0
+		connection.execute(
+			"UPDATE training_attendance_logs SET leave_time = ?, duration_seconds = ? WHERE id = ?",
+			(end_str, duration, o["id"])
+		)
+
+	# Fetch Zoom / Provider post-meeting report if credentials exist
+	settings = get_training_settings(connection)
+	provider = get_meeting_provider(sess["meeting_provider"], settings)
+	meeting_id = sess["meeting_uuid"] or sess["meeting_id"]
+
+	if meeting_id:
+		try:
+			report_participants = provider.get_participants_report(meeting_id)
+			for rp in report_participants:
+				email = rp.get("email")
+				if email:
+					user = connection.execute("SELECT id FROM users WHERE LOWER(email) = ?", (email,)).fetchone()
+					if user:
+						uid = user["id"]
+						# Check if log exists for this time
+						existing_log = connection.execute(
+							"SELECT id FROM training_attendance_logs WHERE training_session_id = ? AND user_id = ? AND (join_time = ? OR provider_participant_id = ?)",
+							(session_id, uid, rp.get("join_time", ""), rp.get("participant_id", ""))
+						).fetchone()
+						if not existing_log and rp.get("join_time"):
+							connection.execute("""
+								INSERT INTO training_attendance_logs (training_session_id, user_id, provider, provider_participant_id, join_time, leave_time, duration_seconds, join_source)
+								VALUES (?, ?, ?, ?, ?, ?, ?, 'RECONCILED')
+							""", (session_id, uid, sess["meeting_provider"], rp.get("participant_id", ""), rp.get("join_time"), rp.get("leave_time"), rp.get("duration_seconds", 0)))
+		except Exception as e:
+			print(f"[reconcile_training_attendance] Provider Report Sync error: {e}")
+
+	# Update session status to COMPLETED
+	connection.execute(
+		"UPDATE training_sessions SET status = 'COMPLETED', actual_end = COALESCE(actual_end, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		(now_str, session_id)
+	)
+
+	# Recalculate attendance for all participants
+	participants = connection.execute(
+		"SELECT user_id FROM training_participants WHERE training_session_id = ?",
+		(session_id,)
+	).fetchall()
+
+	for p in participants:
+		calculate_participant_attendance(connection, session_id, p["user_id"])
+
+	return True
+
 
 def create_app():
 	"""Build and configure the Flask application."""
@@ -5520,6 +5846,741 @@ def create_app():
 	        locations = connection.execute("SELECT * FROM locations ORDER BY location_name").fetchall()
 	        
 	    return render_template("master_management.html", departments=[dict(d) for d in departments], locations=[dict(l) for l in locations], user=session.get("user"), role=session.get("role"), profile_picture=session.get("profile_picture"))
+
+		# ─── LIVE TRAINING MODULE ROUTES ──────────────────────────────────────────────
+
+	@app.get("/training/calendar")
+	def training_calendar():
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		user_id = session.get("user_id")
+		role = session.get("role")
+
+		view_mode = request.args.get("view", "month")
+		filter_type = request.args.get("filter", "all" if role in ("admin", "moderator") else "my")
+		course_id = request.args.get("course_id", "").strip()
+
+		with get_db() as connection:
+			sql = """
+				SELECT s.*, c.name AS course_name,
+					   u_tr.full_name AS trainer_name,
+					   u_mod.full_name AS moderator_name,
+					   u_org.full_name AS organizer_name,
+					   (SELECT COUNT(*) FROM training_participants tp WHERE tp.training_session_id = s.id) AS participant_count,
+					   (SELECT attendance_status FROM training_participants tp WHERE tp.training_session_id = s.id AND tp.user_id = ?) AS user_attendance_status,
+					   (SELECT registration_status FROM training_participants tp WHERE tp.training_session_id = s.id AND tp.user_id = ?) AS user_registration_status,
+					   (SELECT attendance_percentage FROM training_participants tp WHERE tp.training_session_id = s.id AND tp.user_id = ?) AS user_attendance_percentage
+				FROM training_sessions s
+				LEFT JOIN courses c ON c.id = s.course_id
+				LEFT JOIN users u_tr ON u_tr.id = s.trainer_id
+				LEFT JOIN users u_mod ON u_mod.id = s.moderator_id
+				LEFT JOIN users u_org ON u_org.id = s.organizer_id
+				WHERE 1=1
+			"""
+			params = [user_id, user_id, user_id]
+
+			if role not in ("admin", "moderator") or filter_type == "my":
+				sql += """ AND (
+					s.trainer_id = ? OR s.moderator_id = ? OR s.organizer_id = ? OR s.created_by = ?
+					OR EXISTS (SELECT 1 FROM training_participants tp WHERE tp.training_session_id = s.id AND tp.user_id = ?)
+				)"""
+				params.extend([user_id, user_id, user_id, user_id, user_id])
+
+			if filter_type == "upcoming":
+				sql += " AND s.status IN ('SCHEDULED', 'LIVE')"
+			elif filter_type == "completed":
+				sql += " AND s.status = 'COMPLETED'"
+
+			if course_id:
+				sql += " AND s.course_id = ?"
+				params.append(course_id)
+
+			sql += " ORDER BY s.scheduled_start ASC"
+			sessions_rows = connection.execute(sql, params).fetchall()
+			sessions_list = [dict(s) for s in sessions_rows]
+
+			courses_rows = connection.execute("SELECT id, name FROM courses WHERE status IN ('published', 'active') ORDER BY name").fetchall()
+			courses = [dict(c) for c in courses_rows]
+
+		return render_template(
+			"training_calendar.html",
+			sessions=sessions_list,
+			courses=courses,
+			view_mode=view_mode,
+			filter_type=filter_type,
+			selected_course_id=course_id,
+			user=session.get("user"),
+			role=session.get("role"),
+			user_id=user_id,
+			profile_picture=session.get("profile_picture")
+		)
+
+	@app.route("/training/create", methods=["GET", "POST"])
+	@staff_required
+	def create_training():
+		user_id = session.get("user_id")
+		role = session.get("role")
+
+		with get_db() as connection:
+			if request.method == "POST":
+				title = request.form.get("title", "").strip()
+				description = request.form.get("description", "").strip()
+				course_id = request.form.get("course_id") or None
+				trainer_id = request.form.get("trainer_id") or user_id
+				moderator_id = request.form.get("moderator_id") or None
+				organizer_id = request.form.get("organizer_id") or user_id
+				scheduled_date = request.form.get("scheduled_date", "").strip()
+				start_time = request.form.get("start_time", "").strip()
+				end_time = request.form.get("end_time", "").strip()
+				timezone_str = request.form.get("timezone", "Asia/Kolkata")
+				min_attendance_percentage = float(request.form.get("min_attendance_percentage", 75))
+				meeting_provider = request.form.get("meeting_provider", "zoom").lower()
+				auto_create = request.form.get("auto_create_meeting") == "1"
+				custom_join_url = request.form.get("custom_join_url", "").strip()
+				custom_host_url = request.form.get("custom_host_url", "").strip()
+				passcode = request.form.get("passcode", "").strip()
+
+				if not (title and scheduled_date and start_time and end_time):
+					flash("Please provide Title, Date, Start Time, and End Time.")
+					return redirect(url_for("create_training"))
+
+				scheduled_start = f"{scheduled_date} {start_time}:00" if len(start_time) == 5 else f"{scheduled_date} {start_time}"
+				scheduled_end = f"{scheduled_date} {end_time}:00" if len(end_time) == 5 else f"{scheduled_date} {end_time}"
+
+				# Calculate duration in minutes
+				s_dt = parse_datetime_flexible(scheduled_start)
+				e_dt = parse_datetime_flexible(scheduled_end)
+				duration_minutes = max(15, int((e_dt - s_dt).total_seconds() / 60)) if (s_dt and e_dt) else 60
+
+				# Meeting Provider Integration
+				settings = get_training_settings(connection)
+				provider = get_meeting_provider(meeting_provider, settings)
+
+				provider_data = {
+					"title": title,
+					"description": description,
+					"scheduled_start": scheduled_start,
+					"duration_minutes": duration_minutes,
+					"timezone": timezone_str,
+					"join_url": custom_join_url,
+					"host_url": custom_host_url,
+					"passcode": passcode
+				}
+
+				meeting_res = provider.create_meeting(provider_data)
+
+				session_id = connection.execute("""
+					INSERT INTO training_sessions (
+						title, description, course_id, trainer_id, moderator_id, organizer_id,
+						scheduled_start, scheduled_end, timezone, meeting_provider,
+						meeting_id, meeting_uuid, join_url, host_url, passcode,
+						min_attendance_percentage, status, created_by
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SCHEDULED', ?)
+				""", (
+					title, description, course_id, trainer_id, moderator_id, organizer_id,
+					scheduled_start, scheduled_end, timezone_str, meeting_provider,
+					meeting_res.get("meeting_id", ""), meeting_res.get("meeting_uuid", ""),
+					meeting_res.get("join_url", ""), meeting_res.get("host_url", ""),
+					meeting_res.get("passcode", ""), min_attendance_percentage, user_id
+				)).lastrowid
+
+				# Participant Assignment
+				assign_mode = request.form.get("assign_mode", "individual")
+				assigned_user_ids = set()
+
+				if assign_mode == "all":
+					active_users = connection.execute("SELECT id FROM users WHERE COALESCE(is_active, 1) = 1").fetchall()
+					for u in active_users:
+						assigned_user_ids.add((u["id"], "ALL_USERS", None))
+				elif assign_mode == "groups":
+					selected_groups = request.form.getlist("group_ids")
+					for gid in selected_groups:
+						try:
+							gid_int = int(gid)
+							members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ?", (gid_int,)).fetchall()
+							for m in members:
+								assigned_user_ids.add((m["user_id"], "GROUP", gid_int))
+						except ValueError:
+							pass
+				else:
+					selected_users = request.form.getlist("user_ids")
+					for uid in selected_users:
+						try:
+							assigned_user_ids.add((int(uid), "INDIVIDUAL", None))
+						except ValueError:
+							pass
+
+				# Ensure trainer, moderator, and organizer are also registered
+				if trainer_id:
+					assigned_user_ids.add((int(trainer_id), "ROLE_TRAINER", None))
+				if moderator_id:
+					assigned_user_ids.add((int(moderator_id), "ROLE_MODERATOR", None))
+
+				for uid, src_type, src_id in assigned_user_ids:
+					connection.execute("""
+						INSERT INTO training_participants (training_session_id, user_id, source_type, source_id, registration_status, attendance_status)
+						VALUES (?, ?, ?, ?, 'REGISTERED', 'PENDING')
+						ON CONFLICT(training_session_id, user_id) DO NOTHING
+					""", (session_id, uid, src_type, src_id))
+
+					notif_msg = f"You have been scheduled for live training: '{title}' on {scheduled_date} at {start_time}."
+					create_notification(connection, uid, notif_msg, "live_training_scheduled", url_for("training_detail", session_id=session_id))
+
+				flash(f"Live Training '{title}' scheduled successfully with {len(assigned_user_ids)} participants!")
+				return redirect(url_for("training_calendar"))
+
+			# GET Request: Load courses, users, and groups
+			courses = connection.execute("SELECT id, name FROM courses WHERE status IN ('published', 'active') ORDER BY name").fetchall()
+			users_list = connection.execute("SELECT id, full_name, username, employee_id, role, department FROM users WHERE COALESCE(is_active, 1) = 1 ORDER BY full_name").fetchall()
+			groups_list = connection.execute("""
+				SELECT g.id, g.name, g.group_type,
+					   (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS member_count
+				FROM groups g
+				WHERE g.status = 'active'
+				ORDER BY g.name
+			""").fetchall()
+
+			settings = get_training_settings(connection)
+
+		return render_template(
+			"training_create.html",
+			courses=[dict(c) for c in courses],
+			users=[dict(u) for u in users_list],
+			groups=[dict(g) for g in groups_list],
+			settings=settings,
+			user=session.get("user"),
+			role=session.get("role"),
+			user_id=user_id,
+			profile_picture=session.get("profile_picture")
+		)
+
+	@app.get("/training/<int:session_id>")
+	def training_detail(session_id):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		user_id = session.get("user_id")
+		role = session.get("role")
+
+		with get_db() as connection:
+			sess = connection.execute("""
+				SELECT s.*, c.name AS course_name,
+					   u_tr.full_name AS trainer_name, u_tr.email AS trainer_email,
+					   u_mod.full_name AS moderator_name,
+					   u_org.full_name AS organizer_name,
+					   u_cr.full_name AS creator_name
+				FROM training_sessions s
+				LEFT JOIN courses c ON c.id = s.course_id
+				LEFT JOIN users u_tr ON u_tr.id = s.trainer_id
+				LEFT JOIN users u_mod ON u_mod.id = s.moderator_id
+				LEFT JOIN users u_org ON u_org.id = s.organizer_id
+				LEFT JOIN users u_cr ON u_cr.id = s.created_by
+				WHERE s.id = ?
+			""", (session_id,)).fetchone()
+
+			if not sess:
+				flash("Training session not found.")
+				return redirect(url_for("training_calendar"))
+
+			participants_rows = connection.execute("""
+				SELECT tp.*, u.full_name, u.username, u.employee_id, u.department, u.email
+				FROM training_participants tp
+				JOIN users u ON u.id = tp.user_id
+				WHERE tp.training_session_id = ?
+				ORDER BY u.full_name ASC
+			""", (session_id,)).fetchall()
+			participants = [dict(p) for p in participants_rows]
+
+			# User's own participant record
+			user_part = connection.execute(
+				"SELECT * FROM training_participants WHERE training_session_id = ? AND user_id = ?",
+				(session_id, user_id)
+			).fetchone()
+
+			logs_rows = connection.execute("""
+				SELECT l.*, u.full_name
+				FROM training_attendance_logs l
+				JOIN users u ON u.id = l.user_id
+				WHERE l.training_session_id = ?
+				ORDER BY l.join_time DESC
+			""", (session_id,)).fetchall()
+			logs = [dict(l) for l in logs_rows]
+
+		is_trainer = (sess["trainer_id"] == user_id)
+		is_moderator = (sess["moderator_id"] == user_id)
+		is_staff = role in ("admin", "moderator") or is_trainer or is_moderator
+
+		return render_template(
+			"training_detail.html",
+			session_data=dict(sess),
+			participants=participants,
+			user_part=dict(user_part) if user_part else None,
+			logs=logs,
+			is_staff=is_staff,
+			is_trainer=is_trainer,
+			is_moderator=is_moderator,
+			user=session.get("user"),
+			role=session.get("role"),
+			user_id=user_id,
+			profile_picture=session.get("profile_picture")
+		)
+
+	@app.route("/training/<int:session_id>/edit", methods=["GET", "POST"])
+	@staff_required
+	def edit_training(session_id):
+		user_id = session.get("user_id")
+		role = session.get("role")
+
+		with get_db() as connection:
+			sess = connection.execute("SELECT * FROM training_sessions WHERE id = ?", (session_id,)).fetchone()
+			if not sess:
+				flash("Training session not found.")
+				return redirect(url_for("training_calendar"))
+
+			if request.method == "POST":
+				title = request.form.get("title", "").strip()
+				description = request.form.get("description", "").strip()
+				course_id = request.form.get("course_id") or None
+				trainer_id = request.form.get("trainer_id") or sess["trainer_id"]
+				moderator_id = request.form.get("moderator_id") or None
+				scheduled_date = request.form.get("scheduled_date", "").strip()
+				start_time = request.form.get("start_time", "").strip()
+				end_time = request.form.get("end_time", "").strip()
+				min_attendance_percentage = float(request.form.get("min_attendance_percentage", sess["min_attendance_percentage"] or 75))
+				join_url = request.form.get("join_url", "").strip()
+				host_url = request.form.get("host_url", "").strip()
+				passcode = request.form.get("passcode", "").strip()
+
+				scheduled_start = f"{scheduled_date} {start_time}:00" if len(start_time) == 5 else f"{scheduled_date} {start_time}"
+				scheduled_end = f"{scheduled_date} {end_time}:00" if len(end_time) == 5 else f"{scheduled_date} {end_time}"
+
+				connection.execute("""
+					UPDATE training_sessions
+					SET title = ?, description = ?, course_id = ?, trainer_id = ?, moderator_id = ?,
+						scheduled_start = ?, scheduled_end = ?, min_attendance_percentage = ?,
+						join_url = ?, host_url = ?, passcode = ?, updated_at = CURRENT_TIMESTAMP
+					WHERE id = ?
+				""", (
+					title, description, course_id, trainer_id, moderator_id,
+					scheduled_start, scheduled_end, min_attendance_percentage,
+					join_url, host_url, passcode, session_id
+				))
+
+				flash("Training session updated successfully.")
+				return redirect(url_for("training_detail", session_id=session_id))
+
+			courses = connection.execute("SELECT id, name FROM courses WHERE status IN ('published', 'active') ORDER BY name").fetchall()
+			users_list = connection.execute("SELECT id, full_name, role FROM users WHERE COALESCE(is_active, 1) = 1 ORDER BY full_name").fetchall()
+
+		return render_template(
+			"training_create.html",
+			edit_mode=True,
+			session_data=dict(sess),
+			courses=[dict(c) for c in courses],
+			users=[dict(u) for u in users_list],
+			user=session.get("user"),
+			role=session.get("role"),
+			user_id=user_id,
+			profile_picture=session.get("profile_picture")
+		)
+
+	@app.post("/training/<int:session_id>/cancel")
+	@staff_required
+	def cancel_training(session_id):
+		user_id = session.get("user_id")
+		with get_db() as connection:
+			sess = connection.execute("SELECT * FROM training_sessions WHERE id = ?", (session_id,)).fetchone()
+			if sess:
+				connection.execute("UPDATE training_sessions SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (session_id,))
+				participants = connection.execute("SELECT user_id FROM training_participants WHERE training_session_id = ?", (session_id,)).fetchall()
+				for p in participants:
+					create_notification(connection, p["user_id"], f"Live training '{sess['title']}' scheduled for {sess['scheduled_start']} has been cancelled.", "training_cancelled", url_for("training_calendar"))
+				flash(f"Training session '{sess['title']}' has been cancelled.")
+		return redirect(url_for("training_calendar"))
+
+	@app.get("/training/<int:session_id>/join")
+	def join_training(session_id):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		user_id = session.get("user_id")
+
+		with get_db() as connection:
+			sess = connection.execute("SELECT * FROM training_sessions WHERE id = ?", (session_id,)).fetchone()
+			if not sess:
+				flash("Training session not found.")
+				return redirect(url_for("training_calendar"))
+
+			if sess["status"] == "CANCELLED":
+				flash("This training session has been cancelled.")
+				return redirect(url_for("training_detail", session_id=session_id))
+
+			# Record join event
+			record_participant_join(connection, session_id, user_id, join_source="LMS_PORTAL", provider=sess["meeting_provider"])
+
+			# If user is trainer/host and host_url is present, direct to host_url
+			target_url = sess["join_url"]
+			if (sess["trainer_id"] == user_id or sess["created_by"] == user_id) and sess["host_url"]:
+				target_url = sess["host_url"]
+
+			if not target_url:
+				flash("No meeting URL configured for this session.")
+				return redirect(url_for("training_detail", session_id=session_id))
+
+		return redirect(target_url)
+
+	@app.post("/training/<int:session_id>/leave-beacon")
+	def training_leave_beacon(session_id):
+		user_id = session.get("user_id")
+		if user_id:
+			with get_db() as connection:
+				record_participant_leave(connection, session_id, user_id)
+		return {"status": "ok"}, 200
+
+	@app.get("/training/<int:session_id>/live")
+	def training_live_room(session_id):
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		user_id = session.get("user_id")
+		role = session.get("role")
+
+		with get_db() as connection:
+			sess = connection.execute("""
+				SELECT s.*, c.name AS course_name,
+					   u_tr.full_name AS trainer_name,
+					   u_mod.full_name AS moderator_name
+				FROM training_sessions s
+				LEFT JOIN courses c ON c.id = s.course_id
+				LEFT JOIN users u_tr ON u_tr.id = s.trainer_id
+				LEFT JOIN users u_mod ON u_mod.id = s.moderator_id
+				WHERE s.id = ?
+			""", (session_id,)).fetchone()
+
+			if not sess:
+				flash("Training session not found.")
+				return redirect(url_for("training_calendar"))
+
+			is_staff = role in ("admin", "moderator") or sess["trainer_id"] == user_id or sess["moderator_id"] == user_id
+			if not is_staff:
+				return redirect(url_for("training_detail", session_id=session_id))
+
+			participants_rows = connection.execute("""
+				SELECT tp.*, u.full_name, u.username, u.employee_id, u.department, u.email,
+					   (SELECT COUNT(*) FROM training_attendance_logs al WHERE al.training_session_id = tp.training_session_id AND al.user_id = tp.user_id AND al.leave_time IS NULL) AS is_currently_in_meeting
+				FROM training_participants tp
+				JOIN users u ON u.id = tp.user_id
+				WHERE tp.training_session_id = ?
+				ORDER BY is_currently_in_meeting DESC, u.full_name ASC
+			""", (session_id,)).fetchall()
+			participants = [dict(p) for p in participants_rows]
+
+			logs_rows = connection.execute("""
+				SELECT l.*, u.full_name
+				FROM training_attendance_logs l
+				JOIN users u ON u.id = l.user_id
+				WHERE l.training_session_id = ?
+				ORDER BY l.id DESC LIMIT 50
+			""", (session_id,)).fetchall()
+			logs = [dict(l) for l in logs_rows]
+
+		return render_template(
+			"training_live.html",
+			session_data=dict(sess),
+			participants=participants,
+			logs=logs,
+			user=session.get("user"),
+			role=session.get("role"),
+			user_id=user_id,
+			profile_picture=session.get("profile_picture")
+		)
+
+	@app.post("/training/<int:session_id>/manual-attendance")
+	@staff_required
+	def manual_training_attendance(session_id):
+		user_id = session.get("user_id")
+		target_user_id = request.form.get("target_user_id")
+		status = request.form.get("status", "PRESENT").upper()
+		minutes = float(request.form.get("duration_minutes", 60))
+
+		with get_db() as connection:
+			sess = connection.execute("SELECT * FROM training_sessions WHERE id = ?", (session_id,)).fetchone()
+			if sess and target_user_id:
+				s_dt = parse_datetime_flexible(sess["scheduled_start"])
+				e_dt = parse_datetime_flexible(sess["scheduled_end"])
+				sched_min = max(15, int((e_dt - s_dt).total_seconds() / 60)) if (s_dt and e_dt) else 60
+				pct = min(100.0, round((minutes / sched_min) * 100.0, 2))
+
+				connection.execute("""
+					UPDATE training_participants
+					SET attendance_status = ?,
+						attendance_percentage = ?,
+						total_duration_minutes = ?,
+						updated_at = CURRENT_TIMESTAMP
+					WHERE training_session_id = ? AND user_id = ?
+				""", (status, pct, minutes, session_id, target_user_id))
+
+				connection.execute("""
+					INSERT INTO training_attendance_logs (training_session_id, user_id, provider, join_time, leave_time, duration_seconds, join_source)
+					VALUES (?, ?, 'MANUAL_OVERRIDE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, 'STAFF_OVERRIDE')
+				""", (session_id, target_user_id, int(minutes * 60)))
+
+				flash("Participant attendance record updated.")
+		return redirect(url_for("training_live_room", session_id=session_id))
+
+	@app.post("/training/<int:session_id>/reconcile")
+	@staff_required
+	def reconcile_training_session(session_id):
+		with get_db() as connection:
+			reconcile_training_attendance(connection, session_id)
+			flash("Attendance reconciliation completed. All participants calculated and session finalized.")
+		return redirect(url_for("training_detail", session_id=session_id))
+
+	@app.get("/my-learning/live-trainings")
+	def my_live_trainings():
+		if "user_id" not in session:
+			return redirect(url_for("home"))
+		user_id = session.get("user_id")
+
+		with get_db() as connection:
+			trainings = connection.execute("""
+				SELECT s.*, c.name AS course_name,
+					   u_tr.full_name AS trainer_name,
+					   tp.attendance_status, tp.attendance_percentage, tp.total_duration_minutes,
+					   tp.first_join_time, tp.last_leave_time, tp.registration_status
+				FROM training_participants tp
+				JOIN training_sessions s ON s.id = tp.training_session_id
+				LEFT JOIN courses c ON c.id = s.course_id
+				LEFT JOIN users u_tr ON u_tr.id = s.trainer_id
+				WHERE tp.user_id = ?
+				ORDER BY s.scheduled_start DESC
+			""", (user_id,)).fetchall()
+
+		return render_template(
+			"training_history.html",
+			trainings=[dict(t) for t in trainings],
+			user=session.get("user"),
+			role=session.get("role"),
+			user_id=user_id,
+			profile_picture=session.get("profile_picture")
+		)
+
+	@app.get("/training/reports")
+	@staff_required
+	def training_reports():
+		user_id = session.get("user_id")
+		role = session.get("role")
+		course_id = request.args.get("course_id", "")
+		status = request.args.get("status", "")
+
+		with get_db() as connection:
+			# 1. Session-wise summary
+			sess_sql = """
+				SELECT s.*, c.name AS course_name, u_tr.full_name AS trainer_name,
+					   COUNT(tp.id) AS total_enrolled,
+					   SUM(CASE WHEN tp.attendance_status = 'PRESENT' THEN 1 ELSE 0 END) AS present_count,
+					   SUM(CASE WHEN tp.attendance_status = 'ABSENT' THEN 1 ELSE 0 END) AS absent_count,
+					   ROUND(AVG(COALESCE(tp.attendance_percentage, 0)), 1) AS avg_attendance_pct
+				FROM training_sessions s
+				LEFT JOIN courses c ON c.id = s.course_id
+				LEFT JOIN users u_tr ON u_tr.id = s.trainer_id
+				LEFT JOIN training_participants tp ON tp.training_session_id = s.id
+				WHERE 1=1
+			"""
+			sess_params = []
+			if course_id:
+				sess_sql += " AND s.course_id = ?"
+				sess_params.append(course_id)
+			if status:
+				sess_sql += " AND s.status = ?"
+				sess_params.append(status)
+
+			sess_sql += " GROUP BY s.id ORDER BY s.scheduled_start DESC"
+			sessions = [dict(r) for r in connection.execute(sess_sql, sess_params).fetchall()]
+
+			# 2. Participant-wise detail
+			part_sql = """
+				SELECT tp.*, s.title AS session_title, s.scheduled_start, s.meeting_provider, s.min_attendance_percentage,
+					   c.name AS course_name, u.full_name, u.employee_id, u.department, u.email
+				FROM training_participants tp
+				JOIN training_sessions s ON s.id = tp.training_session_id
+				LEFT JOIN courses c ON c.id = s.course_id
+				JOIN users u ON u.id = tp.user_id
+				WHERE 1=1
+			"""
+			part_params = []
+			if course_id:
+				part_sql += " AND s.course_id = ?"
+				part_params.append(course_id)
+			if status:
+				part_sql += " AND s.status = ?"
+				part_params.append(status)
+
+			part_sql += " ORDER BY s.scheduled_start DESC, u.full_name ASC"
+			participants = [dict(r) for r in connection.execute(part_sql, part_params).fetchall()]
+
+			courses = [dict(c) for c in connection.execute("SELECT id, name FROM courses ORDER BY name").fetchall()]
+
+		return render_template(
+			"training_reports.html",
+			sessions=sessions,
+			participants=participants,
+			courses=courses,
+			selected_course_id=course_id,
+			selected_status=status,
+			user=session.get("user"),
+			role=role,
+			profile_picture=session.get("profile_picture")
+		)
+
+	@app.get("/training/reports/download-sessions")
+	@staff_required
+	def download_training_sessions_report():
+		with get_db() as connection:
+			sql = """
+				SELECT s.id, s.title, COALESCE(c.name, 'N/A') AS course_name,
+					   u_tr.full_name AS trainer_name, s.scheduled_start, s.scheduled_end,
+					   s.actual_start, s.actual_end, s.meeting_provider, s.min_attendance_percentage,
+					   s.status, COUNT(tp.id) AS total_enrolled,
+					   SUM(CASE WHEN tp.attendance_status = 'PRESENT' THEN 1 ELSE 0 END) AS present_count,
+					   SUM(CASE WHEN tp.attendance_status = 'ABSENT' THEN 1 ELSE 0 END) AS absent_count,
+					   ROUND(AVG(COALESCE(tp.attendance_percentage, 0)), 1) AS avg_attendance_pct
+				FROM training_sessions s
+				LEFT JOIN courses c ON c.id = s.course_id
+				LEFT JOIN users u_tr ON u_tr.id = s.trainer_id
+				LEFT JOIN training_participants tp ON tp.training_session_id = s.id
+				GROUP BY s.id ORDER BY s.scheduled_start DESC
+			"""
+			rows = connection.execute(sql).fetchall()
+
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow([
+			"Session ID", "Training Title", "Course", "Trainer", "Scheduled Start", "Scheduled End",
+			"Actual Start", "Actual End", "Provider", "Min Attendance %", "Status",
+			"Enrolled Participants", "Present Count", "Absent Count", "Avg Attendance %"
+		])
+		for r in rows:
+			writer.writerow([
+				r["id"], r["title"], r["course_name"], r["trainer_name"], r["scheduled_start"], r["scheduled_end"],
+				r["actual_start"] or "", r["actual_end"] or "", r["meeting_provider"], r["min_attendance_percentage"],
+				r["status"], r["total_enrolled"], r["present_count"] or 0, r["absent_count"] or 0, r["avg_attendance_pct"] or 0
+			])
+
+		return send_file(
+			BytesIO(stream.getvalue().encode("utf-8-sig")),
+			mimetype="text/csv",
+			as_attachment=True,
+			download_name="training_sessions_report.csv"
+		)
+
+	@app.get("/training/reports/download-participants")
+	@staff_required
+	def download_training_participants_report():
+		with get_db() as connection:
+			sql = """
+				SELECT tp.id, s.title AS session_title, COALESCE(c.name, 'N/A') AS course_name,
+					   u.employee_id, u.full_name, u.email, u.department, s.scheduled_start,
+					   tp.source_type, tp.registration_status, tp.first_join_time, tp.last_leave_time,
+					   tp.total_duration_minutes, tp.attendance_percentage, tp.rejoin_count, tp.attendance_status
+				FROM training_participants tp
+				JOIN training_sessions s ON s.id = tp.training_session_id
+				LEFT JOIN courses c ON c.id = s.course_id
+				JOIN users u ON u.id = tp.user_id
+				ORDER BY s.scheduled_start DESC, u.full_name ASC
+			"""
+			rows = connection.execute(sql).fetchall()
+
+		stream = StringIO()
+		writer = csv.writer(stream)
+		writer.writerow([
+			"Participant ID", "Training Title", "Course", "Employee ID", "Full Name", "Email", "Department",
+			"Scheduled Date", "Enrollment Source", "Registration Status", "First Join Time", "Last Leave Time",
+			"Total Duration (Min)", "Attendance %", "Rejoin Count", "Final Attendance Status"
+		])
+		for r in rows:
+			writer.writerow([
+				r["id"], r["session_title"], r["course_name"], r["employee_id"] or "", r["full_name"], r["email"] or "",
+				r["department"] or "", r["scheduled_start"], r["source_type"], r["registration_status"],
+				r["first_join_time"] or "", r["last_leave_time"] or "", r["total_duration_minutes"] or 0,
+				r["attendance_percentage"] or 0, r["rejoin_count"] or 0, r["attendance_status"]
+			])
+
+		return send_file(
+			BytesIO(stream.getvalue().encode("utf-8-sig")),
+			mimetype="text/csv",
+			as_attachment=True,
+			download_name="training_participants_attendance_report.csv"
+		)
+
+	@app.post("/api/webhooks/zoom")
+	def zoom_webhook_receiver():
+		"""Zoom Webhook endpoint handling URL validation and participant join/leave events."""
+		raw_body = request.get_data()
+		payload = request.get_json(silent=True) or {}
+		event = payload.get("event")
+
+		with get_db() as connection:
+			settings = get_training_settings(connection)
+			webhook_secret = settings.get("zoom_webhook_secret")
+
+			# Handle Zoom Webhook URL Validation challenge
+			if event == "endpoint.url_validation":
+				plain_token = payload.get("payload", {}).get("plainToken", "")
+				return jsonify(ZoomMeetingProvider.generate_crc_response(webhook_secret or "zoom_secret", plain_token))
+
+			# Verify webhook signature if configured
+			if webhook_secret and not ZoomMeetingProvider.verify_webhook_signature(webhook_secret, request.headers, raw_body):
+				return {"error": "Invalid signature"}, 401
+
+			# Handle participant events
+			obj = payload.get("payload", {}).get("object", {})
+			meeting_id = str(obj.get("id", ""))
+			participant = obj.get("participant", {})
+			email = participant.get("email", "").strip().lower()
+			participant_id = participant.get("id", "") or participant.get("user_id", "")
+			join_time = participant.get("join_time", "")
+			leave_time = participant.get("leave_time", "")
+
+			sess = connection.execute(
+				"SELECT id FROM training_sessions WHERE meeting_id = ? OR meeting_uuid = ?",
+				(meeting_id, meeting_id)
+			).fetchone()
+
+			if sess and email:
+				user = connection.execute("SELECT id FROM users WHERE LOWER(email) = ?", (email,)).fetchone()
+				if user:
+					uid = user["id"]
+					sid = sess["id"]
+					if event == "meeting.participant_joined":
+						record_participant_join(connection, sid, uid, join_source="ZOOM_WEBHOOK", provider="zoom", provider_participant_id=participant_id)
+					elif event == "meeting.participant_left":
+						record_participant_leave(connection, sid, uid)
+					elif event == "meeting.ended":
+						reconcile_training_attendance(connection, sid)
+
+		return {"status": "success"}, 200
+
+	@app.route("/admin/training/settings", methods=["GET", "POST"])
+	@admin_required
+	def training_settings_page():
+		with get_db() as connection:
+			if request.method == "POST":
+				for key in ("zoom_account_id", "zoom_client_id", "zoom_client_secret", "zoom_webhook_secret", "default_min_attendance"):
+					val = request.form.get(key, "").strip()
+					connection.execute(
+						"INSERT INTO training_settings (setting_key, setting_value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP",
+						(key, val)
+					)
+				flash("Live Training & Zoom API settings saved successfully.")
+				return redirect(url_for("training_settings_page"))
+
+			settings = get_training_settings(connection)
+
+		return render_template(
+			"training_settings.html",
+			settings=settings,
+			user=session.get("user"),
+			role=session.get("role"),
+			profile_picture=session.get("profile_picture")
+		)
 
 	return app
 

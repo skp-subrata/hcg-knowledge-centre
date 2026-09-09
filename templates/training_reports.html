@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Live Training Reports | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 mb-2">Live Training Reports</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-lg">Detailed audit metrics, attendance summaries, and CSV exports for live classroom training.</p>
+    </div>
+    <div class="flex items-center gap-3">
+        <a href="{{ url_for('download_training_sessions_report') }}" class="btn-secondary py-2.5 px-4 rounded-xl text-xs font-bold gap-2">
+            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Export Sessions CSV
+        </a>
+        <a href="{{ url_for('download_training_participants_report') }}" class="btn-primary py-2.5 px-4 rounded-xl text-xs font-bold gap-2 shadow">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Export Participants CSV
+        </a>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="glass-panel p-4 mb-6 bg-white/40 dark:bg-slate-900/40 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-2">
+        <button onclick="switchReportTab('sessions')" id="tab-btn-sessions" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md">
+            Session Summaries ({{ sessions|length }})
+        </button>
+        <button onclick="switchReportTab('participants')" id="tab-btn-participants" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200">
+            Participant Attendance Logs ({{ participants|length }})
+        </button>
+    </div>
+
+    <form method="get" class="flex flex-wrap items-center gap-3">
+        <select name="course_id" onchange="this.form.submit()" class="form-input text-xs py-1.5 px-3 h-10 rounded-xl">
+            <option value="">All Courses</option>
+            {% for c in courses %}
+            <option value="{{ c.id }}" {% if selected_course_id|string == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="status" onchange="this.form.submit()" class="form-input text-xs py-1.5 px-3 h-10 rounded-xl">
+            <option value="">All Statuses</option>
+            <option value="SCHEDULED" {% if selected_status == 'SCHEDULED' %}selected{% endif %}>Scheduled</option>
+            <option value="LIVE" {% if selected_status == 'LIVE' %}selected{% endif %}>Live</option>
+            <option value="COMPLETED" {% if selected_status == 'COMPLETED' %}selected{% endif %}>Completed</option>
+            <option value="CANCELLED" {% if selected_status == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
+        </select>
+    </form>
+</div>
+
+<!-- Tab 1: Session Summaries -->
+<div id="report-tab-sessions" class="space-y-4">
+    <div class="glass-panel overflow-hidden bg-white/50 dark:bg-slate-900/50">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+                <thead>
+                    <tr class="border-b border-slate-200/60 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/40 dark:bg-slate-950/20">
+                        <th class="py-3.5 px-4">Session Title</th>
+                        <th class="py-3.5 px-4">Course</th>
+                        <th class="py-3.5 px-4">Trainer</th>
+                        <th class="py-3.5 px-4">Date</th>
+                        <th class="py-3.5 px-4">Enrolled</th>
+                        <th class="py-3.5 px-4">Present</th>
+                        <th class="py-3.5 px-4">Absent</th>
+                        <th class="py-3.5 px-4">Avg Att %</th>
+                        <th class="py-3.5 px-4 text-right">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    {% for s in sessions %}
+                    <tr class="hover:bg-slate-50/40 dark:hover:bg-slate-950/20">
+                        <td class="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-100">
+                            <a href="{{ url_for('training_detail', session_id=s.id) }}" class="hover:text-indigo-600">
+                                {{ s.title }}
+                            </a>
+                        </td>
+                        <td class="py-3.5 px-4 text-slate-500">{{ s.course_name or '-' }}</td>
+                        <td class="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-medium">{{ s.trainer_name }}</td>
+                        <td class="py-3.5 px-4 text-slate-500">{{ s.scheduled_start.split(' ')[0] }}</td>
+                        <td class="py-3.5 px-4 font-bold">{{ s.total_enrolled }}</td>
+                        <td class="py-3.5 px-4 font-bold text-emerald-600">{{ s.present_count }}</td>
+                        <td class="py-3.5 px-4 font-bold text-rose-500">{{ s.absent_count }}</td>
+                        <td class="py-3.5 px-4 font-bold text-indigo-600">{{ s.avg_attendance_pct or 0 }}%</td>
+                        <td class="py-3.5 px-4 text-right">
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase
+                                {% if s.status == 'COMPLETED' %}bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300
+                                {% elif s.status == 'LIVE' %}bg-red-500 text-white
+                                {% elif s.status == 'SCHEDULED' %}bg-emerald-100 text-emerald-700
+                                {% else %}bg-rose-100 text-rose-700{% endif %}">
+                                {{ s.status }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="py-8 text-center text-slate-400">No session records found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Tab 2: Participant Details -->
+<div id="report-tab-participants" class="space-y-4 hidden">
+    <div class="glass-panel overflow-hidden bg-white/50 dark:bg-slate-900/50">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+                <thead>
+                    <tr class="border-b border-slate-200/60 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/40 dark:bg-slate-950/20">
+                        <th class="py-3.5 px-4">Employee</th>
+                        <th class="py-3.5 px-4">Emp ID</th>
+                        <th class="py-3.5 px-4">Department</th>
+                        <th class="py-3.5 px-4">Training</th>
+                        <th class="py-3.5 px-4">First Join</th>
+                        <th class="py-3.5 px-4">Duration</th>
+                        <th class="py-3.5 px-4">Attendance %</th>
+                        <th class="py-3.5 px-4 text-right">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    {% for p in participants %}
+                    <tr class="hover:bg-slate-50/40 dark:hover:bg-slate-950/20">
+                        <td class="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-100">{{ p.full_name }}</td>
+                        <td class="py-3.5 px-4 text-slate-500">{{ p.employee_id or 'N/A' }}</td>
+                        <td class="py-3.5 px-4 text-slate-500">{{ p.department or 'General' }}</td>
+                        <td class="py-3.5 px-4 font-medium text-slate-700 dark:text-slate-300">{{ p.session_title }}</td>
+                        <td class="py-3.5 px-4 text-slate-500">{{ p.first_join_time or '-' }}</td>
+                        <td class="py-3.5 px-4 font-bold">{{ p.total_duration_minutes }} min</td>
+                        <td class="py-3.5 px-4 font-bold text-indigo-600">{{ p.attendance_percentage }}%</td>
+                        <td class="py-3.5 px-4 text-right">
+                            <span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase
+                                {% if p.attendance_status == 'PRESENT' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300
+                                {% elif p.attendance_status == 'ABSENT' %}bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300
+                                {% elif p.attendance_status == 'IN_PROGRESS' %}bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300
+                                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400{% endif %}">
+                                {{ p.attendance_status }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="py-8 text-center text-slate-400">No participant logs found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function switchReportTab(tab) {
+    const tabSessions = document.getElementById('report-tab-sessions');
+    const tabParticipants = document.getElementById('report-tab-participants');
+    const btnSessions = document.getElementById('tab-btn-sessions');
+    const btnParticipants = document.getElementById('tab-btn-participants');
+
+    if (tab === 'participants') {
+        tabSessions.classList.add('hidden');
+        tabParticipants.classList.remove('hidden');
+        btnParticipants.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
+        btnSessions.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200';
+    } else {
+        tabParticipants.classList.add('hidden');
+        tabSessions.classList.remove('hidden');
+        btnSessions.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
+        btnParticipants.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200';
+    }
+}
+</script>
+{% endblock %}

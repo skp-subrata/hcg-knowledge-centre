@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+
+{% block title %}{% if edit_mode %}Edit Live Training{% else %}Schedule Live Training{% endif %} | HCG Knowledge Centre{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto mb-8">
+    <div class="flex items-center gap-3 mb-2">
+        <a href="{{ url_for('training_calendar') }}" class="p-2 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800 text-slate-500 hover:text-slate-900 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+        </a>
+        <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+            {% if edit_mode %}Edit Live Training Session{% else %}Schedule New Live Training{% endif %}
+        </h1>
+    </div>
+    <p class="text-slate-500 dark:text-slate-400 text-sm ml-11">Configure live virtual training session, meeting provider, and assign learners.</p>
+</div>
+
+<form method="post" class="max-w-4xl mx-auto space-y-6">
+    <!-- Basic Information Card -->
+    <div class="glass-panel p-6 sm:p-8 bg-white/50 dark:bg-slate-900/50 space-y-5">
+        <h2 class="text-base font-bold text-slate-900 dark:text-slate-50 uppercase tracking-wider text-xs border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center gap-2">
+            <span class="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px]">1</span>
+            Basic Session Information
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="md:col-span-2">
+                <label class="form-label">Training Title <span class="text-red-500">*</span></label>
+                <input type="text" name="title" required value="{{ session_data.title if session_data else '' }}" placeholder="e.g. Healthcare Compliance & Fire Safety 2026" class="form-input font-medium">
+            </div>
+
+            <div>
+                <label class="form-label">Link LMS Course (Optional)</label>
+                <select name="course_id" class="form-input">
+                    <option value="">-- No Linked Course --</option>
+                    {% for c in courses %}
+                    <option value="{{ c.id }}" {% if session_data and session_data.course_id|string == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label class="form-label">Assigned Trainer <span class="text-red-500">*</span></label>
+                <select name="trainer_id" required class="form-input">
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if session_data and session_data.trainer_id|string == u.id|string %}selected{% elif not session_data and u.id == user_id %}selected{% endif %}>
+                        {{ u.full_name }} ({{ u.role }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label class="form-label">Assigned Moderator (Optional)</label>
+                <select name="moderator_id" class="form-input">
+                    <option value="">-- No Moderator --</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if session_data and session_data.moderator_id|string == u.id|string %}selected{% endif %}>
+                        {{ u.full_name }} ({{ u.role }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="md:col-span-2">
+                <label class="form-label">Training Agenda & Description</label>
+                <textarea name="description" rows="3" placeholder="Provide session goals, syllabus topics, prerequisites..." class="form-input h-auto resize-none py-3">{{ session_data.description if session_data else '' }}</textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule & Attendance Rules Card -->
+    <div class="glass-panel p-6 sm:p-8 bg-white/50 dark:bg-slate-900/50 space-y-5">
+        <h2 class="text-base font-bold text-slate-900 dark:text-slate-50 uppercase tracking-wider text-xs border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center gap-2">
+            <span class="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px]">2</span>
+            Schedule & Attendance Criteria
+        </h2>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div>
+                <label class="form-label">Training Date <span class="text-red-500">*</span></label>
+                <input type="date" name="scheduled_date" required 
+                       value="{{ session_data.scheduled_start.split(' ')[0] if session_data else '' }}" 
+                       class="form-input">
+            </div>
+
+            <div>
+                <label class="form-label">Start Time <span class="text-red-500">*</span></label>
+                <input type="time" name="start_time" required 
+                       value="{{ session_data.scheduled_start.split(' ')[1][:5] if session_data else '10:00' }}" 
+                       class="form-input">
+            </div>
+
+            <div>
+                <label class="form-label">End Time <span class="text-red-500">*</span></label>
+                <input type="time" name="end_time" required 
+                       value="{{ session_data.scheduled_end.split(' ')[1][:5] if session_data else '11:30' }}" 
+                       class="form-input">
+            </div>
+
+            <div>
+                <label class="form-label">Timezone</label>
+                <select name="timezone" class="form-input">
+                    <option value="Asia/Kolkata" selected>Asia/Kolkata (IST)</option>
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">America/New_York (EST)</option>
+                    <option value="Europe/London">Europe/London (GMT)</option>
+                </select>
+            </div>
+
+            <div class="sm:col-span-2">
+                <label class="form-label">Minimum Attendance Required (%)</label>
+                <div class="flex items-center gap-3">
+                    <select name="min_attendance_percentage" class="form-input">
+                        <option value="50" {% if session_data and session_data.min_attendance_percentage == 50 %}selected{% endif %}>50% of scheduled duration</option>
+                        <option value="60" {% if session_data and session_data.min_attendance_percentage == 60 %}selected{% endif %}>60% of scheduled duration</option>
+                        <option value="70" {% if session_data and session_data.min_attendance_percentage == 70 %}selected{% endif %}>70% of scheduled duration</option>
+                        <option value="75" {% if (session_data and session_data.min_attendance_percentage == 75) or (not session_data) %}selected{% endif %}>75% (Recommended standard)</option>
+                        <option value="80" {% if session_data and session_data.min_attendance_percentage == 80 %}selected{% endif %}>80% of scheduled duration</option>
+                        <option value="90" {% if session_data and session_data.min_attendance_percentage == 90 %}selected{% endif %}>90% of scheduled duration</option>
+                        <option value="100" {% if session_data and session_data.min_attendance_percentage == 100 %}selected{% endif %}>100% Full Attendance</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Meeting Provider Card -->
+    <div class="glass-panel p-6 sm:p-8 bg-white/50 dark:bg-slate-900/50 space-y-5">
+        <h2 class="text-base font-bold text-slate-900 dark:text-slate-50 uppercase tracking-wider text-xs border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center gap-2">
+            <span class="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px]">3</span>
+            Meeting Platform & Auto-Creation
+        </h2>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <label class="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-950/40 cursor-pointer hover:border-indigo-500 transition-all flex items-start gap-3">
+                <input type="radio" name="meeting_provider" value="zoom" {% if not session_data or session_data.meeting_provider == 'zoom' %}checked{% endif %} class="mt-1" onchange="toggleProviderFields()">
+                <div>
+                    <span class="block font-bold text-sm text-slate-900 dark:text-slate-100">Zoom</span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Supports auto-creation & join/leave reconciliation</span>
+                </div>
+            </label>
+
+            <label class="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-950/40 cursor-pointer hover:border-indigo-500 transition-all flex items-start gap-3">
+                <input type="radio" name="meeting_provider" value="google_meet" {% if session_data and session_data.meeting_provider == 'google_meet' %}checked{% endif %} class="mt-1" onchange="toggleProviderFields()">
+                <div>
+                    <span class="block font-bold text-sm text-slate-900 dark:text-slate-100">Google Meet</span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Generates Google Meet conference links</span>
+                </div>
+            </label>
+
+            <label class="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-950/40 cursor-pointer hover:border-indigo-500 transition-all flex items-start gap-3">
+                <input type="radio" name="meeting_provider" value="custom" {% if session_data and session_data.meeting_provider == 'custom' %}checked{% endif %} class="mt-1" onchange="toggleProviderFields()">
+                <div>
+                    <span class="block font-bold text-sm text-slate-900 dark:text-slate-100">Custom / Manual</span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Paste any Teams, Webex or existing link</span>
+                </div>
+            </label>
+        </div>
+
+        <div class="space-y-4 pt-2">
+            <div class="flex items-center gap-3">
+                <input type="checkbox" name="auto_create_meeting" id="auto_create_cb" value="1" {% if not session_data %}checked{% endif %} class="rounded w-4 h-4 text-indigo-600" onchange="toggleAutoCreate(this)">
+                <label for="auto_create_cb" class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Automatically create meeting via API
+                </label>
+            </div>
+
+            <div id="manual-links-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 {% if not session_data %}hidden{% endif %}">
+                <div class="md:col-span-2">
+                    <label class="form-label">Join URL for Participants</label>
+                    <input type="url" name="custom_join_url" value="{{ session_data.join_url if session_data else '' }}" placeholder="https://zoom.us/j/... or https://meet.google.com/..." class="form-input text-xs">
+                </div>
+                <div>
+                    <label class="form-label">Host / Start URL (For Trainer)</label>
+                    <input type="url" name="custom_host_url" value="{{ session_data.host_url if session_data else '' }}" placeholder="https://zoom.us/s/..." class="form-input text-xs">
+                </div>
+                <div>
+                    <label class="form-label">Passcode / PIN (Optional)</label>
+                    <input type="text" name="passcode" value="{{ session_data.passcode if session_data else '' }}" placeholder="123456" class="form-input text-xs">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Participant Selection Card (Only on Create) -->
+    {% if not edit_mode %}
+    <div class="glass-panel p-6 sm:p-8 bg-white/50 dark:bg-slate-900/50 space-y-5">
+        <h2 class="text-base font-bold text-slate-900 dark:text-slate-50 uppercase tracking-wider text-xs border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center gap-2">
+            <span class="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px]">4</span>
+            Assign Participants
+        </h2>
+
+        <!-- Mode Switcher Tabs -->
+        <div class="flex flex-wrap gap-2 border-b border-slate-200/50 dark:border-slate-800 pb-3">
+            <label class="cursor-pointer">
+                <input type="radio" name="assign_mode" value="individual" checked class="hidden peer" onchange="switchAssignTab('individual')">
+                <span class="px-4 py-2 rounded-xl text-xs font-bold border border-transparent peer-checked:bg-indigo-600 peer-checked:text-white bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 inline-block transition-all">
+                    Individual Users
+                </span>
+            </label>
+
+            <label class="cursor-pointer">
+                <input type="radio" name="assign_mode" value="groups" class="hidden peer" onchange="switchAssignTab('groups')">
+                <span class="px-4 py-2 rounded-xl text-xs font-bold border border-transparent peer-checked:bg-indigo-600 peer-checked:text-white bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 inline-block transition-all">
+                    By Groups
+                </span>
+            </label>
+
+            <label class="cursor-pointer">
+                <input type="radio" name="assign_mode" value="all" class="hidden peer" onchange="switchAssignTab('all')">
+                <span class="px-4 py-2 rounded-xl text-xs font-bold border border-transparent peer-checked:bg-indigo-600 peer-checked:text-white bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 inline-block transition-all">
+                    All Active Platform Users
+                </span>
+            </label>
+        </div>
+
+        <!-- Individual Users Tab -->
+        <div id="assign-tab-individual" class="space-y-3">
+            <div class="flex items-center justify-between gap-4">
+                <input type="text" id="user-search-input" placeholder="Search users by name, employee ID, or department..." class="form-input text-xs h-10" onkeyup="filterUserList()">
+                <button type="button" onclick="selectAllUsers(true)" class="text-xs font-bold text-indigo-600 hover:underline shrink-0">Select All</button>
+            </div>
+
+            <div class="max-h-[260px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200/60 dark:border-slate-800 rounded-2xl p-2 bg-white/30 dark:bg-slate-950/30" id="user-checkbox-list">
+                {% for u in users %}
+                <label class="user-item flex items-center justify-between p-2.5 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 rounded-xl cursor-pointer" data-search="{{ u.full_name|lower }} {{ u.employee_id|lower }} {{ u.department|lower }}">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" name="user_ids" value="{{ u.id }}" class="user-cb rounded w-4 h-4 text-indigo-600">
+                        <div>
+                            <span class="font-bold text-xs text-slate-800 dark:text-slate-200">{{ u.full_name }}</span>
+                            <span class="text-[10px] text-slate-400 block">{{ u.employee_id or 'No ID' }} &bull; {{ u.department or 'General' }}</span>
+                        </div>
+                    </div>
+                    <span class="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full">{{ u.role }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Groups Tab -->
+        <div id="assign-tab-groups" class="space-y-3 hidden">
+            <p class="text-xs text-slate-500 dark:text-slate-400">Select one or more groups. All members belonging to these groups will automatically be invited.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[260px] overflow-y-auto">
+                {% for g in groups %}
+                <label class="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white/40 dark:bg-slate-950/40 hover:border-indigo-500 cursor-pointer transition-all">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" name="group_ids" value="{{ g.id }}" class="rounded w-4 h-4 text-indigo-600">
+                        <div>
+                            <span class="font-bold text-xs text-slate-800 dark:text-slate-200">{{ g.name }}</span>
+                            <span class="text-[10px] text-slate-400 block">{{ g.group_type }}</span>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-xl">
+                        {{ g.member_count }} members
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- All Users Tab -->
+        <div id="assign-tab-all" class="p-6 text-center border border-indigo-200 dark:border-indigo-800/40 rounded-2xl bg-indigo-50/20 dark:bg-indigo-950/20 hidden">
+            <svg class="w-10 h-10 mx-auto text-indigo-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100">All Active Organization Users</h4>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">This training will automatically enroll all active employees and staff members across all locations and departments.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="flex items-center justify-end gap-3 pt-4">
+        <a href="{{ url_for('training_calendar') }}" class="btn-secondary py-3 px-6 rounded-2xl text-xs font-bold">
+            Cancel
+        </a>
+        <button type="submit" class="btn-primary py-3 px-8 rounded-2xl text-xs font-bold shadow-lg">
+            {% if edit_mode %}Save Changes{% else %}Schedule & Invite Participants{% endif %}
+        </button>
+    </div>
+</form>
+
+<script>
+function toggleAutoCreate(cb) {
+    const manualContainer = document.getElementById('manual-links-container');
+    if (cb.checked) {
+        manualContainer.classList.add('hidden');
+    } else {
+        manualContainer.classList.remove('hidden');
+    }
+}
+
+function toggleProviderFields() {
+    const autoCb = document.getElementById('auto_create_cb');
+    const selectedProvider = document.querySelector('input[name="meeting_provider"]:checked')?.value;
+    if (selectedProvider === 'custom') {
+        autoCb.checked = false;
+        autoCb.parentElement.classList.add('hidden');
+        document.getElementById('manual-links-container').classList.remove('hidden');
+    } else {
+        autoCb.parentElement.classList.remove('hidden');
+    }
+}
+
+function switchAssignTab(tab) {
+    document.getElementById('assign-tab-individual').classList.add('hidden');
+    document.getElementById('assign-tab-groups').classList.add('hidden');
+    document.getElementById('assign-tab-all').classList.add('hidden');
+
+    if (tab === 'individual') {
+        document.getElementById('assign-tab-individual').classList.remove('hidden');
+    } else if (tab === 'groups') {
+        document.getElementById('assign-tab-groups').classList.remove('hidden');
+    } else if (tab === 'all') {
+        document.getElementById('assign-tab-all').classList.remove('hidden');
+    }
+}
+
+function filterUserList() {
+    const q = document.getElementById('user-search-input').value.toLowerCase();
+    const items = document.querySelectorAll('.user-item');
+    items.forEach(item => {
+        const text = item.getAttribute('data-search') || '';
+        if (text.includes(q)) {
+            item.classList.remove('hidden');
+        } else {
+            item.classList.add('hidden');
+        }
+    });
+}
+
+function selectAllUsers(state) {
+    const cbs = document.querySelectorAll('.user-cb');
+    cbs.forEach(cb => {
+        if (!cb.closest('.user-item').classList.contains('hidden')) {
+            cb.checked = state;
+        }
+    });
+}
+</script>
+{% endblock %}

@@ -145,6 +145,34 @@
             </div>
         </div>
 
+        <!-- Slide 4: Live Training Classrooms -->
+        <div class="carousel-slide absolute inset-0 opacity-0 transition-opacity duration-700 ease-in-out flex flex-col md:flex-row justify-between items-center p-8 gap-6 bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950">
+            <div class="max-w-md space-y-3">
+                <span class="px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase bg-purple-500/20 border border-purple-400/30 text-purple-300">
+                    🎥 Live Virtual Classrooms
+                </span>
+                <h3 class="text-2xl md:text-3xl font-extrabold tracking-tight text-purple-300">Interactive Live Training</h3>
+                <p class="text-xs text-slate-400 leading-relaxed">Join live Zoom sessions, interact with expert trainers, and earn verified attendance credits.</p>
+                <div class="flex items-center gap-3 pt-1">
+                    <a href="{{ url_for('training_calendar') }}" class="inline-flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl transition-all shadow-md">
+                        Open Training Calendar
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                    </a>
+                    <a href="{{ url_for('my_live_trainings') }}" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors">
+                        My Attendance
+                    </a>
+                </div>
+            </div>
+            
+            <div class="p-5 bg-slate-950/60 border border-white/10 rounded-2xl w-full md:w-[320px] text-center space-y-3 shadow-xl">
+                <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-400 flex items-center justify-center mx-auto">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                </div>
+                <h4 class="font-bold text-white text-sm">Scheduled Live Sessions</h4>
+                <p class="text-[11px] text-slate-400">View upcoming dates, syllabus, and instant join links directly from your calendar.</p>
+            </div>
+        </div>
+
     </div>
 
     <!-- Navigation Arrows -->
