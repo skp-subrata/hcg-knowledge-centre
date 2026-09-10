@@ -49,7 +49,7 @@
           <span>·</span><span>{{ (fb.feedback_submitted_at or '')[:10] }}</span>
         </div>
         <p class="text-sm">{{ fb.feedback_comments }}</p>
-        <p class="caption mt-2 inline-flex items-center gap-1.5">{{ avatar(fb.reviewer_name, size="sm") }}{{ fb.reviewer_name }}</p>
+        <p class="caption mt-2 inline-flex items-center gap-1.5">{{ avatar(fb.reviewer_name, src=(url_for('uploaded_file', filename=fb.reviewer_profile_picture) if fb.reviewer_profile_picture else None), size="sm") }}{{ fb.reviewer_name }}</p>
       </li>
       {% endfor %}
     </ul>

@@ -47,7 +47,7 @@
   {% call table("group-members", ["Name", "Employee ID", "Email", "Role", "Department", "Location", "Status", {"label": "Actions", "align": "right"}], caption="Group members") %}
     {% for member in members %}
     <tr>
-      <td><span class="flex items-center gap-2">{{ avatar(member.full_name, size="sm") }}<span class="font-medium">{{ member.full_name }}</span></span></td>
+      <td><span class="flex items-center gap-2">{{ avatar(member.full_name, src=(url_for('uploaded_file', filename=member.profile_picture) if member.profile_picture else None), size="sm") }}<span class="font-medium">{{ member.full_name }}</span></span></td>
       <td class="text-fg-2">{{ member.employee_id or '–' }}</td>
       <td class="text-fg-2">{{ member.email or '–' }}</td>
       <td>{{ badge((member.role or '')|title, {"admin": "info", "moderator": "warning"}.get(member.role, "neutral")) }}</td>
@@ -77,7 +77,7 @@
   {% call table("group-moderators", ["Moderator", "Assigned", "Status"] + ([{"label": "Actions", "align": "right"}] if role == 'admin' else []), caption="Group moderators") %}
     {% for mod in moderators %}
     <tr>
-      <td><span class="flex items-center gap-2">{{ avatar(mod.full_name, size="sm") }}<span class="font-medium">{{ mod.full_name }}</span></span></td>
+      <td><span class="flex items-center gap-2">{{ avatar(mod.full_name, src=(url_for('uploaded_file', filename=mod.profile_picture) if mod.profile_picture else None), size="sm") }}<span class="font-medium">{{ mod.full_name }}</span></span></td>
       <td class="text-fg-2 tabular">{{ (mod.assigned_at or '').split(' ')[0] }}</td>
       <td>{{ status_badge(mod.status) }}</td>
       {% if role == 'admin' %}

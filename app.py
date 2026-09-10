@@ -1987,7 +1987,7 @@ def create_app():
 				flash("You can only view groups you moderate.", "error")
 				return redirect(safe_referrer(url_for("groups_page")))
 			members = connection.execute("""
-				SELECT gm.*, u.full_name, u.username, u.role, u.email, u.department, u.location, COALESCE(u.is_active, 1) AS is_active
+				SELECT gm.*, u.full_name, u.username, u.role, u.email, u.department, u.location, u.profile_picture, COALESCE(u.is_active, 1) AS is_active
 				FROM group_members gm
 				JOIN users u ON u.id = gm.user_id
 				WHERE gm.group_id = ?
@@ -2011,7 +2011,7 @@ def create_app():
 			user_count = len(members)
 			course_count = len(assigned_courses)
 			moderators = connection.execute("""
-				SELECT gm.id, u.id AS user_id, u.full_name, u.role, gm.assigned_at, gm.status
+				SELECT gm.id, u.id AS user_id, u.full_name, u.role, u.profile_picture, gm.assigned_at, gm.status
 				FROM group_moderators gm
 				JOIN users u ON u.id = gm.user_id
 				WHERE gm.group_id = ?
@@ -2314,7 +2314,16 @@ def create_app():
 				location_id = int(location_id) if location_id else None
 				about_me = request.form.get("about_me", "").strip()
 				interests = request.form.getlist("interests")
-				
+				pic = request.files.get("profile_picture")
+				pic_filename = ""
+				if pic and pic.filename:
+					ext = os.path.splitext(pic.filename)[1].lower()
+					if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+						flash("Profile picture must be a PNG, JPG, GIF or WebP image.", "error")
+						return redirect(safe_referrer(url_for("admin_panel")))
+					pic_filename = uuid4().hex + ext
+					pic.save(upload_path(pic_filename))
+
 				if not full_name or not username or len(password) < 6 or role not in ROLES or not employee_id or not email or not phone_number or not location_id:
 					flash("Enter all mandatory fields (employee ID, email, phone, location) and use a password of at least 6 chars.", "error")
 				else:
@@ -2327,8 +2336,8 @@ def create_app():
 								else: flash("Username already exists.", "error")
 							else:
 								cursor = connection.execute(
-									"INSERT INTO users (full_name, username, password_hash, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-									(full_name, username, generate_password_hash(password), role, employee_id, email, phone_number, department_id, position_id, location_id, about_me),
+									"INSERT INTO users (full_name, username, password_hash, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, is_active, profile_picture) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)",
+									(full_name, username, generate_password_hash(password), role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, pic_filename),
 								)
 								new_user_id = cursor.lastrowid
 								for interest_id in interests:
@@ -2362,6 +2371,18 @@ def create_app():
 					location_id = int(location_id) if location_id else None
 					about_me = request.form.get("about_me", "").strip()
 					interests = request.form.getlist("interests")
+					pic = request.files.get("profile_picture")
+					pic_filename = None  # None = leave the existing picture untouched
+					if pic and pic.filename:
+						ext = os.path.splitext(pic.filename)[1].lower()
+						if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+							msg = "Profile picture must be a PNG, JPG, GIF or WebP image."
+							if is_ajax:
+								return jsonify({"error": msg}), 400
+							flash(msg, "error")
+							return redirect(safe_referrer(url_for("admin_panel")))
+						pic_filename = uuid4().hex + ext
+						pic.save(upload_path(pic_filename))
 
 					if not full_name or not username or not employee_id or not email or not phone_number:
 						msg = "Full Name, Username, Employee ID, Email, and Phone Number are mandatory."
@@ -2395,10 +2416,16 @@ def create_app():
 								if is_ajax: return jsonify({"error": msg}), 409
 								flash(msg)
 							else:
-								connection.execute(
-									"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ? WHERE id = ?",
-									(full_name, username, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, user_id),
-								)
+								if pic_filename is not None:
+									connection.execute(
+										"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ?, profile_picture = ? WHERE id = ?",
+										(full_name, username, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, pic_filename, user_id),
+									)
+								else:
+									connection.execute(
+										"UPDATE users SET full_name = ?, username = ?, role = ?, employee_id = ?, email = ?, phone_number = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ? WHERE id = ?",
+										(full_name, username, role, employee_id, email, phone_number, department_id, position_id, location_id, about_me, user_id),
+									)
 								if interests:  # replace the interest set only when the form sent one
 									connection.execute("DELETE FROM user_interest WHERE user_id = ?", (user_id,))
 									for interest_id in interests:
@@ -2501,7 +2528,10 @@ def create_app():
 				if target_user_id is None:
 					flash("Select a user.", "error")
 					return redirect(safe_referrer(url_for("admin_panel")))
-				import os
+				# Not `import os` here -- os is already imported at module level; a redundant local
+				# import shadows it for this whole function (Python's scoping rule for any name
+				# assigned anywhere in a function body), which broke the new profile-picture code
+				# above in add_user/update_user with an UnboundLocalError before this branch ever ran.
 				api_key = "ak_" + os.urandom(16).hex()
 				api_secret = "as_" + os.urandom(24).hex()
 				with get_db() as connection:
@@ -2593,7 +2623,7 @@ def create_app():
 					flash("That course assignment could not be completed.", "error")
 
 		with get_db() as connection:
-			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interest ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
+			users = connection.execute("SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, u.profile_picture, COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids, COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids FROM users u LEFT JOIN course_assignments ca ON ca.student_id = u.id LEFT JOIN user_interest ui ON ui.user_id = u.id GROUP BY u.id ORDER BY u.id").fetchall()
 			master_depts = connection.execute("SELECT department_id as id, department_name as name FROM departments WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY department_name").fetchall()
 			master_positions = connection.execute("SELECT id, name FROM positions WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
 			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
@@ -2884,7 +2914,7 @@ def create_app():
 					(SELECT COUNT(DISTINCT student_id) FROM course_assignments WHERE course_id = ?) AS enrolled_count
 			""", (course_id, course_id, course_id)).fetchone()
 			feedbacks = connection.execute("""
-				SELECT cc.feedback_rating, cc.feedback_comments, cc.feedback_submitted_at, u.full_name as reviewer_name
+				SELECT cc.feedback_rating, cc.feedback_comments, cc.feedback_submitted_at, u.full_name as reviewer_name, u.profile_picture as reviewer_profile_picture
 				FROM course_certifications cc
 				JOIN users u ON cc.user_id = u.id
 				WHERE cc.course_id = ? AND cc.feedback_comments IS NOT NULL AND cc.feedback_comments != ''
@@ -3953,7 +3983,7 @@ def create_app():
 		sort = request.args.get("sort", "newest")
 		
 		sql = """
-			SELECT p.*, u.full_name AS creator_name, u.role,
+			SELECT p.*, u.full_name AS creator_name, u.role, u.profile_picture AS creator_profile_picture,
 				   (SELECT ROUND(AVG(r.rating), 1) FROM post_ratings r WHERE r.post_id = p.id) AS avg_rating,
 				   (SELECT COUNT(*) FROM post_ratings r WHERE r.post_id = p.id) AS rating_count,
 				   (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.id) AS comment_count
@@ -4002,7 +4032,7 @@ def create_app():
 		
 		with get_db() as connection:
 			post = connection.execute(
-				"""SELECT p.*, u.full_name AS creator_name, u.role,
+				"""SELECT p.*, u.full_name AS creator_name, u.role, u.profile_picture AS creator_profile_picture,
 						  (SELECT ROUND(AVG(r.rating), 1) FROM post_ratings r WHERE r.post_id = p.id) AS avg_rating,
 						  (SELECT COUNT(*) FROM post_ratings r WHERE r.post_id = p.id) AS rating_count
 				   FROM posts p
@@ -4029,7 +4059,7 @@ def create_app():
 			user_rating = connection.execute("SELECT * FROM post_ratings WHERE post_id = ? AND user_id = ?", (post_id, user_id)).fetchone()
 			
 			comments = connection.execute(
-				"""SELECT c.*, u.full_name, u.role, r.rating
+				"""SELECT c.*, u.full_name, u.role, u.profile_picture, r.rating
 				   FROM post_comments c
 				   JOIN users u ON u.id = c.user_id
 				   LEFT JOIN post_ratings r ON r.post_id = c.post_id AND r.user_id = c.user_id
@@ -4861,7 +4891,7 @@ def create_app():
 			total_records = conn.execute(count_sql, params).fetchone()["total"]
 
 			data_sql = f"""
-				SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me,
+				SELECT u.id, u.full_name, u.username, u.role, u.employee_id, u.email, u.phone_number, u.department_id, u.position_id, u.location_id, u.about_me, u.profile_picture,
 				       COALESCE(GROUP_CONCAT(DISTINCT ca.course_id), '') AS course_ids,
 					   COALESCE(GROUP_CONCAT(DISTINCT ui.interest_id), '') AS interest_ids
 				FROM users u
