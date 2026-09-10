@@ -619,12 +619,18 @@ def seed_course_questions(connection, creator_id):
 	}
 	for course in connection.execute("SELECT id, name FROM courses").fetchall():
 		key = course["name"].lower()
+		assessment = connection.execute("SELECT id FROM assessments WHERE course_id = ? ORDER BY id LIMIT 1", (course["id"],)).fetchone()
+		if assessment and connection.execute("SELECT 1 FROM assessment_questions WHERE assessment_id = ? LIMIT 1", (assessment["id"],)).fetchone():
+			# This course's assessment already has real, deliberately-authored questions (from
+			# any bank, not just this function's own "Sample Questions" one) -- e.g. a course
+			# seeded by its own dedicated init script with a real MCQ set. Never top it up with
+			# the generic "test 1" fallback; that's only for a genuinely bare assessment.
+			continue
 		questions = question_sets.get(key, question_sets["test 1"])
 		bank_name = f"{course['name']} Sample Questions"
 		bank = connection.execute("SELECT id FROM question_banks WHERE name = ?", (bank_name,)).fetchone()
 		if not bank:
 			bank = (connection.execute("INSERT INTO question_banks (name, category, created_by) VALUES (?, 'Sample', ?)", (bank_name, creator_id)).lastrowid,)
-		assessment = connection.execute("SELECT id FROM assessments WHERE course_id = ? ORDER BY id LIMIT 1", (course["id"],)).fetchone()
 		if not assessment:
 			assessment = (connection.execute("INSERT INTO assessments (course_id, type, title, pass_percentage) VALUES (?, 'post', ?, 60)", (course["id"], f"{course['name']} assessment")).lastrowid,)
 		for text, option_a, option_b, option_c, option_d, correct in questions:

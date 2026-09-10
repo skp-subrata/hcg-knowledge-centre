@@ -171,6 +171,48 @@ def test_demo_seeding_skips_rehashing_once_already_seeded(monkeypatch, tmp_path)
 		connection.close()
 
 
+def test_seed_course_questions_never_tops_up_an_assessment_that_already_has_real_questions(monkeypatch, tmp_path):
+	"""Found while seeding the real Boomi course (init_scripts/012): seed_course_questions used
+	to add its generic 'test 1' filler MCQs to *any* course's first assessment, even one that
+	already had its own deliberately-authored questions -- turning a real 5-question MCQ into
+	a 10-question one on the very next restart. It must now skip a course whose assessment
+	already has at least one linked question, from any bank."""
+	fresh = tmp_path / "fresh2.db"
+	monkeypatch.setattr(app_module, "DATABASE", fresh)
+	app_module.init_db()
+
+	connection = sqlite3.connect(fresh)
+	connection.row_factory = sqlite3.Row
+	try:
+		admin_id = connection.execute("SELECT id FROM users WHERE username = 'subratakumar.pradhan'").fetchone()["id"]
+		course_id = connection.execute(
+			"INSERT INTO courses (name, description, category, content_type, content_url, created_by) VALUES ('Real Content Course', 'd', 'General', 'URL', 'https://example.com', ?)",
+			(admin_id,),
+		).lastrowid
+		assessment_id = connection.execute(
+			"INSERT INTO assessments (course_id, type, title, pass_percentage) VALUES (?, 'post', 'Real Content Course: Final Assessment', 70)",
+			(course_id,),
+		).lastrowid
+		bank_id = connection.execute(
+			"INSERT INTO question_banks (name, category, created_by) VALUES ('Real Content Course Question Bank', 'General', ?)", (admin_id,)
+		).lastrowid
+		question_id = connection.execute(
+			"INSERT INTO questions (question_bank_id, question_text, option_a, option_b, option_c, option_d, correct_option, created_by) "
+			"VALUES (?, 'A real, deliberately-authored question', 'x', 'y', 'z', 'w', 'a', ?)", (bank_id, admin_id)
+		).lastrowid
+		connection.execute("INSERT INTO assessment_questions (assessment_id, question_id) VALUES (?, ?)", (assessment_id, question_id))
+		connection.commit()
+
+		app_module.seed_course_questions(connection, admin_id)
+
+		linked = connection.execute("SELECT COUNT(*) AS n FROM assessment_questions WHERE assessment_id = ?", (assessment_id,)).fetchone()["n"]
+		assert linked == 1, f"expected only the real authored question to remain linked, found {linked}"
+		assert not connection.execute("SELECT 1 FROM question_banks WHERE name = 'Real Content Course Sample Questions'").fetchone(), \
+			"a generic 'Sample Questions' bank must not be created for a course that already has real questions"
+	finally:
+		connection.close()
+
+
 def test_extended_catalog_seeds_courses_posts_and_named_users(db):
 	assert db("SELECT COUNT(*) AS n FROM courses")[0]["n"] >= 7
 	named = db("SELECT COUNT(*) AS n FROM users WHERE username = 'priya.nair'")[0]["n"]
@@ -194,3 +236,19 @@ def test_extended_catalog_is_idempotent_across_restarts(db_path, db):
 		assert before == after
 	finally:
 		connection.close()
+
+
+def test_boomi_course_seeds_a_real_5_question_mcq_assessment(db):
+	course = db("SELECT * FROM courses WHERE name = 'Boomi Integration Platform Fundamentals'")
+	assert len(course) == 1
+	course = course[0]
+	assert course["status"] == "published" and course["category"] == "Integration" and course["content_type"] == "URL"
+
+	assessment = db("SELECT * FROM assessments WHERE course_id = ? AND type = 'post'", (course["id"],))
+	assert len(assessment) == 1
+	assessment = assessment[0]
+	assert assessment["pass_percentage"] == 70
+
+	linked = db("SELECT q.correct_option FROM assessment_questions aq JOIN questions q ON q.id = aq.question_id WHERE aq.assessment_id = ?", (assessment["id"],))
+	assert len(linked) == 5, "must be exactly 5 -- seed_course_questions must not have topped this up with generic filler"
+	assert {row["correct_option"] for row in linked} <= {"a", "b", "c", "d"}
