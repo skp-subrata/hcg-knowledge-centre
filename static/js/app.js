@@ -19,6 +19,24 @@
     setTimeout(finish, reduceMotion() ? 60 : fallback);
   }
 
+  // ------------------------------------------------------------------ diagnostics (feedback widget)
+  // A small rolling buffer of recent console errors/warnings, uncaught JS errors and failed
+  // background requests -- kept only in this tab's memory for the current page view, cleared on
+  // navigation, and never sent anywhere unless someone opens the feedback widget and explicitly
+  // chooses to attach it to a report they review before it's submitted.
+  HKC.diagnostics = [];
+  const MAX_DIAGNOSTICS = 25;
+  function recordDiagnostic(level, message) {
+    HKC.diagnostics.push({ level, message: String(message ?? '').slice(0, 300), time: new Date().toISOString() });
+    if (HKC.diagnostics.length > MAX_DIAGNOSTICS) HKC.diagnostics.shift();
+  }
+  ['error', 'warn'].forEach((level) => {
+    const original = console[level] ? console[level].bind(console) : () => {};
+    console[level] = (...args) => { recordDiagnostic(level, args.map((a) => (a && a.message) || a).join(' ')); original(...args); };
+  });
+  window.addEventListener('error', (event) => recordDiagnostic('error', event.message + (event.filename ? ` (${event.filename.split('/').pop()}:${event.lineno})` : '')));
+  window.addEventListener('unhandledrejection', (event) => recordDiagnostic('error', 'Unhandled promise rejection: ' + ((event.reason && event.reason.message) || event.reason)));
+
   // ------------------------------------------------------------------ utilities
   HKC.escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   HKC.csrf = () => (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
@@ -27,6 +45,7 @@
     const response = await fetch(url, Object.assign({}, options, { headers }));
     let data = null;
     try { data = await response.json(); } catch (e) { /* not JSON */ }
+    if (!response.ok) recordDiagnostic('network', `${(options.method || 'GET')} ${url.split('?')[0]} -> ${response.status}`);
     return { ok: response.ok, status: response.status, data };
   };
   const focusables = (root) => $$('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])', root).filter((el) => el.offsetParent !== null || el === document.activeElement);
@@ -491,6 +510,94 @@
     if (steps.length) runTour(steps);
   }
 
+  // ------------------------------------------------------------------ feedback widget (floating button -> GitHub issue)
+  // Composes a prefilled GitHub "new issue" URL from what's already visible on the page (no new
+  // backend endpoint, no stored GitHub token, nothing saved in this app) and opens it in a new
+  // tab for the person to review and actually submit themselves.
+  const FEEDBACK_REPO = 'skp-subrata/hcg-knowledge-centre';
+  function wireFeedbackWidget() {
+    const form = document.getElementById('feedback-form');
+    const sheet = document.getElementById('feedback-sheet');
+    if (!form || !sheet) return;
+    const typeButtons = $$('[data-feedback-type]', form);
+    let selectedType = 'bug';
+    typeButtons.forEach((button) => button.addEventListener('click', () => {
+      typeButtons.forEach((b) => b.setAttribute('aria-pressed', 'false'));
+      button.setAttribute('aria-pressed', 'true');
+      selectedType = button.dataset.feedbackType;
+    }));
+
+    function pageContext() {
+      const releaseBadge = $('[data-release-version]');
+      return {
+        url: location.origin + location.pathname, // query string dropped: never carry a token/id in a shared report
+        title: document.title.replace(/\s+/g, ' ').trim(),
+        version: releaseBadge ? releaseBadge.dataset.releaseVersion : 'unknown',
+        role: document.body.dataset.role || 'unknown',
+        theme: html.classList.contains('dark') ? 'dark' : 'light',
+        viewport: `${window.innerWidth}×${window.innerHeight}`,
+        userAgent: navigator.userAgent,
+        when: new Date().toISOString(),
+      };
+    }
+    function renderContextPreview() {
+      const list = document.getElementById('feedback-context-preview');
+      if (!list) return;
+      const ctx = pageContext();
+      list.innerHTML = [`Page: ${ctx.url}`, `App v${ctx.version} · ${ctx.role} · ${ctx.theme} mode`, `Viewport ${ctx.viewport}`]
+        .map((line) => `<li>${HKC.escapeHtml(line)}</li>`).join('');
+    }
+    sheet.addEventListener('hkc:open', renderContextPreview);
+    renderContextPreview();
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const titleField = document.getElementById('feedback-title');
+      const detailsField = document.getElementById('feedback-details');
+      const title = titleField.value.trim();
+      const details = detailsField.value.trim();
+      if (!title || !details) {
+        HKC.toast('Please fill in both a title and details.', 'error');
+        (title ? detailsField : titleField).focus();
+        return;
+      }
+      const ctx = pageContext();
+      const includeLogs = document.getElementById('feedback-include-logs').checked;
+      const includeIdentity = document.getElementById('feedback-include-identity').checked;
+
+      const lines = [
+        details, '', '---',
+        `**Type:** ${selectedType}`,
+        `**Page:** ${ctx.url}`,
+        `**Page title:** ${ctx.title}`,
+        `**App version:** ${ctx.version}`,
+        `**Role:** ${ctx.role}`,
+        `**Theme:** ${ctx.theme}`,
+        `**Viewport:** ${ctx.viewport}`,
+        `**Browser:** ${ctx.userAgent}`,
+        `**Reported at:** ${ctx.when}`,
+      ];
+      if (includeIdentity && document.body.dataset.userName) lines.push(`**Reported by:** ${document.body.dataset.userName}`);
+      if (includeLogs) {
+        lines.push('', '<details><summary>Recent browser console activity</summary>', '', '```');
+        if (HKC.diagnostics.length) HKC.diagnostics.forEach((d) => lines.push(`[${d.time.slice(11, 19)}] ${d.level}: ${d.message}`));
+        else lines.push('(nothing recorded on this page view)');
+        lines.push('```', '</details>');
+      }
+      let body = lines.join('\n');
+      if (body.length > 6000) body = body.slice(0, 6000) + '\n\n… (truncated)';
+
+      const labelForType = { bug: 'bug', enhancement: 'enhancement', question: 'question' }[selectedType] || '';
+      const params = new URLSearchParams({ title: `[${selectedType}] ${title}`, body, labels: labelForType });
+      window.open(`https://github.com/${FEEDBACK_REPO}/issues/new?${params.toString()}`, '_blank', 'noopener');
+      HKC.toast('Opening GitHub in a new tab — review it there before submitting.', 'success');
+      HKC.dialog.close(sheet);
+      form.reset();
+      typeButtons.forEach((b) => b.setAttribute('aria-pressed', b.dataset.feedbackType === 'bug' ? 'true' : 'false'));
+      selectedType = 'bug';
+    });
+  }
+
   // ------------------------------------------------------------------ boot
   function init() {
     HKC.theme.apply(HKC.theme.get(), false);
@@ -519,6 +626,7 @@
     }
     wireNotifications();
     wireRelease();
+    wireFeedbackWidget();
     autoShowRelease(maybeStartTour);
     document.dispatchEvent(new CustomEvent('hkc:ready'));
   }

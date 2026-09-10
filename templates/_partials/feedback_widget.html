@@ -1,0 +1,34 @@
+{% from "_macros.html" import btn, field, textarea_field, icon, sheet_right %}
+{# Floating "send feedback" button -> composes a prefilled GitHub issue for the person to review
+   and submit themselves. No server round-trip and nothing is stored in this app: the draft is
+   built entirely in the browser from what's already on the page, and opened as a real GitHub
+   "New issue" form so nothing leaves the browser without the person seeing it first. #}
+<button type="button" class="fab no-print" data-dialog-open="feedback-sheet" aria-label="Send feedback or report an issue">{{ icon("chat", "w-6 h-6") }}</button>
+
+{% call sheet_right("feedback-sheet", "Send feedback", description="Report a bug or share an idea. This opens a prefilled GitHub issue for you to review before it's submitted -- nothing is sent until you do.") %}
+<form id="feedback-form" class="flex flex-col gap-4" novalidate>
+  <fieldset class="field mb-0">
+    <legend class="field-label">Type</legend>
+    <div class="segmented" aria-label="Feedback type">
+      <button type="button" data-feedback-type="bug" aria-pressed="true">Bug</button>
+      <button type="button" data-feedback-type="enhancement" aria-pressed="false">Idea</button>
+      <button type="button" data-feedback-type="question" aria-pressed="false">Question</button>
+    </div>
+  </fieldset>
+
+  {{ field("feedback-title", "Title", required=True, id="feedback-title", placeholder='e.g. "Certificate download fails on Safari"') }}
+  {{ textarea_field("feedback-details", "Details", rows=6, required=True, id="feedback-details", placeholder="What happened? What did you expect instead? Steps to reproduce help a lot.") }}
+
+  <div class="card-inset text-sm">
+    <p class="field-label mb-2">We'll include with this report</p>
+    <ul class="flex flex-col gap-0.5 caption list-none p-0 m-0" id="feedback-context-preview"></ul>
+    <label class="flex items-center gap-2 mt-3 text-sm"><input type="checkbox" id="feedback-include-logs" checked>Include recent browser console messages (helps us debug)</label>
+    <label class="flex items-center gap-2 mt-1 text-sm"><input type="checkbox" id="feedback-include-identity">Include my account name, so we can follow up</label>
+  </div>
+
+  <div class="flex justify-end gap-2 pt-2">
+    <button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button>
+    {{ btn("Open in GitHub", "primary", type="submit", icon_name="external") }}
+  </div>
+</form>
+{% endcall %}
