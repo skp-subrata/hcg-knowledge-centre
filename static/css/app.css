@@ -20,6 +20,10 @@
   --c-warning: 255 159 10;  --c-warning-text: 178 94 0;
   --c-danger: 255 59 48;    --c-danger-text: 198 40 40;
   --c-info: 0 113 227;      --c-info-text: 0 102 204;
+  --tier-platinum-1: 142 142 148;  --tier-platinum-2: 222 226 230;
+  --tier-gold-1:     181 118  18;  --tier-gold-2:     250 197  76;
+  --tier-silver-1:   134 134 140;  --tier-silver-2:   214 214 218;
+  --tier-bronze-1:   150  62  20;  --tier-bronze-2:   224 138  78;
   --hairline: rgb(var(--c-line) / var(--line-a));
   --r-sm: 8px;
   --r-md: 12px;
@@ -56,6 +60,10 @@
   --c-warning: 255 214 10;  --c-warning-text: 255 214 10;
   --c-danger: 255 69 58;    --c-danger-text: 255 105 97;
   --c-info: 41 151 255;     --c-info-text: 100 180 255;
+  --tier-platinum-1: 186 190 196;  --tier-platinum-2: 232 234 238;
+  --tier-gold-1:     214 150  40;  --tier-gold-2:     255 214 110;
+  --tier-silver-1:   170 170 176;  --tier-silver-2:   224 224 228;
+  --tier-bronze-1:   190  96  46;  --tier-bronze-2:   236 160 108;
   --shadow-card: 0 1px 2px rgb(0 0 0 / .4);
   --shadow-lift: 0 8px 24px rgb(0 0 0 / .5);
   --shadow-pop: 0 10px 30px rgb(0 0 0 / .5), 0 0 0 1px rgb(255 255 255 / .08);
@@ -292,7 +300,25 @@ body[data-modal-open] #app { transform: scale(.985); }
 .breadcrumb a { color: inherit; text-decoration: none; }
 .breadcrumb a:hover { color: rgb(var(--c-fg)); }
 .breadcrumb li + li::before { content: "/"; margin-right: .375rem; color: rgb(var(--c-fg-3)); }
-.certificate { background: rgb(var(--c-surface)); border: 1px solid var(--hairline); border-radius: var(--r-lg); box-shadow: var(--shadow-card); }
+.certificate {
+  position: relative;
+  --tier-1: var(--c-accent); --tier-2: var(--c-accent);
+  background: rgb(var(--c-surface)) radial-gradient(900px 260px at 50% -160px, rgb(var(--tier-1) / .16), transparent 72%) no-repeat;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop), 0 0 0 1.5px rgb(var(--tier-2) / .55);
+}
+.certificate[data-tier="platinum"] { --tier-1: var(--tier-platinum-1); --tier-2: var(--tier-platinum-2); }
+.certificate[data-tier="gold"]     { --tier-1: var(--tier-gold-1);     --tier-2: var(--tier-gold-2); }
+.certificate[data-tier="silver"]   { --tier-1: var(--tier-silver-1);   --tier-2: var(--tier-silver-2); }
+.certificate[data-tier="bronze"]   { --tier-1: var(--tier-bronze-1);   --tier-2: var(--tier-bronze-2); }
+.certificate-title { font-size: clamp(1.75rem, 3vw, 2.25rem); }
+.certificate-name { display: inline-block; margin-top: .5rem; padding-bottom: .3rem; font-size: 1.75rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; border-bottom: 3px solid rgb(var(--tier-2) / .6); }
+@media (min-width: 768px) { .certificate-name { font-size: 2.25rem; } }
+.certificate-tier-label { color: rgb(var(--tier-1)); }
+.cert-badge-glow { fill: rgb(var(--tier-1)); opacity: .22; }
+.cert-badge-ring { fill: none; stroke: rgb(var(--tier-2)); stroke-width: 4; }
+.cert-badge-fill { fill: rgb(var(--tier-2)); }
 
 /* ---------------------------------------------------------------- motion */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

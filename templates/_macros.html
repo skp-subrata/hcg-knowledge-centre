@@ -59,6 +59,16 @@
 <svg class="{{ class }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="{{ paths.get(name, paths['dots']) }}"/></svg>
 {%- endmacro %}
 
+{% macro certificate_badge(tier) -%}
+{#- Colored purely by the ancestor .certificate[data-tier]'s inherited --tier-1/--tier-2 custom
+   properties (see app.css) -- no per-tier markup here, so tier -> color has one source of truth. -#}
+<svg viewBox="0 0 100 100" class="w-28 h-28 mx-auto mt-10" role="img" aria-label="{{ tier|title }} badge">
+  <circle class="cert-badge-glow" cx="50" cy="50" r="46"/>
+  <circle class="cert-badge-ring" cx="50" cy="50" r="38"/>
+  <path class="cert-badge-fill" d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z"/>
+</svg>
+{%- endmacro %}
+
 {% macro btn(label, variant="primary", href=None, type="button", size="md", icon_name=None, attrs="", class="") -%}
 {%- set classes = "btn btn-" ~ variant ~ (" btn-sm" if size == "sm" else (" btn-lg" if size == "lg" else "")) ~ ((" " ~ class) if class else "") -%}
 {%- if href %}<a href="{{ href }}" class="{{ classes }}" {{ attrs|safe }}>{% else %}<button type="{{ type }}" class="{{ classes }}" {{ attrs|safe }}>{% endif -%}

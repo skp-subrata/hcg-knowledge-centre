@@ -160,6 +160,33 @@ def test_api_and_web_certification_share_one_reward_reference(student, anon, wor
 	assert len(rows) == 1, "web feedback after an API certification must not pay the certification twice"
 
 
+def test_certificate_page_exposes_elements_the_download_script_needs(make_client, world):
+	maya = make_client("maya.student")
+	html = maya.get(f"/course/{world.certified_course_id}/certificate").get_data(as_text=True)
+	assert 'id="certificate-card"' in html and 'id="download-png-btn"' in html
+	assert "html2canvas" in html
+	assert "setTimeout(() => button.click(), 800)" not in html, "a plain page view must not auto-trigger the download"
+
+
+def test_download_certificate_route_triggers_download_mode(make_client, world):
+	maya = make_client("maya.student")
+	response = maya.get(f"/course/{world.certified_course_id}/certificate/download")
+	assert response.status_code == 200
+	body = response.get_data(as_text=True)
+	assert 'id="certificate-card"' in body and 'id="download-png-btn"' in body
+	assert "setTimeout(() => button.click(), 800)" in body
+
+
+@pytest.mark.parametrize("tier", ["PLATINUM", "GOLD", "SILVER", "BRONZE"])
+def test_certificate_reflects_each_tier(tier, make_client, world, db):
+	maya_id = world.users["maya.student"]
+	db("UPDATE course_certifications SET badge = ? WHERE user_id = ? AND course_id = ?", (tier, maya_id, world.certified_course_id))
+	maya = make_client("maya.student")
+	html = maya.get(f"/course/{world.certified_course_id}/certificate").get_data(as_text=True)
+	assert f'data-tier="{tier.lower()}"' in html
+	assert tier.title() in html
+
+
 def test_api_submit_requires_an_assignment_for_learners(anon, world, db_path):
 	course_id = world.python_course_id  # 'student' is NOT assigned to Python Foundations
 	post_id, qids = make_assessment(db_path, course_id, questions=(("Q", "a", 1),))

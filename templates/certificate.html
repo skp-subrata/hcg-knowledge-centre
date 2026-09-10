@@ -1,26 +1,22 @@
 {% extends "base.html" %}
-{% from "_macros.html" import btn, icon %}
+{% from "_macros.html" import btn, icon, certificate_badge %}
 
 {% block title %}Certificate · {{ course.name }} · HCG Knowledge Centre{% endblock %}
 {% block body_class %}page-certificate{% endblock %}
 
 {% block content %}
-{% set tone = {"PLATINUM": "#8e8e93", "GOLD": "#f5a623", "SILVER": "#a1a1a6", "BRONZE": "#c2410c"}.get(certification.badge, "#0071e3") %}
+{% set tier = (certification.badge or "BRONZE")|lower %}
 <div class="max-w-4xl mx-auto">
-  <div id="certificate-card" class="certificate p-8 md:p-14 text-center">
+  <div id="certificate-card" class="certificate p-8 md:p-14 text-center" data-tier="{{ tier }}">
     <p class="eyebrow">HCG Knowledge Centre</p>
-    <h1 class="mt-3">Certificate of Completion</h1>
+    <h1 class="certificate-title mt-3">Certificate of Completion</h1>
     <p class="text-fg-2 mt-8">This certificate is proudly presented to</p>
-    <h2 class="mt-2 text-3xl md:text-4xl font-bold tracking-tight">{{ user }}</h2>
+    <h2 class="certificate-name mt-2">{{ user }}</h2>
     <p class="text-fg-2 mt-6">for successfully completing</p>
     <p class="mt-2 text-2xl font-semibold tracking-tight">{{ course.name }}</p>
 
-    <svg viewBox="0 0 100 100" class="w-28 h-28 mx-auto mt-10" role="img" aria-label="{{ certification.badge|title }} badge">
-      <circle cx="50" cy="50" r="46" fill="{{ tone }}" opacity=".18"/>
-      <circle cx="50" cy="50" r="38" fill="none" stroke="{{ tone }}" stroke-width="4"/>
-      <path d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="{{ tone }}"/>
-    </svg>
-    <p class="mt-3 font-semibold" style="color: {{ tone }}">{{ certification.badge|title }}</p>
+    {{ certificate_badge(tier) }}
+    <p class="mt-3 font-semibold certificate-tier-label">{{ certification.badge|title }}</p>
 
     <dl class="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-left border-t hairline pt-6">
       <div><dt class="caption">Completed on</dt><dd class="font-medium tabular">{{ (certification.certificate_generated_at or certification.feedback_submitted_at or '')[:10] }}</dd></div>
@@ -49,6 +45,8 @@
       const wasDark = html.classList.contains('dark');
       if (wasDark) html.classList.remove('dark');
       const originalStyle = card.getAttribute('style') || '';
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--c-fg').trim();
+      if (fg) card.style.color = 'rgb(' + fg + ')';
       card.style.width = '1024px'; card.style.maxWidth = '1024px';
       const label = button.innerHTML;
       button.disabled = true; button.innerHTML = '<span>Generating…</span>';
