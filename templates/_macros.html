@@ -254,7 +254,10 @@
         <h3 class="truncate"><a href="{{ url }}" class="no-underline hover:underline">{{ course.name }}</a></h3>
       </div>
     </div>
-    {% if variant == "learner" and course.badge %}{{ badge(course.badge, "success") }}{% elif progress %}{{ status_badge(progress) }}{% endif %}
+    <div class="flex flex-col items-end gap-1">
+      {% if variant == "learner" and course.badge %}{{ badge(course.badge, "success") }}{% elif progress %}{{ status_badge(progress) }}{% endif %}
+      {% if course.is_compulsory %}{{ badge("Compulsory", "warning") }}{% endif %}
+    </div>
   </div>
   {% if course.description %}<p class="text-fg-2 text-sm line-clamp-2">{{ course.description }}</p>{% endif %}
   <div class="flex flex-wrap items-center gap-x-4 gap-y-1 caption">

@@ -34,6 +34,7 @@ class World:
 	api_keys: dict = field(default_factory=dict)      # username -> headers
 	support_category_id: int = 0                       # first support_categories row
 	support_issue_id: int = 0                          # reported by student, status REPORTED
+	compulsory_course_id: int = 0                      # published, is_compulsory=1, not pre-assigned to anyone
 
 
 def _connect(db_path):
@@ -67,6 +68,10 @@ def build_world(db_path, upload_folder):
 				"VALUES ('World Published Course', 'published for tests', 'Testing', 'URL', 'https://example.com/course', ?, 'published')", (mod,)
 			).lastrowid
 			world.certified_course_id = world.mod_published_course_id
+			world.compulsory_course_id = c.execute(
+				"INSERT INTO courses (name, description, category, content_type, content_url, created_by, status, is_compulsory) "
+				"VALUES ('World Compulsory Course', 'compulsory for tests', 'Testing', 'URL', 'https://example.com/compulsory', ?, 'published', 1)", (mod,)
+			).lastrowid
 			for sid in (student, maya):
 				c.execute("INSERT OR IGNORE INTO course_assignments (course_id, student_id, status) VALUES (?, ?, 'in_progress')",
 				          (world.mod_published_course_id, sid))

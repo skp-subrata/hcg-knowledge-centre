@@ -12,6 +12,7 @@
     <div class="flex flex-wrap items-center gap-2 mb-2">
       {{ status_badge(progress or 'not_started') }}
       {% if course.difficulty %}{{ badge(course.difficulty|title, "info" if course.difficulty == 'intermediate' else ("danger" if course.difficulty == 'advanced' else "neutral")) }}{% endif %}
+      {% if course.is_compulsory %}{{ badge("Compulsory", "warning") }}{% endif %}
       <span class="caption">{{ course.category or 'General' }} · {{ course.content_type }}</span>
     </div>
     <h1>{{ course.name }}</h1>

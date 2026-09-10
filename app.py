@@ -1243,6 +1243,91 @@ def sync_user_groups(connection, user_id):
 		if ins.rowcount > 0:
 			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_ADDED', 'group', ?)", (user_id, target_loc_grp_id))
 
+	# 4. Compulsory Course Auto-Assignment for user
+	assign_compulsory_courses_to_user(connection, user_id)
+
+
+# ── Compulsory courses ────────────────────────────────────────────────────────
+# Ported from origin/master, alongside the system-generated groups above (a compulsory
+# course is auto-assigned via the "All Users" group, so both features ship together).
+def assign_compulsory_course_to_all(connection, course_id):
+	"""Assign a compulsory course to all eligible active platform users."""
+	course = connection.execute(
+		"SELECT id, name, status, is_compulsory FROM courses WHERE id = ?",
+		(course_id,)
+	).fetchone()
+	if not course or not course["is_compulsory"]:
+		return
+
+	status = (course["status"] or "published").lower()
+	if status not in ("published", "active"):
+		return
+
+	all_users_grp = connection.execute("SELECT id FROM groups WHERE group_type = 'ALL_USERS' AND system_generated = 1").fetchone()
+	all_users_grp_id = all_users_grp["id"] if all_users_grp else None
+
+	active_users = connection.execute("SELECT id, full_name FROM users WHERE COALESCE(is_active, 1) = 1").fetchall()
+
+	for u in active_users:
+		uid = u["id"]
+		existing = connection.execute("SELECT 1 FROM course_assignments WHERE course_id = ? AND student_id = ?", (course_id, uid)).fetchone()
+		if not existing:
+			connection.execute(
+				"INSERT INTO course_assignments (course_id, student_id, status) VALUES (?, ?, 'not_started') ON CONFLICT(course_id, student_id) DO NOTHING",
+				(course_id, uid)
+			)
+			create_group_assignment_history(
+				connection, course_id, course["name"], uid, u["full_name"],
+				'Group', all_users_grp_id, 'All Users', get_admin_user_id(connection), 'SYSTEM', 'new', 'assigned'
+			)
+			notif_msg = f"'{course['name']}' has been assigned to you as a compulsory course."
+			notif_exists = connection.execute(
+				"SELECT 1 FROM notifications WHERE user_id = ? AND message = ?",
+				(uid, notif_msg)
+			).fetchone()
+			if not notif_exists:
+				connection.execute(
+					"INSERT INTO notifications (user_id, message, type, target_url) VALUES (?, ?, ?, ?)",
+					(uid, notif_msg, "course_assigned", f"/course/{course_id}")
+				)
+
+
+def assign_compulsory_courses_to_user(connection, user_id):
+	"""Assign all published/active compulsory courses to a newly onboarded (or resynced) user."""
+	comp_courses = connection.execute(
+		"SELECT id, name FROM courses WHERE is_compulsory = 1 AND LOWER(IFNULL(status, 'published')) IN ('published', 'active')"
+	).fetchall()
+
+	user = connection.execute("SELECT id, full_name, is_active FROM users WHERE id = ?", (user_id,)).fetchone()
+	if not user or (user["is_active"] is not None and user["is_active"] == 0):
+		return
+
+	all_users_grp = connection.execute("SELECT id FROM groups WHERE group_type = 'ALL_USERS' AND system_generated = 1").fetchone()
+	all_users_grp_id = all_users_grp["id"] if all_users_grp else None
+
+	for c in comp_courses:
+		cid = c["id"]
+		existing = connection.execute("SELECT 1 FROM course_assignments WHERE course_id = ? AND student_id = ?", (cid, user_id)).fetchone()
+		if not existing:
+			connection.execute(
+				"INSERT INTO course_assignments (course_id, student_id, status) VALUES (?, ?, 'not_started') ON CONFLICT(course_id, student_id) DO NOTHING",
+				(cid, user_id)
+			)
+			create_group_assignment_history(
+				connection, cid, c["name"], user_id, user["full_name"],
+				'Group', all_users_grp_id, 'All Users', get_admin_user_id(connection), 'SYSTEM', 'new', 'assigned'
+			)
+			notif_msg = f"'{c['name']}' has been assigned to you as a compulsory course."
+			notif_exists = connection.execute(
+				"SELECT 1 FROM notifications WHERE user_id = ? AND message = ?",
+				(user_id, notif_msg)
+			).fetchone()
+			if not notif_exists:
+				connection.execute(
+					"INSERT INTO notifications (user_id, message, type, target_url) VALUES (?, ?, ?, ?)",
+					(user_id, notif_msg, "course_assigned", f"/course/{cid}")
+				)
+
 
 def ensure_system_generated_groups(connection):
 	"""Ensure All Users, Department, and Location system groups are created and synchronized.
@@ -2191,6 +2276,7 @@ def create_app():
 				description = request.form.get("description", "").strip()
 				category = request.form.get("category", "General").strip() or "General"
 				content_type = request.form.get("content_type", "")
+				is_compulsory = 1 if (session.get("role") == "admin" and request.form.get("is_compulsory") in ("1", "true", "on", "yes")) else 0
 				try:
 					content_url = content_location("course_file")
 				except ValueError as error:
@@ -2201,18 +2287,29 @@ def create_app():
 				else:
 					with get_db() as connection:
 						cursor = connection.execute(
-							"INSERT INTO courses (name, description, category, content_type, content_url, created_by) VALUES (?, ?, ?, ?, ?, ?)",
-							(name, description, category, content_type, content_url, session["user_id"]),
+							"INSERT INTO courses (name, description, category, content_type, content_url, created_by, is_compulsory) VALUES (?, ?, ?, ?, ?, ?, ?)",
+							(name, description, category, content_type, content_url, session["user_id"], is_compulsory),
 						)
-						connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)", (session["user_id"], cursor.lastrowid))
+						new_course_id = cursor.lastrowid
+						connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)", (session["user_id"], new_course_id))
+						if is_compulsory:
+							assign_compulsory_course_to_all(connection, new_course_id)
 					flash("Course created successfully.", "success")
 			elif action == "update_course":
 				with get_db() as connection:
-					if course_is_manageable(connection, request.form["record_id"], session["user_id"], session["role"]):
+					course_id = request.form["record_id"]
+					if course_is_manageable(connection, course_id, session["user_id"], session["role"]):
+						existing_c = connection.execute("SELECT is_compulsory FROM courses WHERE id = ?", (course_id,)).fetchone()
+						is_compulsory = existing_c["is_compulsory"] if existing_c else 0
+						if session.get("role") == "admin":
+							is_compulsory = 1 if request.form.get("is_compulsory") in ("1", "true", "on", "yes") else 0
+						status = request.form.get("status", "published")
 						connection.execute(
-							"UPDATE courses SET name = ?, description = ?, category = ?, status = ? WHERE id = ?",
-							(request.form["name"].strip(), request.form.get("description", "").strip(), request.form.get("category", "General").strip(), request.form.get("status", "published"), request.form["record_id"]),
+							"UPDATE courses SET name = ?, description = ?, category = ?, status = ?, is_compulsory = ? WHERE id = ?",
+							(request.form["name"].strip(), request.form.get("description", "").strip(), request.form.get("category", "General").strip(), status, is_compulsory, course_id),
 						)
+						if is_compulsory and status in ("published", "active"):
+							assign_compulsory_course_to_all(connection, course_id)
 						flash("Course updated successfully.", "success")
 			elif action == "add_bank":
 				with get_db() as connection:
@@ -2980,6 +3077,7 @@ def create_app():
 		thumbnail_color = request.form.get("thumbnail_color", "#6366f1")
 		status = request.form.get("status", "draft")
 		source_type = request.form.get("source_type", "url")
+		is_compulsory = 1 if (session.get("role") == "admin" and request.form.get("is_compulsory") in ("1", "true", "on", "yes")) else 0
 
 		errors = []
 		if not name:
@@ -3017,13 +3115,15 @@ def create_app():
 
 		with get_db() as connection:
 			cursor = connection.execute(
-				"INSERT INTO courses (name, description, category, content_type, content_url, created_by, status, tags, duration_minutes, difficulty, thumbnail_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-				(name, description, category, content_type, content_url, session["user_id"], status, tags, duration_minutes, difficulty, thumbnail_color)
+				"INSERT INTO courses (name, description, category, content_type, content_url, created_by, status, tags, duration_minutes, difficulty, thumbnail_color, is_compulsory) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				(name, description, category, content_type, content_url, session["user_id"], status, tags, duration_minutes, difficulty, thumbnail_color, is_compulsory)
 			)
 			connection.execute(
 				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'create', 'course', ?)",
 				(session["user_id"], cursor.lastrowid)
 			)
+			if is_compulsory and status in ("published", "active"):
+				assign_compulsory_course_to_all(connection, cursor.lastrowid)
 		flash(f"Course '{name}' created successfully.", "success")
 		return redirect(safe_referrer(url_for("courses_page")))
 
@@ -3037,13 +3137,16 @@ def create_app():
 				return redirect(safe_referrer(url_for("courses_page")))
 			
 			# Get existing course to check current content
-			existing = connection.execute("SELECT content_url, content_type FROM courses WHERE id = ?", (course_id,)).fetchone()
+			existing = connection.execute("SELECT content_url, content_type, is_compulsory FROM courses WHERE id = ?", (course_id,)).fetchone()
 			if not existing:
 				flash("Course not found.", "error")
 				return redirect(safe_referrer(url_for("courses_page")))
 
 			source_type = request.form.get("source_type", "url")
 			status = request.form.get("status", "draft")
+			is_compulsory = existing["is_compulsory"]
+			if session.get("role") == "admin":
+				is_compulsory = 1 if request.form.get("is_compulsory") in ("1", "true", "on", "yes") else 0
 
 			new_url = None
 			content_type = existing["content_type"]
@@ -3077,7 +3180,7 @@ def create_app():
 					return redirect(safe_referrer(url_for("courses_page")))
 
 			connection.execute(
-				"UPDATE courses SET name=?, description=?, category=?, status=?, tags=?, duration_minutes=?, difficulty=?, thumbnail_color=?, content_type=?, content_url=? WHERE id=?",
+				"UPDATE courses SET name=?, description=?, category=?, status=?, tags=?, duration_minutes=?, difficulty=?, thumbnail_color=?, content_type=?, content_url=?, is_compulsory=? WHERE id=?",
 				(
 					request.form.get("name", "").strip(),
 					request.form.get("description", "").strip(),
@@ -3089,6 +3192,7 @@ def create_app():
 					request.form.get("thumbnail_color", "#6366f1"),
 					content_type,
 					new_url,
+					is_compulsory,
 					course_id
 				)
 			)
@@ -3096,6 +3200,8 @@ def create_app():
 				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'update', 'course', ?)",
 				(session["user_id"], course_id)
 			)
+			if is_compulsory and status in ("published", "active"):
+				assign_compulsory_course_to_all(connection, course_id)
 		flash("Course updated.", "success")
 		return redirect(safe_referrer(url_for("courses_page")))
 
@@ -3118,6 +3224,9 @@ def create_app():
 				"INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'publish', 'course', ?)",
 				(session["user_id"], course_id)
 			)
+			# Not present upstream: a compulsory course created as a draft and published from here
+			# (rather than via the update-course form) would otherwise never get auto-assigned.
+			assign_compulsory_course_to_all(connection, course_id)
 		flash("Course published successfully!", "success")
 		return redirect(safe_referrer(url_for("courses_page")))
 
@@ -4967,22 +5076,25 @@ def create_app():
 		content_type = (data.get("content_type") or "Text/Article").strip()
 		content_url = (data.get("content_url") or "").strip()
 		status = (data.get("status") or "draft").strip().lower()
-		
+		is_compulsory = 1 if (g.api_user.get("role") == "admin" and data.get("is_compulsory")) else 0
+
 		if not name:
 			return {"error": "Missing required field: name."}, 400
 		if content_type not in ("URL", "PDF", "Video", "PPT"):
 			return {"error": "Invalid content type. Must be one of: URL, PDF, Video, PPT."}, 400
 		if status not in ("draft", "published"):
 			return {"error": "Invalid status. Must be draft or published."}, 400
-			
+
 		with get_db() as connection:
 			try:
 				course_id = connection.execute(
-					"INSERT INTO courses (name, description, category, content_type, content_url, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
-					(name, description, category, content_type, content_url, status, g.api_user["id"])
+					"INSERT INTO courses (name, description, category, content_type, content_url, status, created_by, is_compulsory) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+					(name, description, category, content_type, content_url, status, g.api_user["id"], is_compulsory)
 				).lastrowid
 			except Exception as e:
 				return {"error": f"Database insertion failed: {str(e)}"}, 500
+			if is_compulsory and status == "published":
+				assign_compulsory_course_to_all(connection, course_id)
 		return {"message": "Course created successfully.", "course_id": course_id}, 201
 
 	@app.get("/api/v1/courses/<int:course_id>")

@@ -88,6 +88,10 @@
       </div>
       {{ field("tags", "Tags", placeholder="Comma separated, e.g. safety, 2026, required", id="wiz-tags") }}
       {{ select_field("status", "Publish status", [("published", "Published"), ("draft", "Draft"), ("inactive", "Inactive")], selected="published", hint="Drafts and inactive courses are hidden from learners.", id="wiz-status") }}
+      {% if role == 'admin' %}
+      <label class="inline-flex items-center gap-2 cursor-pointer mt-1"><input type="checkbox" name="is_compulsory" value="1" id="wiz-compulsory"><span class="text-sm">Compulsory for all users</span></label>
+      <p class="field-hint">Once published, this course is auto-assigned to everyone and to every new user.</p>
+      {% endif %}
     </section>
     <section data-step="3" hidden>
       {{ select_field("source_type", "Content source", [("url", "Link (external URL)"), ("file", "Upload a file")], id="wiz-source-type") }}
@@ -127,6 +131,9 @@
       {{ field("duration_minutes", "Duration (minutes)", type="number", id="edit-dur", attrs='min="0"') }}
     </div>
     {{ field("tags", "Tags", id="edit-tags") }}
+    {% if role == 'admin' %}
+    <label class="inline-flex items-center gap-2 cursor-pointer mt-1"><input type="checkbox" name="is_compulsory" value="1" id="edit-compulsory"><span class="text-sm">Compulsory for all users</span></label>
+    {% endif %}
     <h3 class="text-base mt-2 mb-3">Content</h3>
     {{ select_field("source_type", "Content source", [("url", "Link (external URL)"), ("file", "Upload a file")], id="edit-source-type") }}
     <div id="edit-content-url-div">{{ field("content_url", "External URL", type="url", placeholder="https://", id="edit-url") }}</div>
@@ -218,6 +225,8 @@
         byId('edit-diff').value = course.difficulty || 'beginner';
         byId('edit-dur').value = course.duration_minutes || '';
         byId('edit-tags').value = course.tags || '';
+        const compulsoryBox = byId('edit-compulsory');
+        if (compulsoryBox) compulsoryBox.checked = Boolean(course.is_compulsory);
         const local = (course.content_url || '').startsWith('/uploads/');
         byId('edit-source-type').value = local ? 'file' : 'url';
         toggleEditSource();

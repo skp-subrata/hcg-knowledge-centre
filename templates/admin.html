@@ -49,6 +49,9 @@
       </div>
       {{ field("content_url", "Content URL", type="url", placeholder="https://…", hint="For URL and video content.", id="course-url") }}
       {{ file_field("course_file", "Upload file", accept=".pdf,.ppt,.pptx,.mp4,.mov,.webm", hint="PDF, PPT or video. Optional when a URL is given.", id="course-file") }}
+      {% if is_admin %}
+      <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" name="is_compulsory" value="1"><span class="text-sm">Compulsory for all users</span></label>
+      {% endif %}
       <div class="mt-auto pt-1">{{ btn("Create course", "primary", type="submit", icon_name="plus") }}</div>
     </form>
 
@@ -156,7 +159,7 @@
   {% call table("courses-table", ["Course", "Category", "Type", "Status", {"label": "Actions", "align": "right"}], caption="Courses") %}
     {% for item in courses %}
     <tr data-filter-item data-status="{{ (item.status or 'published')|lower }}">
-      <td><div class="font-medium">{{ item.name }}</div><div class="caption">by {{ item.creator }}</div></td>
+      <td><div class="font-medium flex items-center gap-2">{{ item.name }}{% if item.is_compulsory %}{{ badge("Compulsory", "warning") }}{% endif %}</div><div class="caption">by {{ item.creator }}</div></td>
       <td>{{ item.category or '—' }}</td>
       <td>{{ badge(item.content_type or '—', "neutral") }}</td>
       <td>{{ status_badge((item.status or 'published')|lower) }}</td>
@@ -286,6 +289,9 @@
     {{ field("name", "Course name", required=True, id="course-edit-name") }}
     {{ field("category", "Category", id="course-edit-category") }}
     {{ select_field("status", "Status", [("published", "Published"), ("draft", "Draft")], id="course-edit-status") }}
+    {% if is_admin %}
+    <label class="inline-flex items-center gap-2 cursor-pointer"><input type="checkbox" name="is_compulsory" value="1" id="course-edit-compulsory"><span class="text-sm">Compulsory for all users</span></label>
+    {% endif %}
     <div class="flex justify-end gap-2 pt-2">{{ btn("Cancel", "secondary", attrs="data-dialog-close") }}{{ btn("Save changes", "primary", type="submit") }}</div>
   </form>
 {% endcall %}
@@ -399,6 +405,8 @@
       if (courseBtn) {
         const c = JSON.parse(courseBtn.dataset.course);
         setVal('course-edit-id', c.id); setVal('course-edit-name', c.name); setVal('course-edit-category', c.category); setVal('course-edit-status', String(c.status || 'published').toLowerCase());
+        const courseCompulsoryBox = document.getElementById('course-edit-compulsory');
+        if (courseCompulsoryBox) courseCompulsoryBox.checked = Boolean(c.is_compulsory);
         HKC.dialog.open(document.getElementById('course-edit'), courseBtn); return;
       }
       const assessmentBtn = event.target.closest('[data-assessment-edit]');
@@ -452,7 +460,7 @@
     const state = { users: { page: 1, search: '', role: '' }, courses: { page: 1, search: '', status: '' }, 'api-creds': { page: 1, search: '' }, assessments: { page: 1, search: '', type: '' } };
     const rows = {
       users: (u) => `<tr><td><div class="font-medium">${esc(u.full_name)}</div><div class="caption mono">@${esc(u.username)}</div></td><td class="tabular">${esc(u.employee_id || '—')}</td><td class="text-fg-2">${esc(u.email || '—')}</td><td>${roleBadge(u.role)}</td><td class="num tabular">${u.course_ids ? String(u.course_ids).split(',').length : 0}</td><td class="num"><div class="flex justify-end gap-1"><form method="post" action="/admin/view-as/${u.id}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">${iconBtn('eye', `Preview as ${u.full_name}`, 'type="submit"').replace('type="button" ', '')}</form>${iconBtn('edit', `Edit ${u.full_name}`, `data-user-edit data-user='${attr(u)}'`)}${confirmForm(`/admin/delete/user/${u.id}`, '', `Delete ${u.full_name}? Their assignments, attempts and wallet are removed.`, 'Delete user', 'Delete')}${iconBtn('trash', `Delete ${u.full_name}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,
-      courses: (c) => `<tr><td><div class="font-medium">${esc(c.name)}</div>${c.creator ? `<div class="caption">by ${esc(c.creator)}</div>` : ''}</td><td>${esc(c.category || '—')}</td><td>${badge(c.content_type || '—', 'neutral')}</td><td>${badge(String(c.status || 'published').toLowerCase(), tone(c.status || 'published'))}</td><td class="num"><div class="flex justify-end gap-1">${iconBtn('edit', `Edit ${c.name}`, `data-course-edit data-course='${attr(c)}'`)}${confirmForm(`/admin/delete/course/${c.id}`, '', `Delete “${c.name}” and all of its assignments and assessments?`, 'Delete course', 'Delete')}${iconBtn('trash', `Delete ${c.name}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,
+      courses: (c) => `<tr><td><div class="font-medium flex items-center gap-2">${esc(c.name)}${c.is_compulsory ? badge('Compulsory', 'warning') : ''}</div>${c.creator ? `<div class="caption">by ${esc(c.creator)}</div>` : ''}</td><td>${esc(c.category || '—')}</td><td>${badge(c.content_type || '—', 'neutral')}</td><td>${badge(String(c.status || 'published').toLowerCase(), tone(c.status || 'published'))}</td><td class="num"><div class="flex justify-end gap-1">${iconBtn('edit', `Edit ${c.name}`, `data-course-edit data-course='${attr(c)}'`)}${confirmForm(`/admin/delete/course/${c.id}`, '', `Delete “${c.name}” and all of its assignments and assessments?`, 'Delete course', 'Delete')}${iconBtn('trash', `Delete ${c.name}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,
       'api-creds': (k) => `<tr><td><div class="font-medium">${esc(k.full_name)}</div><div class="caption mono">@${esc(k.username)}</div></td><td>${roleBadge(k.role)}</td><td><span class="inline-flex items-center gap-1"><code class="mono text-xs">${esc(String(k.api_key).slice(0, 12))}…</code>${iconBtn('copy', 'Copy API key', `data-copy="${esc(k.api_key)}"`)}</span></td><td>${k.status === 'active' ? `<span class="inline-flex items-center gap-1"><code class="mono text-xs" data-secret="${esc(k.api_secret)}">••••••••••••</code>${iconBtn('eye', 'Reveal secret', 'data-reveal aria-pressed="false"')}${iconBtn('copy', 'Copy API secret', `data-copy="${esc(k.api_secret)}"`)}</span>` : '<span class="caption">Revoked</span>'}</td><td>${badge(k.status, tone(k.status))}</td><td class="num"><div class="flex justify-end gap-1">${k.status === 'active' ? `<a href="/admin/api-credentials/${k.user_id}/download" class="btn btn-icon btn-ghost btn-sm" aria-label="Download credentials for ${esc(k.full_name)}">${HKC_ICONS.download}</a>${confirmForm('', `<input type="hidden" name="action" value="revoke_api_creds"><input type="hidden" name="target_user_id" value="${k.user_id}">`, `Revoke API access for ${k.full_name}? Integrations using this key stop working immediately.`, 'Revoke key', 'Revoke').replace(' action=""', '')}<button type="submit" class="btn btn-sm btn-ghost text-danger">Revoke</button></form>` : ''}</div></td></tr>`,
       assessments: (a) => `<tr><td class="font-medium">${esc(a.title)}</td><td>${esc(a.course_name)}</td><td>${badge(a.type === 'pre' ? 'Pre' : 'Post', tone(a.type))}</td><td class="num tabular">${esc(a.pass_percentage)}%</td><td class="num tabular">${esc(a.max_attempts || 1)}</td><td class="num"><div class="flex justify-end gap-1"><a href="/assessments/${a.id}/questions/download" class="btn btn-icon btn-ghost btn-sm" aria-label="Download questions for ${esc(a.title)}">${HKC_ICONS.download}</a>${iconBtn('edit', `Edit ${a.title}`, `data-assessment-edit data-assessment='${attr(a)}'`)}${confirmForm(`/admin/delete/assessment/${a.id}`, '', `Delete “${a.title}” and its questions and attempts?`, 'Delete assessment', 'Delete')}${iconBtn('trash', `Delete ${a.title}`, 'type="submit"', 'text-danger').replace('type="button" ', '')}</form></div></td></tr>`,
     };
