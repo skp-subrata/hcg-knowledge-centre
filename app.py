@@ -990,6 +990,282 @@ def create_group_assignment_history(connection, course_id, course_name, user_id,
 	)
 
 
+# ── System-generated groups (Department / Location / All Users) ──────────────
+# Ported from origin/master. Membership in these groups is computed automatically
+# from department_id/location_id (or the legacy department/location text columns);
+# manual add/remove is blocked on them (see add_group_members/remove_group_member).
+def get_admin_user_id(connection):
+	admin = connection.execute("SELECT id FROM users WHERE LOWER(role) = 'admin' ORDER BY id ASC LIMIT 1").fetchone()
+	return admin["id"] if admin else 1
+
+
+def sync_department_group_members(connection, dept_id, group_id):
+	"""Sync users belonging to a department into its department group."""
+	dept = connection.execute("SELECT department_name FROM departments WHERE department_id = ?", (dept_id,)).fetchone()
+	if not dept:
+		return
+	dept_name = dept["department_name"]
+
+	current_users = connection.execute(
+		"SELECT id, employee_id, email, department, location, is_active FROM users WHERE (department_id = ? OR (department_id IS NULL AND department = ?))",
+		(dept_id, dept_name)
+	).fetchall()
+	valid_user_ids = {u["id"] for u in current_users}
+
+	for u in current_users:
+		user_status = 'active' if (u["is_active"] is None or u["is_active"] == 1) else 'inactive'
+		connection.execute(
+			"INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			(group_id, u["id"], u["employee_id"] or '', u["email"] or '', u["department"] or dept_name, u["location"] or '', user_status)
+		)
+
+	existing_members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ?", (group_id,)).fetchall()
+	for m in existing_members:
+		uid = m["user_id"]
+		if uid not in valid_user_ids:
+			connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, uid))
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (uid, group_id))
+
+
+def sync_location_group_members(connection, loc_id, group_id):
+	"""Sync users belonging to a location into its location group."""
+	loc = connection.execute("SELECT location_name, city FROM locations WHERE location_id = ?", (loc_id,)).fetchone()
+	if not loc:
+		return
+	loc_name = loc["location_name"]
+	city_name = loc["city"]
+
+	current_users = connection.execute(
+		"SELECT id, employee_id, email, department, location, is_active FROM users WHERE (location_id = ? OR (location_id IS NULL AND (location = ? OR location = ?)))",
+		(loc_id, loc_name, city_name)
+	).fetchall()
+	valid_user_ids = {u["id"] for u in current_users}
+
+	for u in current_users:
+		user_status = 'active' if (u["is_active"] is None or u["is_active"] == 1) else 'inactive'
+		connection.execute(
+			"INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			(group_id, u["id"], u["employee_id"] or '', u["email"] or '', u["department"] or '', u["location"] or loc_name, user_status)
+		)
+
+	existing_members = connection.execute("SELECT user_id FROM group_members WHERE group_id = ?", (group_id,)).fetchall()
+	for m in existing_members:
+		uid = m["user_id"]
+		if uid not in valid_user_ids:
+			connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, uid))
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (uid, group_id))
+
+
+def sync_department_group(connection, dept_id):
+	"""Create or update a department group for the given department_id."""
+	dept = connection.execute("SELECT department_id, department_name, status FROM departments WHERE department_id = ?", (dept_id,)).fetchone()
+	if not dept:
+		return
+	dept_name = dept["department_name"]
+	status = dept["status"]
+	grp_status = 'active' if str(status).lower() == 'active' else 'inactive'
+	target_name = f"Department - {dept_name}"
+	admin_id = get_admin_user_id(connection)
+
+	grp = connection.execute("SELECT id, name, status FROM groups WHERE group_type = 'DEPARTMENT' AND source_master_id = ?", (dept_id,)).fetchone()
+	if not grp:
+		grp_by_name = connection.execute("SELECT id FROM groups WHERE name = ?", (target_name,)).fetchone()
+		if grp_by_name:
+			group_id = grp_by_name["id"]
+			connection.execute("UPDATE groups SET group_type = 'DEPARTMENT', system_generated = 1, source_master_type = 'DEPARTMENT', source_master_id = ?, status = ? WHERE id = ?", (dept_id, grp_status, group_id))
+		else:
+			group_id = connection.execute(
+				"INSERT INTO groups (name, description, group_type, status, created_by, system_generated, source_master_type, source_master_id) VALUES (?, ?, 'DEPARTMENT', ?, ?, 1, 'DEPARTMENT', ?)",
+				(target_name, f"System-generated group for {dept_name} department", grp_status, admin_id, dept_id)
+			).lastrowid
+	else:
+		group_id = grp["id"]
+		if grp["name"] != target_name or grp["status"] != grp_status:
+			connection.execute("UPDATE groups SET name = ?, status = ? WHERE id = ?", (target_name, grp_status, group_id))
+
+	if grp_status == 'active':
+		sync_department_group_members(connection, dept_id, group_id)
+
+
+def sync_location_group(connection, loc_id):
+	"""Create or update a location group for the given location_id."""
+	loc = connection.execute("SELECT location_id, location_name, status FROM locations WHERE location_id = ?", (loc_id,)).fetchone()
+	if not loc:
+		return
+	loc_name = loc["location_name"]
+	status = loc["status"]
+	grp_status = 'active' if str(status).lower() == 'active' else 'inactive'
+	target_name = f"Location - {loc_name}"
+	admin_id = get_admin_user_id(connection)
+
+	grp = connection.execute("SELECT id, name, status FROM groups WHERE group_type = 'LOCATION' AND source_master_id = ?", (loc_id,)).fetchone()
+	if not grp:
+		grp_by_name = connection.execute("SELECT id FROM groups WHERE name = ?", (target_name,)).fetchone()
+		if grp_by_name:
+			group_id = grp_by_name["id"]
+			connection.execute("UPDATE groups SET group_type = 'LOCATION', system_generated = 1, source_master_type = 'LOCATION', source_master_id = ?, status = ? WHERE id = ?", (loc_id, grp_status, group_id))
+		else:
+			group_id = connection.execute(
+				"INSERT INTO groups (name, description, group_type, status, created_by, system_generated, source_master_type, source_master_id) VALUES (?, ?, 'LOCATION', ?, ?, 1, 'LOCATION', ?)",
+				(target_name, f"System-generated group for {loc_name} location", grp_status, admin_id, loc_id)
+			).lastrowid
+	else:
+		group_id = grp["id"]
+		if grp["name"] != target_name or grp["status"] != grp_status:
+			connection.execute("UPDATE groups SET name = ?, status = ? WHERE id = ?", (target_name, grp_status, group_id))
+
+	if grp_status == 'active':
+		sync_location_group_members(connection, loc_id, group_id)
+
+
+def sync_all_users_group(connection, user_id=None):
+	"""Ensure All Users group exists and users belong to it."""
+	admin_id = get_admin_user_id(connection)
+	grp = connection.execute("SELECT id FROM groups WHERE group_type = 'ALL_USERS' AND system_generated = 1").fetchone()
+	if not grp:
+		existing = connection.execute("SELECT id FROM groups WHERE name = 'All Users'").fetchone()
+		if existing:
+			group_id = existing["id"]
+			connection.execute("UPDATE groups SET group_type = 'ALL_USERS', system_generated = 1 WHERE id = ?", (group_id,))
+		else:
+			group_id = connection.execute(
+				"INSERT INTO groups (name, description, group_type, status, created_by, system_generated) VALUES ('All Users', 'System-generated group containing all users', 'ALL_USERS', 'active', ?, 1)",
+				(admin_id,)
+			).lastrowid
+	else:
+		group_id = grp["id"]
+
+	if user_id:
+		u = connection.execute("SELECT id, employee_id, email, department, location, is_active FROM users WHERE id = ?", (user_id,)).fetchone()
+		if u:
+			user_status = 'active' if (u["is_active"] is None or u["is_active"] == 1) else 'inactive'
+			connection.execute(
+				"INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+				(group_id, u["id"], u["employee_id"] or '', u["email"] or '', u["department"] or '', u["location"] or '', user_status)
+			)
+	else:
+		connection.execute("""
+			INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status)
+			SELECT ?, u.id, COALESCE(u.employee_id, ''), COALESCE(u.email, ''), COALESCE(u.department, ''), COALESCE(u.location, ''),
+			       CASE WHEN COALESCE(u.is_active, 1) = 1 THEN 'active' ELSE 'inactive' END
+			FROM users u
+		""", (group_id,))
+
+
+def sync_user_groups(connection, user_id):
+	"""Synchronize a single user's membership across All Users, Department, and Location system groups."""
+	user = connection.execute("SELECT id, department_id, department, location_id, location, employee_id, email, is_active FROM users WHERE id = ?", (user_id,)).fetchone()
+	if not user:
+		return
+
+	# 1. All Users
+	sync_all_users_group(connection, user_id=user_id)
+
+	# 2. Department Group Sync
+	dept_id = user["department_id"]
+	dept_name = user["department"]
+	target_dept_grp_id = None
+
+	if dept_id:
+		d_row = connection.execute("SELECT department_id FROM departments WHERE department_id = ? AND status = 'Active'", (dept_id,)).fetchone()
+		if d_row:
+			sync_department_group(connection, dept_id)
+			grp = connection.execute("SELECT id FROM groups WHERE group_type = 'DEPARTMENT' AND source_master_id = ? AND status = 'active'", (dept_id,)).fetchone()
+			if grp:
+				target_dept_grp_id = grp["id"]
+	elif dept_name:
+		d_row = connection.execute("SELECT department_id FROM departments WHERE department_name = ? AND status = 'Active'", (dept_name,)).fetchone()
+		if d_row:
+			dept_id = d_row["department_id"]
+			sync_department_group(connection, dept_id)
+			grp = connection.execute("SELECT id FROM groups WHERE group_type = 'DEPARTMENT' AND source_master_id = ? AND status = 'active'", (dept_id,)).fetchone()
+			if grp:
+				target_dept_grp_id = grp["id"]
+
+	user_status = 'active' if (user["is_active"] is None or user["is_active"] == 1) else 'inactive'
+
+	current_dept_memberships = connection.execute("""
+		SELECT gm.group_id
+		FROM group_members gm
+		JOIN groups g ON g.id = gm.group_id
+		WHERE gm.user_id = ? AND g.group_type = 'DEPARTMENT' AND g.system_generated = 1
+	""", (user_id,)).fetchall()
+
+	for m in current_dept_memberships:
+		gid = m["group_id"]
+		if gid != target_dept_grp_id:
+			connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (gid, user_id))
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (user_id, gid))
+
+	if target_dept_grp_id:
+		ins = connection.execute("INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (target_dept_grp_id, user_id, user["employee_id"] or '', user["email"] or '', user["department"] or '', user["location"] or '', user_status))
+		if ins.rowcount > 0:
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_ADDED', 'group', ?)", (user_id, target_dept_grp_id))
+
+	# 3. Location Group Sync
+	loc_id = user["location_id"]
+	loc_name = user["location"]
+	target_loc_grp_id = None
+
+	if loc_id:
+		l_row = connection.execute("SELECT location_id FROM locations WHERE location_id = ? AND status = 'Active'", (loc_id,)).fetchone()
+		if l_row:
+			sync_location_group(connection, loc_id)
+			grp = connection.execute("SELECT id FROM groups WHERE group_type = 'LOCATION' AND source_master_id = ? AND status = 'active'", (loc_id,)).fetchone()
+			if grp:
+				target_loc_grp_id = grp["id"]
+	elif loc_name:
+		l_row = connection.execute("SELECT location_id FROM locations WHERE (location_name = ? OR city = ?) AND status = 'Active'", (loc_name, loc_name)).fetchone()
+		if l_row:
+			loc_id = l_row["location_id"]
+			sync_location_group(connection, loc_id)
+			grp = connection.execute("SELECT id FROM groups WHERE group_type = 'LOCATION' AND source_master_id = ? AND status = 'active'", (loc_id,)).fetchone()
+			if grp:
+				target_loc_grp_id = grp["id"]
+
+	current_loc_memberships = connection.execute("""
+		SELECT gm.group_id
+		FROM group_members gm
+		JOIN groups g ON g.id = gm.group_id
+		WHERE gm.user_id = ? AND g.group_type = 'LOCATION' AND g.system_generated = 1
+	""", (user_id,)).fetchall()
+
+	for m in current_loc_memberships:
+		gid = m["group_id"]
+		if gid != target_loc_grp_id:
+			connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (gid, user_id))
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (user_id, gid))
+
+	if target_loc_grp_id:
+		ins = connection.execute("INSERT OR IGNORE INTO group_members (group_id, user_id, employee_id, email, department, location, user_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (target_loc_grp_id, user_id, user["employee_id"] or '', user["email"] or '', user["department"] or '', user["location"] or '', user_status))
+		if ins.rowcount > 0:
+			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_ADDED', 'group', ?)", (user_id, target_loc_grp_id))
+
+
+def ensure_system_generated_groups(connection):
+	"""Ensure All Users, Department, and Location system groups are created and synchronized.
+
+	Called unconditionally from create_app() (not gated behind demo seeding, unlike
+	origin/master's placement inside seed_course_questions -- a real deployment with
+	seeding disabled must still get these groups created).
+	"""
+	sync_all_users_group(connection)
+
+	depts = connection.execute("SELECT department_id FROM departments").fetchall()
+	for d in depts:
+		sync_department_group(connection, d["department_id"])
+
+	locs = connection.execute("SELECT location_id FROM locations").fetchall()
+	for l in locs:
+		sync_location_group(connection, l["location_id"])
+
+	users = connection.execute("SELECT id FROM users").fetchall()
+	for u in users:
+		sync_user_groups(connection, u["id"])
+
+
 def question_template():
 	"""Build a blank Excel template for course assessment questions."""
 	workbook = Workbook()
@@ -1261,6 +1537,11 @@ def create_app():
 	with get_db() as connection:
 		init_support_db(connection)
 
+	# System-generated groups (Department / Location / All Users) -- also created/synced
+	# unconditionally here, matching init_support_db above: no lazy hook, no stale flag.
+	with get_db() as connection:
+		ensure_system_generated_groups(connection)
+
 	@app.route("/", methods=["GET", "POST"])
 	def home():
 		"""Authenticate users and show their permitted courses."""
@@ -1526,10 +1807,13 @@ def create_app():
 		if session.get("role") not in ("admin", "moderator"):
 			return redirect(url_for("home"))
 		with get_db() as connection:
-			group = connection.execute("SELECT id FROM groups WHERE id = ?", (group_id,)).fetchone()
+			group = connection.execute("SELECT id, system_generated FROM groups WHERE id = ?", (group_id,)).fetchone()
 			if not group:
 				flash("Group not found.", "error")
 				return redirect(safe_referrer(url_for("groups_page")))
+			if group["system_generated"]:
+				flash("This group's membership is managed automatically and cannot be edited by hand.", "error")
+				return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 			for raw_user_id in request.form.getlist("selected_users"):
 				user_id = int(raw_user_id)
 				connection.execute(
@@ -1546,6 +1830,10 @@ def create_app():
 		user_id = request.form.get("user_id")
 		if user_id:
 			with get_db() as connection:
+				group = connection.execute("SELECT system_generated FROM groups WHERE id = ?", (group_id,)).fetchone()
+				if group and group["system_generated"]:
+					flash("This group's membership is managed automatically and cannot be edited by hand.", "error")
+					return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
 				connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, int(user_id)))
 		flash("User removed from group. Existing course access remains unchanged.", "success")
 		return redirect(safe_referrer(url_for("group_detail", group_id=group_id)))
@@ -1825,6 +2113,7 @@ def create_app():
 									if str(interest_id).isdigit():
 										connection.execute("INSERT OR IGNORE INTO user_interest (user_id, interest_id) VALUES (?, ?)", (new_user_id, int(interest_id)))
 
+								sync_user_groups(connection, new_user_id)
 								flash("User added successfully.", "success")
 					except sqlite3.IntegrityError:
 						flash("Database integrity error occurred.", "error")
@@ -1893,6 +2182,7 @@ def create_app():
 									for interest_id in interests:
 										if str(interest_id).isdigit():
 											connection.execute("INSERT OR IGNORE INTO user_interest (user_id, interest_id) VALUES (?, ?)", (user_id, int(interest_id)))
+								sync_user_groups(connection, int(user_id))
 								if is_ajax:
 									return jsonify({"success": True, "message": "User updated successfully."})
 								flash("User updated successfully.", "success")
@@ -2942,8 +3232,9 @@ def create_app():
 					"UPDATE users SET full_name = ?, email = ?, phone_number = ?, employee_id = ?, department_id = ?, position_id = ?, location_id = ?, about_me = ?, profile_picture = ? WHERE id = ?",
 					(full_name, email, phone_number, employee_id, department_id, position_id, location_id, about_me, pic_filename, session["user_id"])
 				)
+				sync_user_groups(connection, session["user_id"])
 
-					
+
 			session["user"] = full_name
 			session["profile_picture"] = pic_filename
 			flash("Profile updated successfully.", "success")
@@ -4583,6 +4874,7 @@ def create_app():
 				).lastrowid
 			except Exception as e:
 				return {"error": f"Database insertion failed: {str(e)}"}, 500
+			sync_user_groups(connection, user_id)
 		return {"message": "User created successfully.", "user_id": user_id}, 201
 
 	@app.get("/api/v1/users/<int:user_id>")
@@ -5360,9 +5652,10 @@ def create_app():
 	                    if not name or not code:
 	                        flash("Department Name and Code are mandatory.", "error")
 	                    else:
-	                        conn.execute("INSERT INTO departments (department_name, department_code, description, status, created_by) VALUES (?, ?, ?, ?, ?)", (name, code, desc, status, user_id))
+	                        dept_id = conn.execute("INSERT INTO departments (department_name, department_code, description, status, created_by) VALUES (?, ?, ?, ?, ?)", (name, code, desc, status, user_id)).lastrowid
+	                        sync_department_group(conn, dept_id)
 	                        flash("Department created successfully.", "success")
-	                        
+
 	                elif action == "edit_department":
 	                    dept_id = request.form.get("record_id")
 	                    name = request.form.get("department_name", "").strip()
@@ -5373,12 +5666,14 @@ def create_app():
 	                        flash("Department Name and Code are mandatory.", "error")
 	                    else:
 	                        conn.execute("UPDATE departments SET department_name = ?, department_code = ?, description = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (name, code, desc, status, user_id, dept_id))
+	                        sync_department_group(conn, dept_id)
 	                        flash("Department updated successfully.", "success")
-	                        
+
 	                elif action == "toggle_department":
 	                    dept_id = request.form.get("record_id")
 	                    new_status = request.form.get("status")
 	                    conn.execute("UPDATE departments SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE department_id = ?", (new_status, user_id, dept_id))
+	                    sync_department_group(conn, dept_id)
 	                    flash(f"Department marked as {new_status}.", "success")
 
 	                elif action == "add_location":
@@ -5393,9 +5688,10 @@ def create_app():
 	                    if not name or not code or not city or not country:
 	                        flash("Location Name, Code, City, and Country are mandatory.", "error")
 	                    else:
-	                        conn.execute("INSERT INTO locations (location_name, location_code, city, country, address, state, postal_code, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (name, code, city, country, address, state, postal_code, status, user_id))
+	                        loc_id = conn.execute("INSERT INTO locations (location_name, location_code, city, country, address, state, postal_code, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (name, code, city, country, address, state, postal_code, status, user_id)).lastrowid
+	                        sync_location_group(conn, loc_id)
 	                        flash("Location created successfully.", "success")
-	                        
+
 	                elif action == "edit_location":
 	                    loc_id = request.form.get("record_id")
 	                    name = request.form.get("location_name", "").strip()
@@ -5410,12 +5706,14 @@ def create_app():
 	                        flash("Location Name, Code, City, and Country are mandatory.", "error")
 	                    else:
 	                        conn.execute("UPDATE locations SET location_name = ?, location_code = ?, city = ?, country = ?, address = ?, state = ?, postal_code = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (name, code, city, country, address, state, postal_code, status, user_id, loc_id))
+	                        sync_location_group(conn, loc_id)
 	                        flash("Location updated successfully.", "success")
-	                        
+
 	                elif action == "toggle_location":
 	                    loc_id = request.form.get("record_id")
 	                    new_status = request.form.get("status")
 	                    conn.execute("UPDATE locations SET status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE location_id = ?", (new_status, user_id, loc_id))
+	                    sync_location_group(conn, loc_id)
 	                    flash(f"Location marked as {new_status}.", "success")
 	                elif action == "add_interest":
 	                    name = request.form.get("interest_name", "").strip()

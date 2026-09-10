@@ -7,11 +7,15 @@
 <header class="page-header">
   <div class="min-w-0">
     <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li><a href="{{ url_for('groups_page') }}">Groups</a></li><li><span aria-current="page">{{ group.name }}</span></li></ol></nav>
-    <div class="flex items-center gap-2 mb-2">{{ status_badge(group.status) }}<span class="caption">{{ group.group_type or 'General' }}</span></div>
+    <div class="flex items-center gap-2 mb-2">{{ status_badge(group.status) }}{% if group.system_generated %}{{ badge("System", "info") }}{% endif %}<span class="caption">{{ group.group_type or 'General' }}</span></div>
     <h1>{{ group.name }}</h1>
     <p class="text-fg-2 mt-2 max-w-3xl">{{ group.description or 'No description has been added for this group yet.' }}</p>
   </div>
 </header>
+
+{% if group.system_generated %}
+<div class="card-inset mb-8"><p class="caption inline-flex items-center gap-1.5">{{ icon("shield", "w-3.5 h-3.5") }}This group's membership is generated automatically from master data and kept in sync — members cannot be added or removed by hand.</p></div>
+{% endif %}
 
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
   {{ stat_tile("Members", user_count or 0) }}
@@ -25,6 +29,7 @@
     <div class="flex justify-between gap-4"><dt class="text-fg-2">Created by</dt><dd class="font-medium">{{ group.creator_name }}</dd></div>
     <div class="flex justify-between gap-4 border-t hairline pt-3"><dt class="text-fg-2">Created</dt><dd class="font-medium tabular">{{ (group.created_at or '')[:10] }}</dd></div>
     <div class="flex justify-between gap-4 border-t hairline pt-3"><dt class="text-fg-2">Type</dt><dd class="font-medium">{{ group.group_type or 'General' }}</dd></div>
+    <div class="flex justify-between gap-4 border-t hairline pt-3"><dt class="text-fg-2">System generated</dt><dd class="font-medium">{{ "Yes" if group.system_generated else "No" }}</dd></div>
   </dl>
   <form method="post" action="{{ url_for('assign_group_course', group_id=group.id) }}" class="card lg:col-span-2" aria-labelledby="assign-title"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <h2 id="assign-title" class="text-base mb-4">Assign a course to every member</h2>
@@ -49,7 +54,7 @@
       <td class="text-fg-2">{{ member.department or '–' }}</td>
       <td class="text-fg-2">{{ member.location or '–' }}</td>
       <td>{{ status_badge(member.user_status or 'active') }}</td>
-      <td class="num"><form method="post" action="{{ url_for('remove_group_member', group_id=group.id) }}" data-confirm="Remove {{ member.full_name }} from {{ group.name }}? Their course access is kept." data-confirm-title="Remove member" data-confirm-label="Remove" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="user_id" value="{{ member.user_id }}">{{ btn_icon("Remove " ~ member.full_name, "trash", size="sm", type="submit") }}</form></td>
+      <td class="num">{% if group.system_generated %}<span class="caption">System managed</span>{% else %}<form method="post" action="{{ url_for('remove_group_member', group_id=group.id) }}" data-confirm="Remove {{ member.full_name }} from {{ group.name }}? Their course access is kept." data-confirm-title="Remove member" data-confirm-label="Remove" data-confirm-danger><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="user_id" value="{{ member.user_id }}">{{ btn_icon("Remove " ~ member.full_name, "trash", size="sm", type="submit") }}</form>{% endif %}</td>
     </tr>
     {% endfor %}
   {% endcall %}

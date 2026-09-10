@@ -1,5 +1,10 @@
-"""Groups: CSV member upload matching and progress counts."""
+"""Groups: CSV member upload matching, progress counts, and the system-generated groups
+(Department / Location / All Users) ported from origin/master -- membership in these is
+computed automatically rather than maintained by hand."""
 import io
+import sqlite3
+
+import app as app_module
 
 
 def test_csv_upload_matches_by_employee_id_not_a_loose_username_match(moderator, world, db):
@@ -28,3 +33,101 @@ def test_group_detail_counts_certified_members_as_completed(moderator, world, db
 
 	source = Path(app_module.__file__).read_text(encoding="utf-8")
 	assert "ca.status = 'completed') AS completed_count" not in source
+
+
+# ---------------------------------------------------------------------------
+# system-generated groups (Department / Location / All Users)
+# ---------------------------------------------------------------------------
+def _raw_connection(db_path):
+	connection = sqlite3.connect(db_path)
+	connection.row_factory = sqlite3.Row
+	return connection
+
+
+def test_ensure_system_generated_groups_creates_all_users_department_and_location(world, db):
+	all_users = db("SELECT * FROM groups WHERE group_type = 'ALL_USERS' AND system_generated = 1")
+	assert len(all_users) == 1
+	dept = db("SELECT * FROM groups WHERE group_type = 'DEPARTMENT' AND source_master_id = ? AND system_generated = 1", (world.department_id,))
+	assert len(dept) == 1 and dept[0]["name"].startswith("Department - ")
+	loc = db("SELECT * FROM groups WHERE group_type = 'LOCATION' AND source_master_id = ? AND system_generated = 1", (world.location_id,))
+	assert len(loc) == 1 and loc[0]["name"].startswith("Location - ")
+
+
+def test_ensure_system_generated_groups_is_idempotent_on_an_already_synced_db(world, db, db_path):
+	before_groups = db("SELECT id, name, status FROM groups ORDER BY id")
+	before_members = db("SELECT group_id, user_id FROM group_members ORDER BY group_id, user_id")
+	manual_group_before = db("SELECT * FROM groups WHERE id = ?", (world.group_id,))[0]
+
+	connection = _raw_connection(db_path)
+	with connection:
+		app_module.ensure_system_generated_groups(connection)
+	connection.close()
+
+	after_groups = db("SELECT id, name, status FROM groups ORDER BY id")
+	after_members = db("SELECT group_id, user_id FROM group_members ORDER BY group_id, user_id")
+	assert [dict(r) for r in before_groups] == [dict(r) for r in after_groups]
+	assert [dict(r) for r in before_members] == [dict(r) for r in after_members]
+	manual_group_after = db("SELECT * FROM groups WHERE id = ?", (world.group_id,))[0]
+	assert dict(manual_group_before) == dict(manual_group_after), "a pre-existing manual group must not be annexed or altered"
+
+
+def test_new_user_is_added_to_all_users_and_their_department_and_location_groups(admin, world, db):
+	response = admin.post("/admin", data={
+		"action": "add_user", "full_name": "Group Sync Test", "username": "groupsynctest", "password": "testpass1",
+		"role": "basic user", "employee_id": "EMP-GROUPSYNC", "email": "groupsync@example.com", "phone_number": "1234567890",
+		"department_id": str(world.department_id), "location_id": str(world.location_id),
+	})
+	assert response.status_code in (200, 302)
+	new_user_id = db("SELECT id FROM users WHERE username = 'groupsynctest'")[0]["id"]
+
+	all_users_group = db("SELECT id FROM groups WHERE group_type = 'ALL_USERS' AND system_generated = 1")[0]["id"]
+	dept_group = db("SELECT id FROM groups WHERE group_type = 'DEPARTMENT' AND source_master_id = ? AND system_generated = 1", (world.department_id,))[0]["id"]
+	loc_group = db("SELECT id FROM groups WHERE group_type = 'LOCATION' AND source_master_id = ? AND system_generated = 1", (world.location_id,))[0]["id"]
+
+	member_group_ids = {r["group_id"] for r in db("SELECT group_id FROM group_members WHERE user_id = ?", (new_user_id,))}
+	assert {all_users_group, dept_group, loc_group} <= member_group_ids
+
+
+def test_toggling_a_department_inactive_flips_its_group_and_a_later_resync_drops_stale_members(admin, world, db):
+	# give a real seeded user this department so there is a member to remove/restore
+	student_id = world.users["student"]
+
+	def update_student():
+		admin.post("/admin", data={
+			"action": "update_user", "record_id": str(student_id), "full_name": "Student User", "username": "student",
+			"employee_id": "EMP-STUDENT-DEPT", "email": "student.dept@example.com", "phone_number": "1234567890",
+			"role": "basic user", "department_id": str(world.department_id), "location_id": str(world.location_id),
+		})
+
+	update_student()
+	dept_group_id = db("SELECT id FROM groups WHERE group_type = 'DEPARTMENT' AND source_master_id = ? AND system_generated = 1", (world.department_id,))[0]["id"]
+	assert db("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?", (dept_group_id, student_id))
+
+	admin.post("/admin/masters", data={"action": "toggle_department", "record_id": str(world.department_id), "status": "Inactive"})
+	assert db("SELECT status FROM departments WHERE department_id = ?", (world.department_id,))[0]["status"] == "Inactive"
+	assert db("SELECT status FROM groups WHERE id = ?", (dept_group_id,))[0]["status"] == "inactive"
+	# toggling the master record alone does not retroactively prune existing members --
+	# that happens the next time the user's own membership is resynced (below)
+	assert db("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?", (dept_group_id, student_id))
+
+	update_student()  # re-syncs this user; their department no longer resolves as Active
+	assert not db("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?", (dept_group_id, student_id))
+
+	admin.post("/admin/masters", data={"action": "toggle_department", "record_id": str(world.department_id), "status": "Active"})
+	assert db("SELECT status FROM groups WHERE id = ?", (dept_group_id,))[0]["status"] == "active"
+	update_student()
+	assert db("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?", (dept_group_id, student_id))
+
+
+def test_manual_membership_edits_are_blocked_on_a_system_generated_group(moderator, admin, world, db):
+	all_users_group_id = db("SELECT id FROM groups WHERE group_type = 'ALL_USERS' AND system_generated = 1")[0]["id"]
+	student_id = world.users["student"]
+	assert db("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?", (all_users_group_id, student_id))
+
+	remove = moderator.post(f"/groups/{all_users_group_id}/remove-member", data={"user_id": str(student_id)}, follow_redirects=True)
+	assert b"managed automatically" in remove.data
+	assert db("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?", (all_users_group_id, student_id)), "system group membership must not be removable by hand"
+
+	maya_id = world.users["maya.student"]
+	add = admin.post(f"/groups/{all_users_group_id}/members", data={"selected_users": [str(maya_id)]}, follow_redirects=True)
+	assert b"managed automatically" in add.data

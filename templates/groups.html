@@ -31,22 +31,30 @@
 <section aria-labelledby="groups-title">
   <div class="flex items-end justify-between mb-4"><h2 id="groups-title">All groups</h2><span class="caption">{{ groups|length }}</span></div>
   {% if groups %}
-  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-    {% for group in groups %}
-    <article class="card is-interactive flex flex-col gap-3" aria-labelledby="group-{{ group.id }}">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0"><h3 id="group-{{ group.id }}" class="truncate">{{ group.name }}</h3><p class="caption">{{ group.group_type or 'General' }}</p></div>
-        {{ status_badge(group.status) }}
-      </div>
-      <p class="text-sm text-fg-2 line-clamp-2">{{ group.description or 'No description provided.' }}</p>
-      <div class="flex flex-wrap gap-x-4 gap-y-1 caption">
-        <span class="inline-flex items-center gap-1">{{ icon("users", "w-3.5 h-3.5") }}{{ group.member_count or 0 }} member{{ '' if group.member_count == 1 else 's' }}</span>
-        <span class="inline-flex items-center gap-1">{{ icon("book", "w-3.5 h-3.5") }}{{ group.course_count or 0 }} course{{ '' if group.course_count == 1 else 's' }}</span>
-        <span class="inline-flex items-center gap-1">{{ icon("user", "w-3.5 h-3.5") }}{{ group.creator_name }}</span>
-      </div>
-      <div class="mt-auto pt-2">{{ btn("Open group", "secondary", href=url_for('group_detail', group_id=group.id), size="sm", icon_name="arrow-right") }}</div>
-    </article>
-    {% endfor %}
+  <div id="group-library" data-filter>
+    <div class="flex flex-wrap gap-2 mb-4" role="group" aria-label="Filter by type">
+      {% for value, label in [("all", "All"), ("custom", "Manual"), ("system", "System")] %}
+      <button type="button" class="chip" data-filter-chip data-filter-key="type" data-filter-value="{{ value }}" aria-pressed="{{ 'true' if value == 'all' else 'false' }}">{{ label }}</button>
+      {% endfor %}
+    </div>
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {% for group in groups %}
+      <article class="card is-interactive flex flex-col gap-3" aria-labelledby="group-{{ group.id }}" data-filter-item data-type="{{ 'system' if group.system_generated else 'custom' }}">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0"><h3 id="group-{{ group.id }}" class="truncate">{{ group.name }}</h3><p class="caption">{{ group.group_type or 'General' }}</p></div>
+          <div class="flex flex-col items-end gap-1">{{ status_badge(group.status) }}{% if group.system_generated %}{{ badge("System", "info") }}{% endif %}</div>
+        </div>
+        <p class="text-sm text-fg-2 line-clamp-2">{{ group.description or 'No description provided.' }}</p>
+        <div class="flex flex-wrap gap-x-4 gap-y-1 caption">
+          <span class="inline-flex items-center gap-1">{{ icon("users", "w-3.5 h-3.5") }}{{ group.member_count or 0 }} member{{ '' if group.member_count == 1 else 's' }}</span>
+          <span class="inline-flex items-center gap-1">{{ icon("book", "w-3.5 h-3.5") }}{{ group.course_count or 0 }} course{{ '' if group.course_count == 1 else 's' }}</span>
+          <span class="inline-flex items-center gap-1">{{ icon("user", "w-3.5 h-3.5") }}{{ 'Admin' if group.system_generated else group.creator_name }}</span>
+        </div>
+        <div class="mt-auto pt-2">{{ btn("Open group", "secondary", href=url_for('group_detail', group_id=group.id), size="sm", icon_name="arrow-right") }}</div>
+      </article>
+      {% endfor %}
+    </div>
+    <div class="card p-0 mt-6" data-filter-empty hidden>{{ empty_state("No matching groups", "Try a different filter.", "search") }}</div>
   </div>
   {% else %}
   <div class="card p-0">{% call empty_state("No groups yet", "Create a group to assign courses to a whole team at once.", "users") %}{% if is_staff %}{{ btn("Create group", "secondary", size="sm", attrs='data-dialog-open="group-create"') }}{% endif %}{% endcall %}</div>
