@@ -8,34 +8,74 @@
   <div>
     <p class="eyebrow mb-1">Developer tools</p>
     <h1>Reports &amp; analytics</h1>
-    <p class="text-fg-2 mt-1">Adoption, completions and rewards at a glance. CSV exports live in the admin workspace.</p>
+    <p class="text-fg-2 mt-1">Adoption, completions and rewards at a glance.</p>
   </div>
   <div class="no-print">{{ btn("Print report", "secondary", icon_name="document", attrs='data-print') }}</div>
 </header>
 
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-  {{ stat_tile("Users", total_users, active_users ~ " active accounts") }}
-  {{ stat_tile("Courses", total_courses, active_courses ~ " published") }}
-  {{ stat_tile("Pass rate", pass_rate ~ "%", "from " ~ total_attempts ~ " assessment attempts") }}
-  {{ stat_tile("Points issued", "{:,}".format(total_points_issued or 0), "total reward points earned") }}
+<div class="card mb-8 no-print" aria-labelledby="range-title">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+    <h2 id="range-title" class="text-base">Date range</h2>
+    <div id="range-status" class="caption" aria-live="polite"></div>
+  </div>
+  <div class="flex flex-wrap items-end gap-3">
+    <div class="flex flex-wrap gap-2" role="group" aria-label="Date range preset">
+      {% for value, label in [("all", "All time"), ("today", "Today"), ("7d", "7 days"), ("30d", "30 days"), ("90d", "90 days"), ("this_year", "This year")] %}
+      <button type="button" class="chip" data-preset="{{ value }}" aria-pressed="{{ 'true' if (preset or 'all') == value else 'false' }}">{{ label }}</button>
+      {% endfor %}
+    </div>
+    <div class="flex items-end gap-2">
+      <label class="field mb-0"><span class="field-label">From</span><input type="date" class="input" id="range-from" value="{{ start_date }}"></label>
+      <label class="field mb-0"><span class="field-label">To</span><input type="date" class="input" id="range-to" value="{{ end_date }}"></label>
+      {{ btn("Apply", "secondary", type="button", size="sm", attrs='id="range-apply"') }}
+    </div>
+  </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  <div class="card stat"><span class="eyebrow">Users</span><span class="stat-value" id="stat-users">{{ total_users }}</span><span class="stat-hint" id="stat-users-hint">{{ active_users }} active accounts</span></div>
+  <div class="card stat"><span class="eyebrow">Courses</span><span class="stat-value" id="stat-courses">{{ total_courses }}</span><span class="stat-hint" id="stat-courses-hint">{{ active_courses }} published</span></div>
+  <div class="card stat"><span class="eyebrow">Pass rate</span><span class="stat-value" id="stat-pass-rate">{{ pass_rate }}%</span><span class="stat-hint" id="stat-pass-rate-hint">from {{ total_attempts }} assessment attempts</span></div>
+  <div class="card stat"><span class="eyebrow">Points issued</span><span class="stat-value" id="stat-points">{{ "{:,}".format(total_points_issued or 0) }}</span><span class="stat-hint">total reward points earned</span></div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
   <section class="card" aria-labelledby="chart-cat-title">
     <h2 id="chart-cat-title" class="text-base mb-4">Course completions by category</h2>
     <div class="relative h-72"><canvas id="categoryChart" role="img" aria-label="Bar chart of course completions by category"></canvas></div>
   </section>
   <section class="card" aria-labelledby="chart-pass-title">
     <h2 id="chart-pass-title" class="text-base mb-4">Assessment pass vs fail</h2>
-    <div class="relative h-72"><canvas id="passFailChart" role="img" aria-label="Doughnut chart: {{ pass_rate }}% pass, {{ 100 - pass_rate }}% fail"></canvas></div>
+    <div class="relative h-72"><canvas id="passFailChart" role="img" aria-label="Doughnut chart of passed vs failed assessment attempts"></canvas></div>
   </section>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+  <section class="card" aria-labelledby="chart-progress-title">
+    <h2 id="chart-progress-title" class="text-base mb-4">Course assignment progress</h2>
+    <div class="relative h-72"><canvas id="progressChart" role="img" aria-label="Bar chart of course assignments by progress status"></canvas></div>
+  </section>
+  <section class="card" aria-labelledby="chart-community-title">
+    <h2 id="chart-community-title" class="text-base mb-4">Community activity</h2>
+    <div class="relative h-72"><canvas id="communityChart" role="img" aria-label="Bar chart of posts, comments and ratings"></canvas></div>
+  </section>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+  <section class="card" aria-labelledby="chart-rewards-title">
+    <h2 id="chart-rewards-title" class="text-base mb-4">Reward points by type</h2>
+    <div class="relative h-72"><canvas id="rewardsChart" role="img" aria-label="Bar chart of reward points issued by transaction type"></canvas></div>
+  </section>
+  <section class="card" aria-labelledby="chart-support-title">
+    <h2 id="chart-support-title" class="text-base mb-4 flex items-center justify-between gap-2"><span>Support &amp; helpdesk</span>{{ btn("Open support reports", "ghost", href=url_for('support.admin_reports'), size="sm", icon_name="arrow-right") }}</h2>
+    <div class="relative h-72"><canvas id="supportChart" role="img" aria-label="Doughnut chart of open support issues by status"></canvas></div>
+  </section>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
   <section class="card" aria-labelledby="top-title">
     <h2 id="top-title" class="text-base mb-4 flex items-center gap-2">{{ icon("award", "w-4 h-4 text-warning") }}Top learners</h2>
-    {% if top_learners %}
-    <ol class="flex flex-col gap-2 m-0 p-0 list-none">
+    <ol class="flex flex-col gap-2 m-0 p-0 list-none" id="top-learners-list">
       {% for learner in top_learners %}
       <li class="card-inset flex items-center justify-between gap-3 py-2.5">
         <span class="flex items-center gap-3"><span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-fg/10 text-sm font-semibold tabular">{{ loop.index }}</span><span class="font-medium">{{ learner.user_name }}</span></span>
@@ -43,19 +83,44 @@
       </li>
       {% endfor %}
     </ol>
-    {% else %}<p class="caption text-center py-6">No certificates issued yet.</p>{% endif %}
+    <p class="caption text-center py-6" id="top-learners-empty" {% if top_learners %}hidden{% endif %}>No certificates issued in this range.</p>
   </section>
   <section class="card" aria-labelledby="activity-title">
     <h2 id="activity-title" class="text-base mb-4">Recent activity</h2>
-    {% if recent_activity %}
-    <ol class="flex flex-col gap-3 m-0 p-0 list-none border-l hairline ml-1 pl-4">
+    <ol class="flex flex-col gap-3 m-0 p-0 list-none border-l hairline ml-1 pl-4" id="recent-activity-list">
       {% for log in recent_activity %}
       <li class="relative text-sm"><span class="absolute -left-[1.3rem] top-1.5 w-2 h-2 rounded-full bg-accent" aria-hidden="true"></span><span class="font-medium">{{ log.action }}</span> <span class="text-fg-2">on {{ log.entity_type }} #{{ log.entity_id }}</span><span class="caption block mt-0.5">{{ log.created_at }}</span></li>
       {% endfor %}
     </ol>
-    {% else %}<p class="caption text-center py-6">No audit entries yet.</p>{% endif %}
+    <p class="caption text-center py-6" id="recent-activity-empty" {% if recent_activity %}hidden{% endif %}>No audit entries in this range.</p>
   </section>
 </div>
+
+{% if role == 'admin' %}
+<section aria-labelledby="downloads-title" class="no-print">
+  <div class="flex items-end justify-between mb-4"><h2 id="downloads-title">Reports &amp; downloads</h2><span class="caption">CSV exports</span></div>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for href, title, description in [
+      (url_for('download_content_master_report'), "Content master", "Every piece of content: type, category, status and authorship."),
+      (url_for('download_content_engagement_report'), "Content engagement", "Views, ratings and comments for each item."),
+      (url_for('download_content_approval_report'), "Content approval", "Submission, approval and rejection history."),
+      (url_for('download_user_content_report'), "User content", "Per-user posting activity and ratings."),
+      (url_for('download_assessment_results_report'), "Assessment results", "Every attempt: score, result and timestamp."),
+      (url_for('download_user_rewards_report'), "User rewards", "Wallet balances and lifetime totals per user."),
+      (url_for('download_reward_transactions_report'), "Reward transactions", "Every ledger entry, with running balance."),
+      (url_for('download_reward_sources_report'), "Reward sources", "Configured reward rules and their totals."),
+      (url_for('download_course_owner_rewards_report'), "Course owner rewards", "Points earned by course authors from ratings."),
+      (url_for('download_community_content_rewards_report'), "Community content rewards", "Points earned by post authors from ratings."),
+    ] %}
+    <div class="card flex flex-col gap-2">
+      <h3 class="text-sm font-semibold">{{ title }}</h3>
+      <p class="text-fg-2 text-sm flex-1">{{ description }}</p>
+      <div>{{ btn("Download CSV", "secondary", href=href, size="sm", icon_name="download") }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -64,26 +129,110 @@
   (function () {
     document.querySelector('[data-print]')?.addEventListener('click', () => window.print());
     const token = (name, alpha) => { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return alpha === undefined ? `rgb(${v})` : `rgb(${v} / ${alpha})`; };
-    const categories = {{ chart_categories | tojson | safe }};
-    const completions = {{ chart_completions | tojson | safe }};
-    const passRate = {{ pass_rate }};
+
+    const data = {
+      categories: {{ chart_categories | tojson | safe }},
+      completions: {{ chart_completions | tojson | safe }},
+      passRate: {{ pass_rate }},
+      progress: {{ progress_counts | tojson | safe }},
+      community: {{ community_metrics | tojson | safe }},
+      rewardTypes: {{ reward_breakdown.types | tojson | safe }},
+      rewardPoints: {{ reward_breakdown.points | tojson | safe }},
+      support: {{ support_counts | tojson | safe }},
+    };
+
     let charts = [];
     function draw() {
       charts.forEach((c) => c.destroy()); charts = [];
       const text = token('--c-fg-2'), grid = token('--c-line', .08);
       charts.push(new Chart(document.getElementById('categoryChart'), {
         type: 'bar',
-        data: { labels: categories, datasets: [{ label: 'Completions', data: completions, backgroundColor: token('--c-accent', .85), borderRadius: 6 }] },
+        data: { labels: data.categories, datasets: [{ label: 'Completions', data: data.completions, backgroundColor: token('--c-accent', .85), borderRadius: 6 }] },
         options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { color: text, precision: 0 }, grid: { color: grid } }, x: { ticks: { color: text }, grid: { display: false } } }, plugins: { legend: { display: false } } },
       }));
       charts.push(new Chart(document.getElementById('passFailChart'), {
         type: 'doughnut',
-        data: { labels: ['Pass', 'Fail'], datasets: [{ data: [passRate, 100 - passRate], backgroundColor: [token('--c-success', .85), token('--c-danger', .85)], borderWidth: 0, hoverOffset: 4 }] },
+        data: { labels: ['Pass', 'Fail'], datasets: [{ data: [data.passRate, 100 - data.passRate], backgroundColor: [token('--c-success', .85), token('--c-danger', .85)], borderWidth: 0, hoverOffset: 4 }] },
         options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: text, padding: 16 } } } },
+      }));
+      const progressLabels = { not_started: 'Not started', in_progress: 'In progress', completed: 'Completed', assessment_failed: 'Assessment failed' };
+      charts.push(new Chart(document.getElementById('progressChart'), {
+        type: 'bar',
+        data: { labels: Object.keys(data.progress).map((k) => progressLabels[k] || k), datasets: [{ label: 'Assignments', data: Object.values(data.progress), backgroundColor: [token('--c-info', .85), token('--c-warning', .85), token('--c-success', .85), token('--c-danger', .85)], borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { color: text, precision: 0 }, grid: { color: grid } }, x: { ticks: { color: text }, grid: { display: false } } }, plugins: { legend: { display: false } } },
+      }));
+      charts.push(new Chart(document.getElementById('communityChart'), {
+        type: 'bar',
+        data: { labels: ['Posts', 'Comments', 'Ratings'], datasets: [{ label: 'Count', data: [data.community.posts || 0, data.community.comments || 0, data.community.ratings || 0], backgroundColor: token('--c-accent', .85), borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { color: text, precision: 0 }, grid: { color: grid } }, x: { ticks: { color: text }, grid: { display: false } } }, plugins: { legend: { display: false } } },
+      }));
+      charts.push(new Chart(document.getElementById('rewardsChart'), {
+        type: 'bar',
+        data: { labels: data.rewardTypes, datasets: [{ label: 'Points', data: data.rewardPoints, backgroundColor: token('--c-warning', .85), borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { color: text, precision: 0 }, grid: { color: grid } }, y: { ticks: { color: text }, grid: { display: false } } }, plugins: { legend: { display: false } } },
+      }));
+      const supportLabels = { open: 'Open', in_progress: 'In progress', awaiting_confirmation: 'Awaiting confirmation', resolved: 'Resolved', reopened: 'Reopened' };
+      const supportKeys = ['open', 'in_progress', 'awaiting_confirmation', 'resolved', 'reopened'].filter((k) => k in data.support);
+      charts.push(new Chart(document.getElementById('supportChart'), {
+        type: 'doughnut',
+        data: { labels: supportKeys.map((k) => supportLabels[k]), datasets: [{ data: supportKeys.map((k) => data.support[k] || 0), backgroundColor: [token('--c-info', .85), token('--c-warning', .85), token('--c-warning', .5), token('--c-success', .85), token('--c-danger', .85)], borderWidth: 0, hoverOffset: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: text, padding: 12 } } } },
       }));
     }
     draw();
     document.addEventListener('hkc:themechange', () => requestAnimationFrame(draw));
+
+    // ---- date-range filter (AJAX, no reload) ----
+    const presetButtons = Array.from(document.querySelectorAll('[data-preset]'));
+    const fromInput = document.getElementById('range-from');
+    const toInput = document.getElementById('range-to');
+    const status = document.getElementById('range-status');
+
+    function renderTopLearners(list) {
+      const el = document.getElementById('top-learners-list');
+      const empty = document.getElementById('top-learners-empty');
+      empty.hidden = list.length !== 0;
+      el.innerHTML = list.map((learner, i) => `<li class="card-inset flex items-center justify-between gap-3 py-2.5"><span class="flex items-center gap-3"><span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-fg/10 text-sm font-semibold tabular">${i + 1}</span><span class="font-medium">${HKC.escapeHtml(learner.user_name)}</span></span><span class="badge badge-success">${learner.certs} certificate${learner.certs === 1 ? '' : 's'}</span></li>`).join('');
+    }
+    function renderRecentActivity(list) {
+      const el = document.getElementById('recent-activity-list');
+      const empty = document.getElementById('recent-activity-empty');
+      empty.hidden = list.length !== 0;
+      el.innerHTML = list.map((log) => `<li class="relative text-sm"><span class="absolute -left-[1.3rem] top-1.5 w-2 h-2 rounded-full bg-accent" aria-hidden="true"></span><span class="font-medium">${HKC.escapeHtml(log.action)}</span> <span class="text-fg-2">on ${HKC.escapeHtml(log.entity_type)} #${log.entity_id}</span><span class="caption block mt-0.5">${HKC.escapeHtml(log.created_at)}</span></li>`).join('');
+    }
+
+    async function refresh(params) {
+      status.textContent = 'Loading…';
+      const query = new URLSearchParams(params).toString();
+      const { ok, data: payload } = await HKC.fetchJSON(`/api/admin/reports/analytics?${query}`);
+      if (!ok || !payload) { status.textContent = 'Could not load this range.'; return; }
+      document.getElementById('stat-users').textContent = payload.total_users;
+      document.getElementById('stat-users-hint').textContent = `${payload.active_users} active accounts`;
+      document.getElementById('stat-courses').textContent = payload.total_courses;
+      document.getElementById('stat-courses-hint').textContent = `${payload.active_courses} published`;
+      document.getElementById('stat-pass-rate').textContent = `${payload.pass_rate}%`;
+      document.getElementById('stat-pass-rate-hint').textContent = `from ${payload.total_attempts} assessment attempts`;
+      document.getElementById('stat-points').textContent = Number(payload.total_points_issued || 0).toLocaleString();
+      data.categories = payload.chart_categories; data.completions = payload.chart_completions;
+      data.passRate = payload.pass_rate; data.progress = payload.progress_counts;
+      data.community = payload.community_metrics; data.rewardTypes = payload.reward_breakdown.types;
+      data.rewardPoints = payload.reward_breakdown.points; data.support = payload.support_counts;
+      draw();
+      renderTopLearners(payload.top_learners || []);
+      renderRecentActivity(payload.recent_activity || []);
+      status.textContent = '';
+    }
+
+    presetButtons.forEach((btn) => btn.addEventListener('click', () => {
+      presetButtons.forEach((b) => b.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+      fromInput.value = ''; toInput.value = '';
+      refresh({ preset: btn.dataset.preset });
+    }));
+    document.getElementById('range-apply')?.addEventListener('click', () => {
+      presetButtons.forEach((b) => b.setAttribute('aria-pressed', 'false'));
+      refresh({ start_date: fromInput.value, end_date: toInput.value, preset: 'custom' });
+    });
   })();
 </script>
 {% endblock %}

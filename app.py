@@ -1557,6 +1557,176 @@ def record_system_snapshot(connection):
 	}
 
 
+def get_reports_analytics_data(conn, start_date=None, end_date=None, preset=None):
+	"""Compute every figure the Reports & Analytics dashboard shows, for an optional date
+	range or named preset. Ported from origin/master, with one change: the Support module's
+	own get_support_dashboard_stats() is reused for the Support card instead of master's
+	is_sla_breached-based query -- our ported support_issues schema has no such column, and
+	this keeps one source of truth with the Support module's own admin dashboard."""
+	import datetime
+	today = datetime.date.today()
+
+	if preset == "today":
+		start_date = today.isoformat()
+		end_date = today.isoformat()
+	elif preset == "7d":
+		start_date = (today - datetime.timedelta(days=7)).isoformat()
+		end_date = today.isoformat()
+	elif preset == "30d":
+		start_date = (today - datetime.timedelta(days=30)).isoformat()
+		end_date = today.isoformat()
+	elif preset == "90d":
+		start_date = (today - datetime.timedelta(days=90)).isoformat()
+		end_date = today.isoformat()
+	elif preset == "this_year":
+		start_date = f"{today.year}-01-01"
+		end_date = today.isoformat()
+	elif preset == "all":
+		start_date = None
+		end_date = None
+
+	if start_date: start_date = str(start_date).strip() or None
+	if end_date: end_date = str(end_date).strip() or None
+
+	def make_date_where(col_name, has_where=False):
+		conds = []
+		params = []
+		if start_date:
+			conds.append(f"DATE({col_name}) >= ?")
+			params.append(start_date)
+		if end_date:
+			conds.append(f"DATE({col_name}) <= ?")
+			params.append(end_date)
+		if not conds:
+			return "", []
+		prefix = " AND " if has_where else " WHERE "
+		return prefix + " AND ".join(conds), params
+
+	# 1. User Stats
+	u_w, u_p = make_date_where("created_at")
+	u_act_w, u_act_p = make_date_where("created_at", has_where=True)
+	total_users = conn.execute(f"SELECT COUNT(*) FROM users{u_w}", u_p).fetchone()[0]
+	active_users = conn.execute(f"SELECT COUNT(*) FROM users WHERE is_active = 1{u_act_w}", u_act_p).fetchone()[0]
+
+	# 2. Course Stats
+	c_w, c_p = make_date_where("created_at")
+	c_pub_w, c_pub_p = make_date_where("created_at", has_where=True)
+	total_courses = conn.execute(f"SELECT COUNT(*) FROM courses{c_w}", c_p).fetchone()[0]
+	active_courses = conn.execute(f"SELECT COUNT(*) FROM courses WHERE LOWER(status) = 'published'{c_pub_w}", c_pub_p).fetchone()[0]
+
+	# 3. Assessment Stats & Pass/Fail Ratio
+	a_w, a_p = make_date_where("started_at")
+	total_attempts = conn.execute(f"SELECT COUNT(*) FROM assessment_attempts{a_w}", a_p).fetchone()[0]
+
+	a_pass_w, a_pass_p = make_date_where("started_at", has_where=True)
+	passed_attempts = conn.execute(f"SELECT COUNT(*) FROM assessment_attempts WHERE result = 'pass'{a_pass_w}", a_pass_p).fetchone()[0]
+	failed_attempts = total_attempts - passed_attempts
+	pass_rate = round((passed_attempts / total_attempts * 100) if total_attempts > 0 else 0, 1)
+
+	# 4. Rewards Stats
+	r_w, r_p = make_date_where("created_at")
+	points_row = conn.execute(f"SELECT SUM(points) FROM reward_transactions{r_w}", r_p).fetchone()
+	total_points_issued = (points_row[0] if points_row and points_row[0] is not None else None)
+	if total_points_issued is None:
+		total_points_issued = conn.execute("SELECT SUM(total_earned) FROM user_wallets").fetchone()[0] or 0
+
+	# 5. Completions by Category
+	cert_w, cert_p = make_date_where("cc.created_at")
+	cat_data = conn.execute(f"""
+		SELECT c.category, COUNT(cc.id) as completions
+		FROM courses c
+		LEFT JOIN course_certifications cc ON c.id = cc.course_id {cert_w}
+		GROUP BY c.category
+		ORDER BY completions DESC
+	""", cert_p).fetchall()
+	chart_categories = [row[0] or "General" for row in cat_data]
+	chart_completions = [row[1] for row in cat_data]
+
+	# 6. Course Assignment Progress Breakdown
+	ca_w, ca_p = make_date_where("ca.updated_at")
+	progress_counts = {"not_started": 0, "in_progress": 0, "completed": 0, "assessment_failed": 0}
+	ca_rows = conn.execute(f"""
+		SELECT ca.status, COUNT(*) as cnt
+		FROM course_assignments ca
+		{ca_w}
+		GROUP BY ca.status
+	""", ca_p).fetchall()
+	for r in ca_rows:
+		st = (r[0] or "not_started").lower()
+		if st in progress_counts:
+			progress_counts[st] = r[1]
+
+	# 7. Community Activity Metrics
+	p_w, p_p = make_date_where("created_at", has_where=True)
+	post_count = conn.execute(f"SELECT COUNT(*) FROM posts WHERE status = 'PUBLISHED'{p_w}", p_p).fetchone()[0]
+
+	comm_w, comm_p = make_date_where("created_at", has_where=True)
+	comment_count = conn.execute(f"SELECT COUNT(*) FROM post_comments WHERE status = 'active'{comm_w}", comm_p).fetchone()[0]
+
+	rat_w, rat_p = make_date_where("created_at")
+	rating_count = conn.execute(f"SELECT COUNT(*) FROM post_ratings{rat_w}", rat_p).fetchone()[0]
+
+	# 8. Reward Points Issued by Type
+	rt_w, rt_p = make_date_where("created_at")
+	reward_breakdown = conn.execute(f"""
+		SELECT COALESCE(NULLIF(transaction_type, ''), 'General') as tx_type, SUM(points) as pts
+		FROM reward_transactions
+		{rt_w}
+		GROUP BY tx_type
+		ORDER BY pts DESC
+	""", rt_p).fetchall()
+	reward_types = [r[0].replace('_', ' ').title() for r in reward_breakdown]
+	reward_points = [r[1] for r in reward_breakdown]
+
+	# 9. Support snapshot -- reuses the Support module's own dashboard-stats query (undated;
+	# the Support module has its own date-filterable reports page, linked from this dashboard).
+	from support.repositories.issue_repository import get_support_dashboard_stats
+	try:
+		support_counts = get_support_dashboard_stats(conn)
+	except sqlite3.Error:
+		support_counts = {}
+
+	# 10. Leaderboard: Top Learners. Deliberately kept from upstream: only rows actually
+	# CERTIFIED count -- master's own query has no such filter and would count in-progress
+	# certification records too; this filter was already a defect fix on this branch.
+	tl_w, tl_p = make_date_where("created_at", has_where=True)
+	top_learners = conn.execute(f"""
+		SELECT user_name, COUNT(*) as certs
+		FROM course_certifications
+		WHERE certification_status = 'CERTIFIED'{tl_w}
+		GROUP BY user_id, user_name
+		ORDER BY certs DESC
+		LIMIT 5
+	""", tl_p).fetchall()
+
+	# 11. Recent Activity
+	act_w, act_p = make_date_where("created_at")
+	recent_activity = conn.execute(f"SELECT * FROM audit_logs {act_w} ORDER BY created_at DESC LIMIT 5", act_p).fetchall()
+
+	return {
+		"start_date": start_date or "",
+		"end_date": end_date or "",
+		"preset": preset or "all",
+		"total_users": total_users,
+		"active_users": active_users,
+		"total_courses": total_courses,
+		"active_courses": active_courses,
+		"total_attempts": total_attempts,
+		"passed_attempts": passed_attempts,
+		"failed_attempts": failed_attempts,
+		"pass_rate": pass_rate,
+		"total_points_issued": total_points_issued,
+		"chart_categories": chart_categories,
+		"chart_completions": chart_completions,
+		"progress_counts": progress_counts,
+		"community_metrics": {"posts": post_count, "comments": comment_count, "ratings": rating_count},
+		"reward_breakdown": {"types": reward_types, "points": reward_points},
+		"support_counts": support_counts,
+		"top_learners": [dict(r) for r in top_learners],
+		"recent_activity": [dict(r) for r in recent_activity],
+	}
+
+
 def create_app():
 	"""Build and configure the Flask application."""
 	app = Flask(__name__)
@@ -2036,62 +2206,29 @@ def create_app():
 	@staff_required
 	def admin_reports():
 		"""Render the reporting and analytics dashboard."""
+		start_date = request.args.get("start_date", "").strip()
+		end_date = request.args.get("end_date", "").strip()
+		preset = request.args.get("preset", "all").strip()
 		with get_db() as connection:
-			# User Stats
-			total_users = connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-			active_users = connection.execute("SELECT COUNT(*) FROM users WHERE is_active = 1").fetchone()[0]
-			
-			# Course Stats
-			total_courses = connection.execute("SELECT COUNT(*) FROM courses").fetchone()[0]
-			active_courses = connection.execute("SELECT COUNT(*) FROM courses WHERE LOWER(status) = 'published'").fetchone()[0]
-			
-			# Assessment Stats
-			total_attempts = connection.execute("SELECT COUNT(*) FROM assessment_attempts").fetchone()[0]
-			passed_attempts = connection.execute("SELECT COUNT(*) FROM assessment_attempts WHERE result = 'pass'").fetchone()[0]
-			pass_rate = round((passed_attempts / total_attempts * 100) if total_attempts > 0 else 0, 1)
-			
-			# Rewards Stats
-			total_points_issued = connection.execute("SELECT SUM(total_earned) FROM user_wallets").fetchone()[0] or 0
-			
-			# Chart Data: Completions by Category
-			cat_data = connection.execute("""
-				SELECT c.category, COUNT(cc.id) as completions 
-				FROM courses c 
-				LEFT JOIN course_certifications cc ON c.id = cc.course_id 
-				GROUP BY c.category
-			""").fetchall()
-			categories = [row[0] for row in cat_data]
-			completions = [row[1] for row in cat_data]
-			
-			# Leaderboard: Top Learners
-			top_learners = connection.execute("""
-				SELECT user_name, COUNT(*) as certs 
-				FROM course_certifications 
-				WHERE certification_status = 'CERTIFIED'
-				GROUP BY user_id, user_name 
-				ORDER BY certs DESC 
-				LIMIT 5
-			""").fetchall()
-			
-			# Recent Activity
-			recent_activity = connection.execute("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 5").fetchall()
-			
-		return render_template("reports.html", 
-			total_users=total_users, 
-			active_users=active_users,
-			total_courses=total_courses,
-			active_courses=active_courses,
-			total_attempts=total_attempts,
-			pass_rate=pass_rate,
-			total_points_issued=total_points_issued,
-			chart_categories=categories,
-			chart_completions=completions,
-			top_learners=[dict(row) for row in top_learners],
-			recent_activity=[dict(row) for row in recent_activity],
-			user=session.get("user"), 
+			analytics_data = get_reports_analytics_data(connection, start_date, end_date, preset)
+		return render_template("reports.html",
+			**analytics_data,
+			user=session.get("user"),
 			role=session.get("role"),
+			actual_role=session.get("actual_role"),
 			profile_picture=session.get("profile_picture")
 		)
+
+	@app.get("/api/admin/reports/analytics")
+	@staff_required
+	def get_admin_reports_analytics_api():
+		"""JSON analytics data backing the dashboard's date-range filter (no page reload)."""
+		start_date = request.args.get("start_date", "").strip()
+		end_date = request.args.get("end_date", "").strip()
+		preset = request.args.get("preset", "all").strip()
+		with get_db() as connection:
+			analytics_data = get_reports_analytics_data(connection, start_date, end_date, preset)
+		return jsonify(analytics_data)
 
 	@app.get("/admin/system")
 	@admin_required
