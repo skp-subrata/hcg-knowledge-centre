@@ -131,3 +131,28 @@ def test_manual_membership_edits_are_blocked_on_a_system_generated_group(moderat
 	maya_id = world.users["maya.student"]
 	add = admin.post(f"/groups/{all_users_group_id}/members", data={"selected_users": [str(maya_id)]}, follow_redirects=True)
 	assert b"managed automatically" in add.data
+
+
+def test_pruning_a_stale_member_that_no_longer_exists_does_not_crash(world, db, db_path):
+	"""Found live: group_members rows are normally cascade-deleted when a user is removed, but
+	an out-of-band fix to the database (not going through the app's own FK-enforced connection)
+	can leave a dangling one behind. The prune loop in sync_department_group_members /
+	sync_location_group_members must not let a failure logging that removal (audit_logs.user_id
+	references users(id)) crash the sync -- and since this same sync runs unconditionally at
+	every app startup, a crash here takes the whole app down, not just one request."""
+	dept_group_id = db("SELECT id FROM groups WHERE group_type = 'DEPARTMENT' AND source_master_id = ? AND system_generated = 1", (world.department_id,))[0]["id"]
+	# a group_members row pointing at a user_id that doesn't exist -- FK enforcement is off on
+	# this raw connection, exactly like an out-of-band script that never enables it
+	db("INSERT INTO group_members (group_id, user_id, employee_id, email, department, location) VALUES (?, 999999, 'GONE', '', '', '')", (dept_group_id,))
+	assert db("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = 999999", (dept_group_id,))
+
+	connection = sqlite3.connect(db_path)
+	connection.row_factory = sqlite3.Row
+	connection.execute("PRAGMA foreign_keys = ON")
+	try:
+		with connection:
+			app_module.sync_department_group(connection, world.department_id)  # must not raise
+	finally:
+		connection.close()
+
+	assert not db("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = 999999", (dept_group_id,)), "the dangling row must still be pruned"

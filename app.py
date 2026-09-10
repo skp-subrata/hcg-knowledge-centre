@@ -1030,7 +1030,16 @@ def sync_department_group_members(connection, dept_id, group_id):
 		uid = m["user_id"]
 		if uid not in valid_user_ids:
 			connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, uid))
-			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (uid, group_id))
+			# audit_logs.user_id references users(id); uid here is whoever this stale
+			# membership row already pointed to, which should always still be a real user
+			# (group_members cascades on user deletion) -- but this sync runs at app startup
+			# and a failure here must never be able to take the whole app down over a log
+			# entry, so a dangling reference (e.g. from an out-of-band DB fix) is swallowed
+			# rather than left to crash create_app().
+			try:
+				connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (uid, group_id))
+			except sqlite3.IntegrityError:
+				pass
 
 
 def sync_location_group_members(connection, loc_id, group_id):
@@ -1059,7 +1068,10 @@ def sync_location_group_members(connection, loc_id, group_id):
 		uid = m["user_id"]
 		if uid not in valid_user_ids:
 			connection.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, uid))
-			connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (uid, group_id))
+			try:
+				connection.execute("INSERT INTO audit_logs (user_id, action, entity_type, entity_id) VALUES (?, 'AUTO_GROUP_REMOVED', 'group', ?)", (uid, group_id))
+			except sqlite3.IntegrityError:
+				pass
 
 
 def sync_department_group(connection, dept_id):
