@@ -66,7 +66,17 @@
           <label class="flex items-center gap-2"><input type="radio" name="assignment_type" value="group" class="accent-accent"> A group</label>
         </div>
       </fieldset>
-      <div data-assign-target="individual">{{ row_select("student_id", "Learner", students, "assign-student", placeholder="Select a learner", required=True, text_key="full_name") }}</div>
+      <div data-assign-target="individual">
+        <div class="field">
+          <label class="field-label" for="assign-student-search">Learner<span class="req" aria-hidden="true">*</span></label>
+          <div class="relative">
+            <input type="hidden" name="student_id" id="assign-student-id">
+            <input type="text" class="input" id="assign-student-search" placeholder="Search by name, username or employee ID" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assign-student-listbox" aria-autocomplete="list" aria-describedby="assign-student-error">
+            <ul class="card absolute top-full left-0 z-20 w-full mt-1 max-h-56 overflow-y-auto p-1" id="assign-student-listbox" role="listbox" hidden></ul>
+          </div>
+          <p class="field-error" id="assign-student-error" hidden>Search for a learner and pick one from the list.</p>
+        </div>
+      </div>
       <div data-assign-target="group" hidden>{{ row_select("group_id", "Group", groups, "assign-group", placeholder="Select a group") }}</div>
       <p class="caption">Assigned learners are notified and the course appears on their dashboard.</p>
       <div class="mt-auto pt-1">{{ btn("Assign course", "primary", type="submit", icon_name="check") }}</div>
@@ -382,11 +392,72 @@
           const on = wrap.dataset.assignTarget === mode;
           wrap.hidden = !on;
           const select = wrap.querySelector('select');
-          select.required = on; select.disabled = !on;
+          if (select) { select.required = on; select.disabled = !on; }
+          const search = wrap.querySelector('#assign-student-search');
+          if (search) { search.disabled = !on; if (!on) search.value = ''; }
+          const hiddenId = wrap.querySelector('#assign-student-id');
+          if (hiddenId && !on) hiddenId.value = '';
         });
       };
       assignForm.querySelectorAll('input[name="assignment_type"]').forEach((r) => r.addEventListener('change', sync));
       sync();
+
+      // ---- searchable learner picker (replaces a plain <select> that doesn't scale past a
+      // handful of users, and always reflects the live user list -- no page reload needed to
+      // pick someone created moments ago) ----
+      const studentSearch = document.getElementById('assign-student-search');
+      const studentIdField = document.getElementById('assign-student-id');
+      const studentList = document.getElementById('assign-student-listbox');
+      const studentError = document.getElementById('assign-student-error');
+      if (studentSearch && studentIdField && studentList) {
+        let debounceTimer = null;
+        let activeIndex = -1;
+        const closeList = () => { studentList.hidden = true; studentSearch.setAttribute('aria-expanded', 'false'); activeIndex = -1; };
+        const openList = () => { studentList.hidden = false; studentSearch.setAttribute('aria-expanded', 'true'); };
+        const renderOptions = (rows) => {
+          studentList.innerHTML = rows.length
+            ? rows.map((u, i) => `<li role="option" id="assign-student-opt-${i}"><button type="button" class="menu-item w-full" data-id="${u.id}" data-name="${HKC.escapeHtml(u.full_name)}">${HKC.escapeHtml(u.full_name)} <span class="caption">@${HKC.escapeHtml(u.username)}${u.employee_id ? ' · ' + HKC.escapeHtml(u.employee_id) : ''}</span></button></li>`).join('')
+            : '<li class="caption px-3 py-2">No matching learners.</li>';
+          openList();
+        };
+        const search = async (term) => {
+          const { ok, data } = await HKC.fetchJSON(`/api/admin/students/search?q=${encodeURIComponent(term)}`, { method: 'GET' });
+          if (ok && data) renderOptions(data.data || []);
+        };
+        studentSearch.addEventListener('input', () => {
+          studentIdField.value = '';
+          studentError.hidden = true;
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => search(studentSearch.value.trim()), 200);
+        });
+        studentSearch.addEventListener('focus', () => { if (!studentList.innerHTML) search(studentSearch.value.trim()); else openList(); });
+        studentList.addEventListener('click', (event) => {
+          const option = event.target.closest('[data-id]');
+          if (!option) return;
+          studentIdField.value = option.dataset.id;
+          studentSearch.value = option.dataset.name;
+          closeList();
+        });
+        document.addEventListener('click', (event) => {
+          if (!event.target.closest('#assign-student-search') && !event.target.closest('#assign-student-listbox')) closeList();
+        });
+        studentSearch.addEventListener('keydown', (event) => {
+          const options = Array.from(studentList.querySelectorAll('[data-id]'));
+          if (event.key === 'Escape') { closeList(); return; }
+          if (!options.length) return;
+          if (event.key === 'ArrowDown') { event.preventDefault(); activeIndex = Math.min(activeIndex + 1, options.length - 1); options[activeIndex]?.focus(); }
+          else if (event.key === 'ArrowUp') { event.preventDefault(); activeIndex = Math.max(activeIndex - 1, 0); options[activeIndex]?.focus(); }
+          else if (event.key === 'Enter' && activeIndex >= 0) { event.preventDefault(); options[activeIndex]?.click(); }
+        });
+      }
+      assignForm.addEventListener('submit', (event) => {
+        const mode = assignForm.querySelector('input[name="assignment_type"]:checked').value;
+        if (mode === 'individual' && !studentIdField.value) {
+          event.preventDefault();
+          studentError.hidden = false;
+          studentSearch.focus();
+        }
+      });
     }
 
     // ---------------------------------------------------------------- quick-add masters

@@ -58,7 +58,7 @@ POLICY = {
 	"support.api_confirm_resolution": "login", "support.api_reopen_issue": "login", "support.api_categories": "login",
 	# staff (admin or moderator)
 	"admin_panel": "staff", "delete_record": "staff", "download_question_template": "staff",
-	"admin_reports": "staff", "get_admin_reports_analytics_api": "staff", "download_assessment_questions": "staff",
+	"admin_reports": "staff", "get_admin_reports_analytics_api": "staff", "api_search_assignable_students": "staff", "download_assessment_questions": "staff",
 	"approval_queue": "staff", "approval_action": "staff",
 	"courses_page": "staff", "courses_create": "staff", "courses_update": "staff", "courses_publish": "staff",
 	"groups_page": "staff", "group_detail": "staff", "add_group_members": "staff", "remove_group_member": "staff",

@@ -2635,7 +2635,8 @@ def create_app():
 			master_interests = connection.execute("SELECT id, interest_name as name FROM interest_master WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY name").fetchall()
 			master_locations = connection.execute("SELECT location_id as id, location_name as name FROM locations WHERE LOWER(COALESCE(status, 'active')) = 'active' ORDER BY location_name").fetchall()
 			courses = connection.execute("SELECT c.*, u.full_name AS creator FROM courses c JOIN users u ON u.id = c.created_by WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY c.id DESC", (session["user_id"], session["user_id"])).fetchall()
-			students = connection.execute("SELECT id, full_name, username FROM users WHERE role = 'basic user' ORDER BY full_name").fetchall()
+			# The "Assign a course" learner picker searches live via /api/admin/students/search
+			# instead of a page-load-time dropdown (see admin.html) -- no full user list needed here.
 			banks = connection.execute("SELECT * FROM question_banks ORDER BY id DESC").fetchall()
 			assessments = connection.execute("SELECT a.*, c.name AS course_name FROM assessments a JOIN courses c ON c.id = a.course_id WHERE c.created_by = ? OR c.id IN (SELECT course_id FROM course_assignments WHERE student_id = ?) ORDER BY a.id DESC", (session["user_id"], session["user_id"])).fetchall()
 			if session.get("role") == "admin":
@@ -2645,7 +2646,7 @@ def create_app():
 			api_creds = connection.execute("SELECT ac.*, u.username, u.full_name, u.role FROM api_credentials ac JOIN users u ON u.id = ac.user_id ORDER BY ac.id DESC").fetchall() if session.get("role") == "admin" else []
 			
 			assignable_courses = connection.execute("SELECT id, name FROM courses WHERE LOWER(status) = 'published' ORDER BY name").fetchall()
-		return render_template("admin.html", users=[dict(u) for u in users], courses=courses, assignable_courses=assignable_courses, students=students, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
+		return render_template("admin.html", users=[dict(u) for u in users], courses=courses, assignable_courses=assignable_courses, banks=banks, assessments=assessments, groups=groups, api_creds=api_creds, content_types=CONTENT_TYPES, roles=ROLES, master_depts=master_depts, master_positions=master_positions, master_interests=master_interests, master_locations=master_locations, user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"), profile_picture=session.get("profile_picture"))
 
 	@app.route("/assessments/<int:assessment_id>", methods=["GET", "POST"])
 	def assessment(assessment_id):
@@ -4923,6 +4924,29 @@ def create_app():
 					"totalPages": total_pages
 				}
 			})
+
+
+	@app.get("/api/admin/students/search")
+	@staff_required
+	def api_search_assignable_students():
+		"""Live search for the 'Assign a course' learner picker. Deliberately its own small,
+		narrowly-scoped endpoint (id/full_name/username/employee_id only, capped at 20 results)
+		rather than reusing /api/admin/users: that one is admin-only and returns the full user
+		record, more than this picker needs, and every staff member (admin or moderator) who can
+		already reach the Assign-a-course form should be able to search it."""
+		query = request.args.get("q", "").strip().lower()
+		with get_db() as connection:
+			if query:
+				pattern = f"%{query}%"
+				rows = connection.execute(
+					"SELECT id, full_name, username, employee_id FROM users WHERE role = 'basic user' "
+					"AND (LOWER(full_name) LIKE ? OR LOWER(username) LIKE ? OR LOWER(COALESCE(employee_id, '')) LIKE ?) "
+					"ORDER BY full_name LIMIT 20",
+					(pattern, pattern, pattern),
+				).fetchall()
+			else:
+				rows = connection.execute("SELECT id, full_name, username, employee_id FROM users WHERE role = 'basic user' ORDER BY full_name LIMIT 20").fetchall()
+		return jsonify({"data": [dict(r) for r in rows]})
 
 
 	@app.get("/api/admin/courses")

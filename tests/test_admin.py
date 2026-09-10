@@ -9,6 +9,27 @@ import app as app_module
 ROOT = Path(app_module.__file__).resolve().parent
 
 
+def test_search_assignable_students_only_returns_basic_users(admin, moderator, student, anon, world, db):
+	# the moderator's own username ('mod') must never appear even though it matches 'mod'
+	response = admin.get("/api/admin/students/search?q=mod")
+	assert response.status_code == 200
+	names = {row["username"] for row in response.get_json()["data"]}
+	assert "mod" not in names
+
+	# a real basic-user account is found by a fragment of their username
+	target = db("SELECT username FROM users WHERE role = 'basic user' LIMIT 1")[0]["username"]
+	fragment = target[:4]
+	found = {row["username"] for row in admin.get(f"/api/admin/students/search?q={fragment}").get_json()["data"]}
+	assert target in found
+
+	# a moderator (not just an admin) can use this picker too -- the "Assign a course" form
+	# is available to both
+	assert moderator.get("/api/admin/students/search?q=").status_code == 200
+
+	assert student.get("/api/admin/students/search?q=a").status_code in (302, 403)
+	assert anon.get("/api/admin/students/search?q=a").status_code in (302, 403)
+
+
 def test_delete_record_with_an_unknown_resource_redirects(admin, world):
 	response = admin.post("/admin/delete/module/1")
 	assert response.status_code == 302
