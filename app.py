@@ -6105,6 +6105,9 @@ def create_app():
 			""", (session_id,)).fetchall()
 			logs = [dict(l) for l in logs_rows]
 
+			settings = get_training_settings(connection)
+			has_zoom_creds = bool(settings.get("zoom_client_id") and settings.get("zoom_client_secret"))
+
 		is_trainer = (sess["trainer_id"] == user_id)
 		is_moderator = (sess["moderator_id"] == user_id)
 		is_staff = role in ("admin", "moderator") or is_trainer or is_moderator
@@ -6115,6 +6118,7 @@ def create_app():
 			participants=participants,
 			user_part=dict(user_part) if user_part else None,
 			logs=logs,
+			has_zoom_creds=has_zoom_creds,
 			is_staff=is_staff,
 			is_trainer=is_trainer,
 			is_moderator=is_moderator,
@@ -6142,12 +6146,13 @@ def create_app():
 				course_id = request.form.get("course_id") or None
 				trainer_id = request.form.get("trainer_id") or sess["trainer_id"]
 				moderator_id = request.form.get("moderator_id") or None
+				meeting_provider = request.form.get("meeting_provider", sess["meeting_provider"])
 				scheduled_date = request.form.get("scheduled_date", "").strip()
 				start_time = request.form.get("start_time", "").strip()
 				end_time = request.form.get("end_time", "").strip()
 				min_attendance_percentage = float(request.form.get("min_attendance_percentage", sess["min_attendance_percentage"] or 75))
-				join_url = request.form.get("join_url", "").strip()
-				host_url = request.form.get("host_url", "").strip()
+				join_url = (request.form.get("custom_join_url") or request.form.get("join_url") or "").strip()
+				host_url = (request.form.get("custom_host_url") or request.form.get("host_url") or "").strip()
 				passcode = request.form.get("passcode", "").strip()
 
 				scheduled_start = f"{scheduled_date} {start_time}:00" if len(start_time) == 5 else f"{scheduled_date} {start_time}"
@@ -6156,12 +6161,12 @@ def create_app():
 				connection.execute("""
 					UPDATE training_sessions
 					SET title = ?, description = ?, course_id = ?, trainer_id = ?, moderator_id = ?,
-						scheduled_start = ?, scheduled_end = ?, min_attendance_percentage = ?,
+						meeting_provider = ?, scheduled_start = ?, scheduled_end = ?, min_attendance_percentage = ?,
 						join_url = ?, host_url = ?, passcode = ?, updated_at = CURRENT_TIMESTAMP
 					WHERE id = ?
 				""", (
 					title, description, course_id, trainer_id, moderator_id,
-					scheduled_start, scheduled_end, min_attendance_percentage,
+					meeting_provider, scheduled_start, scheduled_end, min_attendance_percentage,
 					join_url, host_url, passcode, session_id
 				))
 
@@ -6216,14 +6221,27 @@ def create_app():
 			# Record join event
 			record_participant_join(connection, session_id, user_id, join_source="LMS_PORTAL", provider=sess["meeting_provider"])
 
+			settings = get_training_settings(connection)
+			has_zoom_creds = bool(settings.get("zoom_client_id") and settings.get("zoom_client_secret"))
+
 			# If user is trainer/host and host_url is present, direct to host_url
 			target_url = sess["join_url"]
 			if (sess["trainer_id"] == user_id or sess["created_by"] == user_id) and sess["host_url"]:
 				target_url = sess["host_url"]
 
+			# Check if target URL is a fallback generated zoom link without real API credentials
+			is_simulated_zoom = (
+				sess["meeting_provider"] == "zoom"
+				and not has_zoom_creds
+				and ("zoom.us/j/" in (target_url or "") or "app.zoom.us/wc/" in (target_url or ""))
+			)
+
+			if is_simulated_zoom:
+				flash("Zoom API keys are not configured yet, so you have been connected to the LMS Built-in Live Classroom.")
+				return redirect(url_for("training_live_room", session_id=session_id))
+
 			if not target_url:
-				flash("No meeting URL configured for this session.")
-				return redirect(url_for("training_detail", session_id=session_id))
+				return redirect(url_for("training_live_room", session_id=session_id))
 
 		return redirect(target_url)
 

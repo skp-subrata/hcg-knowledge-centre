@@ -213,22 +213,24 @@ class ZoomMeetingProvider(BaseMeetingProvider):
                 print(f"[ZoomMeetingProvider] Create Meeting API Error: {e}")
 
         # Fallback if API not configured or offline:
+        import random
         existing_url = session_data.get("join_url", "").strip()
         existing_host = session_data.get("host_url", "").strip()
         existing_id = session_data.get("meeting_id", "").strip()
-        passcode = session_data.get("passcode", "").strip()
+        passcode = session_data.get("passcode", "").strip() or str(random.randint(100000, 999999))
+
+        if not existing_id:
+            existing_id = f"{int(time.time() * 1000) % 9000000000 + 1000000000}"
 
         if not existing_url:
-            gen_id = f"{int(time.time() * 1000) % 9000000000 + 1000000000}"
-            existing_id = gen_id
-            existing_url = f"https://zoom.us/j/{gen_id}"
-            existing_host = existing_host or existing_url
+            existing_url = f"https://zoom.us/j/{existing_id}?pwd={passcode}"
+            existing_host = existing_host or f"https://zoom.us/s/{existing_id}?pwd={passcode}"
 
         return {
-            "meeting_id": existing_id or str(int(time.time())),
-            "meeting_uuid": existing_id or str(int(time.time())),
+            "meeting_id": existing_id,
+            "meeting_uuid": existing_id,
             "join_url": existing_url,
-            "host_url": existing_host or existing_url,
+            "host_url": existing_host,
             "passcode": passcode,
             "provider": "zoom"
         }
@@ -315,3 +317,4 @@ def get_meeting_provider(provider_type: str, settings: Optional[Dict[str, str]] 
         return GoogleMeetProvider(settings)
     else:
         return CustomMeetingProvider(settings)
+
