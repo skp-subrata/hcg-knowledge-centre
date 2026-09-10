@@ -112,7 +112,7 @@
                         {% if is_staff %}
                         <a href="{{ url_for('edit_training', session_id=session_data.id) }}" class="text-indigo-600 dark:text-indigo-400 underline hover:no-underline">Edit & paste your real Zoom meeting link</a>
                         <span class="text-slate-400">|</span>
-                        <a href="{{ url_for('training_settings_view') }}" class="text-indigo-600 dark:text-indigo-400 underline hover:no-underline">Configure Zoom API Credentials</a>
+                        <a href="{{ url_for('training_settings_page') }}" class="text-indigo-600 dark:text-indigo-400 underline hover:no-underline">Configure Zoom API Credentials</a>
                         {% endif %}
                     </div>
                 </div>
