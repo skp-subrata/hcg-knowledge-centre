@@ -96,13 +96,13 @@ def test_exactly_one_active_release_is_seeded(db):
 	assert db("SELECT COUNT(*) AS n FROM app_releases")[0]["n"] >= 2
 
 
-def test_active_release_is_1_7_0_and_earlier_releases_are_retired(db):
+def test_active_release_is_1_8_0_and_earlier_releases_are_retired(db):
 	active = db("SELECT version_number, features, improvements, bug_fixes FROM app_releases WHERE is_active = 1")
-	assert len(active) == 1 and active[0]["version_number"] == "1.7.0"
+	assert len(active) == 1 and active[0]["version_number"] == "1.8.0"
 	for column in ("features", "improvements", "bug_fixes"):
 		assert json.loads(active[0][column]), f"{column} must be non-empty JSON so the release sheet has something to show"
 	retired = {r["version_number"] for r in db("SELECT version_number FROM app_releases WHERE is_active = 0")}
-	assert {"1.6.1", "1.5.0", "1.4.0", "1.3.2"} <= retired
+	assert {"1.7.0", "1.6.1", "1.5.0", "1.4.0", "1.3.2"} <= retired
 
 
 def test_statements_keeps_a_trailing_statement_without_a_semicolon():
