@@ -20,6 +20,14 @@ def get_category_by_id(connection, category_id):
     ).fetchone()
 
 
+def get_category_by_code(connection, code):
+    """Fetch a single category by its stable code (e.g. used to resolve the feedback
+    widget's compact "type" into a real category without hardcoding an id)."""
+    return connection.execute(
+        "SELECT * FROM support_categories WHERE code = ?", (code,)
+    ).fetchone()
+
+
 def create_category(connection, name, code, description=""):
     """Create a new category master record."""
     cursor = connection.execute(

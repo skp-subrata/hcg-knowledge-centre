@@ -510,11 +510,11 @@
     if (steps.length) runTour(steps);
   }
 
-  // ------------------------------------------------------------------ feedback widget (floating button -> GitHub issue)
-  // Composes a prefilled GitHub "new issue" URL from what's already visible on the page (no new
-  // backend endpoint, no stored GitHub token, nothing saved in this app) and opens it in a new
-  // tab for the person to review and actually submit themselves.
-  const FEEDBACK_REPO = 'skp-subrata/hcg-knowledge-centre';
+  // ------------------------------------------------------------------ feedback widget (floating button -> support ticket)
+  // Files a real Support & Helpdesk ticket via /api/support/quick-feedback (JSON, CSRF-protected
+  // through HKC.fetchJSON) -- works for every signed-in user, no GitHub account required. The
+  // server best-effort mirrors the ticket to GitHub on its own; nothing GitHub-related happens
+  // in the browser any more.
   function wireFeedbackWidget() {
     const form = document.getElementById('feedback-form');
     const sheet = document.getElementById('feedback-sheet');
@@ -537,6 +537,7 @@
         theme: html.classList.contains('dark') ? 'dark' : 'light',
         viewport: `${window.innerWidth}×${window.innerHeight}`,
         userAgent: navigator.userAgent,
+        platform: navigator.platform,
         when: new Date().toISOString(),
       };
     }
@@ -550,7 +551,7 @@
     sheet.addEventListener('hkc:open', renderContextPreview);
     renderContextPreview();
 
-    form.addEventListener('submit', (event) => {
+    form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const titleField = document.getElementById('feedback-title');
       const detailsField = document.getElementById('feedback-details');
@@ -563,34 +564,32 @@
       }
       const ctx = pageContext();
       const includeLogs = document.getElementById('feedback-include-logs').checked;
-      const includeIdentity = document.getElementById('feedback-include-identity').checked;
+      const submitButton = form.querySelector('button[type="submit"]');
+      if (submitButton) submitButton.disabled = true;
 
-      const lines = [
-        details, '', '---',
-        `**Type:** ${selectedType}`,
-        `**Page:** ${ctx.url}`,
-        `**Page title:** ${ctx.title}`,
-        `**App version:** ${ctx.version}`,
-        `**Role:** ${ctx.role}`,
-        `**Theme:** ${ctx.theme}`,
-        `**Viewport:** ${ctx.viewport}`,
-        `**Browser:** ${ctx.userAgent}`,
-        `**Reported at:** ${ctx.when}`,
-      ];
-      if (includeIdentity && document.body.dataset.userName) lines.push(`**Reported by:** ${document.body.dataset.userName}`);
-      if (includeLogs) {
-        lines.push('', '<details><summary>Recent browser console activity</summary>', '', '```');
-        if (HKC.diagnostics.length) HKC.diagnostics.forEach((d) => lines.push(`[${d.time.slice(11, 19)}] ${d.level}: ${d.message}`));
-        else lines.push('(nothing recorded on this page view)');
-        lines.push('```', '</details>');
+      const { ok, data } = await HKC.fetchJSON('/api/support/quick-feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: selectedType,
+          title,
+          details,
+          context: {
+            url: ctx.url,
+            viewport: ctx.viewport,
+            user_agent: ctx.userAgent,
+            platform: ctx.platform,
+          },
+          logs: includeLogs ? HKC.diagnostics : [],
+        }),
+      });
+
+      if (submitButton) submitButton.disabled = false;
+      if (!ok || !data || !data.success) {
+        HKC.toast((data && data.message) || 'Could not submit your ticket. Please try again.', 'error');
+        return;
       }
-      let body = lines.join('\n');
-      if (body.length > 6000) body = body.slice(0, 6000) + '\n\n… (truncated)';
 
-      const labelForType = { bug: 'bug', enhancement: 'enhancement', question: 'question' }[selectedType] || '';
-      const params = new URLSearchParams({ title: `[${selectedType}] ${title}`, body, labels: labelForType });
-      window.open(`https://github.com/${FEEDBACK_REPO}/issues/new?${params.toString()}`, '_blank', 'noopener');
-      HKC.toast('Opening GitHub in a new tab — review it there before submitting.', 'success');
+      HKC.toast(`Ticket #${data.issue_number} created — thanks for the report.`, 'success');
       HKC.dialog.close(sheet);
       form.reset();
       typeButtons.forEach((b) => b.setAttribute('aria-pressed', b.dataset.feedbackType === 'bug' ? 'true' : 'false'));

@@ -4,7 +4,7 @@ Creates all support_* database tables, indexes, and seeds default categories.
 Completely isolated from primary application tables.
 """
 
-from support.config import INITIAL_CATEGORIES
+from support.config import INITIAL_CATEGORIES, ADDITIONAL_CATEGORIES
 
 
 def init_support_db(connection):
@@ -32,6 +32,15 @@ def init_support_db(connection):
                     "INSERT OR IGNORE INTO support_categories (name, code, description) VALUES (?, ?, ?)",
                     (name, code, desc)
                 )
+
+        # Seed the feedback-widget categories unconditionally (not gated behind cat_count == 0):
+        # this runs on every app start, so it also back-fills a database that already seeded
+        # INITIAL_CATEGORIES before these existed. UNIQUE(code) + INSERT OR IGNORE make repeats free.
+        for name, code, desc in ADDITIONAL_CATEGORIES:
+            connection.execute(
+                "INSERT OR IGNORE INTO support_categories (name, code, description) VALUES (?, ?, ?)",
+                (name, code, desc)
+            )
 
         # 2. Support Issues Core Table
         connection.execute("""

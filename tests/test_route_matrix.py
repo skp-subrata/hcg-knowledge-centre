@@ -56,6 +56,7 @@ POLICY = {
 	"support.user_dashboard": "login", "support.report_issue": "login", "support.issue_detail": "login",
 	"support.post_issue_message": "login", "support.serve_attachment_file": "login",
 	"support.api_confirm_resolution": "login", "support.api_reopen_issue": "login", "support.api_categories": "login",
+	"support.api_quick_feedback": "login",
 	# staff (admin or moderator)
 	"admin_panel": "staff", "delete_record": "staff", "download_question_template": "staff",
 	"admin_reports": "staff", "get_admin_reports_analytics_api": "staff", "api_search_assignable_students": "staff", "download_assessment_questions": "staff",
@@ -322,6 +323,7 @@ def _request_kwargs(endpoint, method, world, db):
 		"support.api_confirm_resolution": {"comment": "smoke"},
 		"support.api_reopen_issue": {"reason": "smoke"},
 		"support.api_categories": {"name": "Smoke Category", "code": "SMOKE"},
+		"support.api_quick_feedback": {"type": "bug", "title": "Smoke widget feedback", "details": "Filed by the route matrix smoke test.", "context": {"url": "/", "viewport": "1024x768", "user_agent": "smoke", "platform": "smoke"}, "logs": []},
 	}
 	if endpoint in payload:
 		return {"json": payload[endpoint]}

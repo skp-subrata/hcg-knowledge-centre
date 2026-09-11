@@ -87,6 +87,18 @@ def create_new_issue(connection, user_id, title, description, category_id, prior
     # 5. Log audit
     audit_repository.log_audit(connection, user_id, "CREATE_ISSUE", issue_id=issue_id, new_value=issue_number)
 
+    # 6. Notify every admin that a new ticket landed. This was previously missing here -- only
+    # update_status()/provide_resolution() notified anyone -- so a freshly reported ticket (from
+    # either /support/report or the feedback widget) sat invisible until an admin happened to
+    # browse to /support. Fixed at the source rather than in just one caller.
+    admin_ids = [row["id"] for row in connection.execute("SELECT id FROM users WHERE LOWER(role) = 'admin'").fetchall()]
+    for admin_id in admin_ids:
+        notification_publisher.publish_support_event(
+            connection, "ISSUE_CREATED", admin_id,
+            f"New support ticket #{issue_number}: {title.strip()}",
+            target_url=f"/support/issues/{issue_id}"
+        )
+
     return issue_repository.get_issue_by_id(connection, issue_id)
 
 

@@ -1,6 +1,8 @@
-"""The floating 'send feedback' button: composes a prefilled GitHub issue client-side, no
-server round-trip. Server-side, there's nothing to submit to -- these tests pin what the
-button/sheet expose to JS (and, deliberately, what they must never expose)."""
+"""The floating 'send feedback' button: files a real Support & Helpdesk ticket via a JSON POST
+to /api/support/quick-feedback (see tests/test_support.py for the endpoint's own behavior).
+These tests pin what the button/sheet expose to the page and to app.js -- identity is always
+captured server-side now (same as the full /support/report form), so there's no opt-in checkbox
+for it any more, and nothing here talks to GitHub directly from the browser."""
 from pathlib import Path
 
 import app as app_module
@@ -13,9 +15,9 @@ def test_the_widget_is_present_for_a_signed_in_user(student):
 	assert 'data-dialog-open="feedback-sheet"' in html
 	assert 'id="feedback-form"' in html
 	assert 'id="feedback-title"' in html and 'id="feedback-details"' in html
-	# opt-in only: identity is never included unless the person checks the box themselves
-	assert 'id="feedback-include-identity"' in html
-	assert 'checked' not in html.split('id="feedback-include-identity"')[1].split('>')[0]
+	# identity is captured server-side unconditionally (like /support/report already does) --
+	# there's nothing to opt into, so the old checkbox must be gone entirely
+	assert 'id="feedback-include-identity"' not in html
 
 
 def test_the_widget_is_absent_when_signed_out(anon):
@@ -34,13 +36,14 @@ def test_body_exposes_only_role_and_display_name_not_any_other_pii(student):
 	assert "password" not in body_tag.lower()
 
 
-def test_widget_js_targets_the_real_repo_and_never_calls_a_server_endpoint():
+def test_widget_js_posts_to_the_support_endpoint_and_never_touches_github():
 	source = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
-	assert "FEEDBACK_REPO = 'skp-subrata/hcg-knowledge-centre'" in source
-	assert "github.com/${FEEDBACK_REPO}/issues/new" in source
-	# the feedback submit handler must not fetch/POST anywhere -- it only opens a URL
+	assert "FEEDBACK_REPO" not in source
+	assert "github.com" not in source
 	handler = source.split("function wireFeedbackWidget")[1].split("\n  }\n\n  // ")[0]
-	assert "fetch(" not in handler and "HKC.fetchJSON(" not in handler
+	assert "HKC.fetchJSON('/api/support/quick-feedback'" in handler
+	assert "window.open(" not in handler
+	assert "feedback-include-identity" not in handler
 
 
 def test_diagnostics_buffer_is_capped_and_query_strings_are_stripped_from_network_log():

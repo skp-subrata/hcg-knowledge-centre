@@ -33,10 +33,55 @@ def _log_activity(connection, user_id, event_type, details=None):
     except Exception:
         pass
 
-from support.config import SUPPORT_UPLOAD_DIR
+import os
+
+import requests
+
+from support.config import SUPPORT_UPLOAD_DIR, FEEDBACK_WIDGET_CATEGORY_CODES
 from support.repositories import issue_repository, category_repository
 from support.services import issue_service, tat_service
 from support.validators import validate_create_issue_payload
+
+# The shared upstream repo the floating feedback widget mirrors tickets to. A GitHub mirror is
+# strictly best-effort and optional: it only runs when GITHUB_FEEDBACK_TOKEN is set (a personal
+# access token with `public_repo` scope, held only in the live WSGI file, never committed --
+# same pattern as PYTHONANYWHERE_API_TOKEN in app.py's record_system_snapshot()). Without it,
+# tickets still go to the internal Support module -- the actual source of truth -- as normal.
+GITHUB_FEEDBACK_REPO = "skp-subrata/hcg-knowledge-centre"
+
+
+def _build_widget_description(details, context, logs):
+    """Plain-text ticket body (support/templates/support/issue_detail.html renders `description`
+    via `whitespace-pre-line`, not a markdown renderer, so no markdown here)."""
+    lines = [details, "", f"Page: {context.get('url', '')}"]
+    if logs:
+        lines += ["", "Recent console messages:"]
+        lines += [f"- {str(entry)[:300]}" for entry in logs[:25]]
+    return "\n".join(lines)
+
+
+def _mirror_to_github(issue, description):
+    """Best-effort mirror of a just-created ticket to GitHub. Never raises and never blocks or
+    fails the caller: a missing token, a network error, or a non-201 response all just mean no
+    mirror happens this time -- the internal ticket (already committed) is unaffected either way."""
+    token = os.getenv("GITHUB_FEEDBACK_TOKEN")
+    if not token:
+        return None
+    try:
+        response = requests.post(
+            f"https://api.github.com/repos/{GITHUB_FEEDBACK_REPO}/issues",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+            },
+            json={"title": f"[{issue['issue_number']}] {issue['title']}", "body": description},
+            timeout=6,
+        )
+        if response.status_code == 201:
+            return response.json().get("html_url")
+    except Exception:
+        pass
+    return None
 
 
 support_bp = Blueprint(
@@ -174,6 +219,62 @@ def report_issue():
         user=session.get("user"), role=session.get("role"), actual_role=session.get("actual_role"),
         profile_picture=session.get("profile_picture"),
     )
+
+
+@support_bp.route("/api/support/quick-feedback", methods=["POST"])
+@login_required
+def api_quick_feedback():
+    """JSON endpoint for the floating feedback widget. Creates a real support ticket via the
+    same issue_service.create_new_issue() the full /support/report form uses, then best-effort
+    mirrors it to GitHub -- a GitHub failure of any kind never affects the response below."""
+    user_id = session["user_id"]
+    payload = request.get_json(silent=True) or {}
+    feedback_type = payload.get("type", "question")
+    title = (payload.get("title") or "").strip()
+    details = (payload.get("details") or "").strip()
+    context = payload.get("context") or {}
+    logs = payload.get("logs") or []
+
+    if not title or not details:
+        return jsonify({"success": False, "message": "Title and details are required."}), 400
+
+    category_code = FEEDBACK_WIDGET_CATEGORY_CODES.get(feedback_type, "GENERAL_FEEDBACK")
+    description = _build_widget_description(details, context, logs)
+
+    with get_db() as conn:
+        category = category_repository.get_category_by_code(conn, category_code)
+        if not category:
+            return jsonify({"success": False, "message": "Feedback category is not configured."}), 500
+        try:
+            issue = issue_service.create_new_issue(
+                conn, user_id=user_id, title=title, description=description,
+                category_id=category["id"], priority="Medium",
+                module_name="Feedback Widget",
+                page_url=context.get("url", ""),
+                device_info=context.get("viewport", ""),
+                browser_info=context.get("user_agent", ""),
+                os_info=context.get("platform", ""),
+            )
+        except ValueError as ve:
+            return jsonify({"success": False, "message": str(ve)}), 400
+        _log_activity(conn, user_id, "support_issue_created", {"issue_id": issue["issue_id"], "issue_number": issue["issue_number"], "source": "feedback_widget"})
+
+    github_url = _mirror_to_github(issue, description)
+    if github_url:
+        try:
+            with get_db() as conn:
+                issue_repository.add_issue_update(
+                    conn, issue_id=issue["issue_id"], updated_by_user_id=user_id,
+                    update_type="SYSTEM", message=f"Mirrored to GitHub: {github_url}",
+                )
+        except Exception:
+            pass
+
+    return jsonify({
+        "success": True,
+        "issue_number": issue["issue_number"],
+        "issue_url": url_for("support.issue_detail", issue_id=issue["issue_id"]),
+    })
 
 
 @support_bp.route("/support/issues/<int:issue_id>", methods=["GET"])

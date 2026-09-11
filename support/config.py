@@ -87,3 +87,20 @@ INITIAL_CATEGORIES = [
     ("Mobile / Responsive", "MOBILE", "Touch controls, layout issues on mobile devices."),
     ("Other", "OTHER", "General inquiries or uncategorized issues.")
 ]
+
+# Extra categories for the floating feedback widget (a lighter-weight entry point than the full
+# "Report an issue" form). Seeded unconditionally -- see init_support_db() -- rather than only
+# when the categories table is empty, so they land on databases that already seeded the original
+# list before this feature existed.
+ADDITIONAL_CATEGORIES = [
+    ("Bug Report", "BUG_REPORT", "Something is broken or not working as expected."),
+    ("Feature Request", "FEATURE_REQUEST", "An idea or enhancement request."),
+    ("General Feedback", "GENERAL_FEEDBACK", "General comments or questions about the app.")
+]
+
+# Maps the widget's compact "type" segmented control to a real category code above.
+FEEDBACK_WIDGET_CATEGORY_CODES = {
+    "bug": "BUG_REPORT",
+    "enhancement": "FEATURE_REQUEST",
+    "question": "GENERAL_FEEDBACK"
+}
