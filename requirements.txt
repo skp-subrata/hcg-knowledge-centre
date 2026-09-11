@@ -1,4 +1,4 @@
 Flask>=3.0,<4.0
 openpyxl>=3.1,<4.0
 gunicorn>=22,<24
-requests>=2,<3   # System health page's PythonAnywhere CPU-quota lookup; support module's optional GitHub feedback mirror
+requests>=2,<3   # only for the System health page's optional PythonAnywhere CPU-quota lookup
