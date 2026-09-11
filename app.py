@@ -2,6 +2,7 @@ import sqlite3
 import os
 import sys
 import csv
+import html
 import json
 from io import BytesIO
 from io import StringIO, TextIOWrapper
@@ -883,6 +884,36 @@ def embed_url(value):
 	if parsed.netloc == "youtu.be":
 		return f"https://www.youtube.com/embed/{parsed.path.strip('/')}"
 	return value
+
+
+def embed_unavailable_page(message, fallback_url=None):
+	"""A small, self-contained (no external assets, works offline) HTML page shown inside the
+	course-material iframe when /proxy/embed can't show the real page -- so the failure reads as
+	a legible message instead of a bare status-code string. `fallback_url` is only ever a value
+	that already passed is_safe_proxy_target (a real http(s) URL), so a link to it is a genuine
+	escape hatch: the *user's own browser* opening it isn't subject to this server's own network
+	restrictions or the SSRF guard that may have blocked the server-side fetch."""
+	link = (
+		f'<p><a href="{html.escape(fallback_url)}" target="_blank" rel="noopener noreferrer">Open the page in a new tab</a></p>'
+		if fallback_url else ""
+	)
+	return f"""<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Content unavailable</title>
+<style>
+  html, body {{ height: 100%; margin: 0; }}
+  body {{
+    display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", system-ui, sans-serif;
+    background: #f5f5f7; color: #1d1d1f; text-align: center;
+  }}
+  @media (prefers-color-scheme: dark) {{ body {{ background: #1c1c1e; color: #f5f5f7; }} }}
+  .wrap {{ max-width: 360px; }}
+  p {{ font-size: 0.9375rem; line-height: 1.5; margin: 0 0 12px; }}
+  a {{ color: #0071e3; font-weight: 600; text-decoration: none; }}
+  a:hover {{ text-decoration: underline; }}
+</style></head>
+<body><div class="wrap"><p>{html.escape(message)}</p>{link}</div></body></html>"""
 
 
 def course_is_visible(connection, course_id, user_id):
@@ -2875,32 +2906,45 @@ def create_app():
 		with get_db() as connection:
 			course = connection.execute("SELECT id FROM courses WHERE content_url = ?", (url,)).fetchone()
 			if not course or not course_is_visible(connection, course["id"], session["user_id"]):
-				return "Only the content of a course you can access can be embedded.", 403
+				return embed_unavailable_page("Only the content of a course you can access can be embedded."), 403
 		if not is_safe_proxy_target(url):
-			return "This address cannot be embedded.", 403
-		
+			# Never worth an "open in a new tab" link here: either the value isn't a real http(s)
+			# URL at all (e.g. a course's content_url was set to garbage by mistake -- the
+			# original bug this was written for, course 13's "AI Replacing JOBS???"), or it
+			# resolves to a private/loopback address the SSRF guard correctly refuses -- a link
+			# to either would be broken or misleading, not a genuine fallback.
+			return embed_unavailable_page("This link can't be embedded here. If you manage this course, check that its content URL is correct."), 403
+
 		import urllib.request
 		from flask import Response
-		
+
 		try:
 			req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
 			with urllib.request.urlopen(req, timeout=10) as resp:
 				content = resp.read()
-				
+
 				headers = {}
 				for k, v in resp.getheaders():
 					k_lower = k.lower()
 					if k_lower not in ('x-frame-options', 'content-security-policy', 'transfer-encoding', 'content-length', 'content-encoding', 'strict-transport-security'):
 						headers[k] = v
-				
+
 				if b'<head>' in content:
 					content = content.replace(b'<head>', f'<head><base href="{url}">'.encode('utf-8', 'ignore'), 1)
 				elif b'<head ' in content:
 					content = content.replace(b'<head ', f'<head><base href="{url}"></head><head '.encode('utf-8', 'ignore'), 1)
-					
+
 				return Response(content, status=resp.status, headers=headers)
 		except Exception as e:
-			return f"Failed to proxy embedded page: {str(e)}", 500
+			# The real cause (a blocked/unreachable request from this server -- e.g. a hosting
+			# provider's outbound network restrictions, or the target simply being down) is
+			# printed server-side for diagnosis, not shown to the user: it can include internal
+			# networking detail (proxy/tunnel errors and the like) that isn't meaningful to them
+			# and isn't this course's fault. The one thing that reliably still works is opening
+			# the real page in the user's own browser, which isn't subject to this server's own
+			# network restrictions -- offered as the fallback here.
+			print(f"[proxy_embed] failed to fetch {url}: {e}")
+			return embed_unavailable_page("This page couldn't be loaded here -- it may be blocking automatic access, or temporarily unreachable.", fallback_url=url), 502
 
 	@app.get("/course/<int:course_id>")
 	def course_detail(course_id):

@@ -50,6 +50,24 @@ def test_exit_view_restores_the_administrator(admin, world):
 	assert admin.get("/admin").status_code == 200
 
 
+def test_view_as_link_only_appears_while_actually_in_the_admin_view(admin):
+	"""Regression test: the avatar menu's "View as another user" link used to be gated on
+	real_role (the account's actual role), so an admin who had switched to Student view still
+	saw it -- but view_as_page()/view_as() are @admin_required, which checks the *effective*
+	role, so clicking it while in Student view silently redirected home with no explanation.
+	The link must track the same effective-role gate the route itself enforces (matching how
+	the "Manage" nav dropdown that also links here already behaves)."""
+	assert "View as another user" in admin.get("/").get_data(as_text=True)
+	admin.post("/switch-role")  # admin -> student view, actual_role unchanged
+	with admin.session_transaction() as sess:
+		assert sess["role"] == "basic user" and sess["actual_role"] == "admin"
+	page = admin.get("/").get_data(as_text=True)
+	assert "View as another user" not in page
+	assert admin.get("/view-as").status_code == 302, "the route itself denies this exact state -- the link must not dangle"
+	admin.post("/switch-role")  # back to admin view
+	assert "View as another user" in admin.get("/").get_data(as_text=True)
+
+
 def test_inactive_user_cannot_log_in(anon, world, db, login):
 	db("UPDATE users SET is_active = 0 WHERE username = 'student'")
 	response = login(anon, "student")
@@ -113,6 +131,60 @@ def test_proxy_embed_only_serves_visible_course_urls(student, world, fake_dns, f
 def test_proxy_embed_refuses_unsafe_targets_even_for_course_urls(student, world, fake_dns, fake_fetch, db, target):
 	db("UPDATE courses SET content_url = ? WHERE id = ?", (target, world.mod_published_course_id))
 	assert student.get(f"/proxy/embed?url={target}").status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# proxy_embed's failure responses: legible instead of a bare status-code string,
+# and a fallback "open in a new tab" link only when it's a genuine escape hatch
+# (regression coverage for course 13's "AI Replacing JOBS???", whose content_url
+# was garbage, and course 11's Boomi content, whose real URL this server's own
+# host blocks fetching but a normal browser does not)
+# ---------------------------------------------------------------------------
+def test_proxy_embed_permission_denied_shows_a_message_with_no_fallback_link(student, world, fake_dns, fake_fetch):
+	response = student.get("/proxy/embed?url=https://example.com/not-a-course")
+	assert response.status_code == 403
+	body = response.get_data(as_text=True)
+	assert "can be embedded" in body
+	assert "Open the page in a new tab" not in body
+
+
+def test_proxy_embed_unsafe_target_shows_a_message_with_no_fallback_link(student, world, fake_dns, fake_fetch, db):
+	db("UPDATE courses SET content_url = 'http://10.0.0.8/' WHERE id = ?", (world.mod_published_course_id,))
+	response = student.get("/proxy/embed?url=http://10.0.0.8/")
+	assert response.status_code == 403
+	body = response.get_data(as_text=True)
+	assert "can&#x27;t be embedded here" in body
+	assert "Open the page in a new tab" not in body
+
+
+def test_proxy_embed_fetch_failure_shows_a_fallback_link_and_never_leaks_the_raw_error(student, world, fake_dns, monkeypatch):
+	import urllib.request
+
+	def _boom(req, *args, **kwargs):
+		raise OSError("Tunnel connection failed: 403 Forbidden")  # e.g. a hosting provider's outbound network whitelist
+
+	monkeypatch.setattr(urllib.request, "urlopen", _boom)
+	response = student.get("/proxy/embed?url=https://example.com/course")  # a real, allowed course URL
+	assert response.status_code == 502
+	body = response.get_data(as_text=True)
+	assert "couldn&#x27;t be loaded here" in body
+	assert 'href="https://example.com/course"' in body and "Open the page in a new tab" in body
+	assert "Tunnel connection failed" not in body, "the raw exception must never reach the client"
+
+
+def test_proxy_embed_fallback_link_escapes_the_url(student, world, fake_dns, monkeypatch, db):
+	import urllib.request
+
+	def _boom(req, *args, **kwargs):
+		raise OSError("blocked")
+
+	monkeypatch.setattr(urllib.request, "urlopen", _boom)
+	evil_url = 'https://example.com/course?x="><script>alert(1)</script>'
+	db("UPDATE courses SET content_url = ? WHERE id = ?", (evil_url, world.mod_published_course_id))
+	response = student.get(f"/proxy/embed?url={evil_url}")
+	body = response.get_data(as_text=True)
+	assert "<script>alert(1)</script>" not in body
+	assert "&lt;script&gt;" in body
 
 
 def test_course_iframe_sandbox_does_not_grant_same_origin():

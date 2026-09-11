@@ -70,7 +70,7 @@
           {% if real_role in ("admin", "moderator") and not impersonating %}
           <form method="post" action="{{ url_for('switch_role') }}" role="none"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="menu-item" role="menuitem">{{ icon("switch") }}<span>{% if eff_role == 'basic user' %}Switch to {{ real_role }} view{% else %}Switch to student view{% endif %}</span></button></form>
           {% endif %}
-          {% if real_role == "admin" and not impersonating %}
+          {% if eff_role == "admin" and not impersonating %}
           <a href="{{ url_for('view_as_page') }}" class="menu-item" role="menuitem">{{ icon("eye") }}<span>View as another user</span></a>
           {% endif %}
           {% if impersonating %}
