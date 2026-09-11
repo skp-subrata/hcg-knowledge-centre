@@ -3000,7 +3000,7 @@ def create_app():
 				flash("You do not have permission to access this course.", "error")
 				return redirect(safe_referrer(url_for("home")))
 			if certification and certification["certification_status"] == "CERTIFIED":
-				return redirect(safe_referrer(url_for("certificate", course_id=course_id)))
+				return redirect(url_for("certificate", course_id=course_id))
 			if not certification or certification["latest_assessment_status"] not in ("FEEDBACK_PENDING", "CERTIFIED"):
 				return redirect(safe_referrer(url_for("course_detail", course_id=course_id)))
 		if request.method == "POST":
@@ -3016,7 +3016,7 @@ def create_app():
 				certification = get_user_course_record(connection, session["user_id"], course_id)
 				if certification and certification["certification_status"] == "CERTIFIED":
 					flash("A certificate has already been issued for this course.", "error")
-					return redirect(safe_referrer(url_for("certificate", course_id=course_id)))
+					return redirect(url_for("certificate", course_id=course_id))
 				# The certificate is based on the latest passing attempt of a 'post' assessment (any type if the course has no
 				# post assessment), graded against that assessment's own pass mark.
 				passing = connection.execute(
@@ -3081,7 +3081,7 @@ def create_app():
 					actor_id=session["user_id"]
 				)
 			flash("Feedback submitted successfully. Your certificate and badge have been created.", "success")
-			return redirect(safe_referrer(url_for("certificate", course_id=course_id)))
+			return redirect(url_for("certificate", course_id=course_id))
 		return render_template("feedback.html", course=course, user=session.get("user"), certification=certification)
 
 	@app.get("/course/<int:course_id>/certificate")

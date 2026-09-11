@@ -116,6 +116,32 @@ def test_pre_assessment_alone_does_not_certify_but_post_does(student, world, db,
 	assert record["badge"] == "PLATINUM"
 
 
+def test_feedback_submission_redirects_to_the_certificate_not_back_to_itself(student, world, db, db_path, course):
+	"""Regression test for a live production bug (ERR_TOO_MANY_REDIRECTS on /course/<id>/feedback
+	after a real submission): feedback_form()'s success/already-certified redirects used
+	safe_referrer(url_for("certificate", ...)), which prefers request.referrer whenever it's
+	same-host. A real browser's Referer on this POST is the feedback page itself, so
+	safe_referrer returned that instead of the certificate URL -- redirecting back to
+	/course/<id>/feedback, which (now CERTIFIED) redirected to safe_referrer(certificate) again,
+	looping forever. The certificate target is fixed and known regardless of where the user came
+	from, so these three redirects now go straight to url_for("certificate", ...) unconditionally."""
+	uid = world.users["student"]
+	post_id, qids = make_assessment(db_path, course, questions=(("Q", "a", 1),))
+	student.post(f"/assessments/{post_id}", data=_answers(qids, "a"))
+	assert _cert_record(db, uid, course)["latest_assessment_status"] == "FEEDBACK_PENDING"
+
+	feedback_url = f"/course/{course}/feedback"
+	response = student.post(feedback_url, data={"rating": "8", "comments": "great"}, headers={"Referer": f"http://localhost{feedback_url}"})
+	assert response.status_code == 302
+	assert response.headers["Location"] == f"/course/{course}/certificate"
+
+	# Re-hitting the (now already-certified) feedback page, again with a same-page referrer,
+	# must also go straight to the certificate rather than looping back to itself.
+	response = student.get(feedback_url, headers={"Referer": f"http://localhost{feedback_url}"})
+	assert response.status_code == 302
+	assert response.headers["Location"] == f"/course/{course}/certificate"
+
+
 def test_feedback_uses_the_latest_passing_attempt(student, world, db, db_path, course):
 	uid = world.users["student"]
 	post_id, qids = make_assessment(db_path, course, pass_percentage=50, max_attempts=3, questions=(("Q1", "a", 1), ("Q2", "a", 1)))
