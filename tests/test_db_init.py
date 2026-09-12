@@ -131,6 +131,41 @@ def test_duplicate_add_column_is_skipped_but_other_errors_are_raised(tmp_path):
 	assert [name for name, _ in __import__("db_init").applied_scripts(connection)] == ["001_base.sql"], "a failing script is not recorded"
 
 
+def test_migration_013_backfills_login_timestamps_from_existing_activity_log(tmp_path):
+	"""013_engagement_tracking.sql's backfill must use only real login_success rows (not
+	page_view or login_failure) and pick MIN/MAX correctly, so the "unique users, all-time" KPI
+	isn't wrongly stuck at 0 for existing users right after this ships."""
+	real_script = (INIT_SCRIPTS_DIR / "013_engagement_tracking.sql").read_text(encoding="utf-8")
+	scripts = tmp_path / "scripts"
+	scripts.mkdir()
+	(scripts / "013_engagement_tracking.sql").write_text(real_script, encoding="utf-8")
+
+	connection = sqlite3.connect(tmp_path / "x.db")
+	connection.row_factory = sqlite3.Row
+	connection.executescript(
+		"""
+		CREATE TABLE users (id INTEGER PRIMARY KEY);
+		CREATE TABLE activity_log (id INTEGER PRIMARY KEY, user_id INTEGER, event_type TEXT, created_at TEXT);
+		INSERT INTO users (id) VALUES (1), (2);
+		INSERT INTO activity_log (user_id, event_type, created_at) VALUES
+			(1, 'login_success', '2026-01-01 09:00:00'),
+			(1, 'login_success', '2026-01-05 09:00:00'),
+			(1, 'page_view', '2026-01-06 09:00:00'),
+			(2, 'login_failure', '2026-01-02 09:00:00');
+		"""
+	)
+	apply_init_scripts(connection, scripts)
+
+	row1 = connection.execute("SELECT first_login_at, last_login_at FROM users WHERE id = 1").fetchone()
+	assert row1["first_login_at"] == "2026-01-01 09:00:00"
+	assert row1["last_login_at"] == "2026-01-05 09:00:00", "the latest login_success, not the later page_view"
+
+	row2 = connection.execute("SELECT first_login_at, last_login_at FROM users WHERE id = 2").fetchone()
+	assert row2["first_login_at"] is None and row2["last_login_at"] is None, "only a login_failure on record -- never actually logged in"
+
+	assert "ip_address" in [row[1] for row in connection.execute("PRAGMA table_info(activity_log)")]
+
+
 def test_cli_main_reports_the_database_and_applied_scripts(db_path, capsys):
 	import db_init
 

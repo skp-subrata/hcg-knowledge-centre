@@ -1488,6 +1488,24 @@ ACTIVITY_LOG_RETENTION_DAYS = 90
 PYTHONANYWHERE_FREE_DISK_QUOTA_BYTES = 512 * 1024 * 1024
 
 
+def get_client_ip():
+	"""Best-effort real client IP for the activity log. Prefers the first hop in
+	X-Forwarded-For (set by PythonAnywhere's own front-end proxy, and by any other reverse
+	proxy in front of this app) over request.remote_addr, which without ProxyFix
+	(LMS_PROXY_FIX -- off by default, see create_app()) would just be the proxy's own address,
+	not the visitor's. Reads the header directly rather than depending on that global toggle, so
+	IP capture works correctly whether or not ProxyFix is enabled. Never raises: returns None
+	outside a request context (log_activity() is always called from one in practice, but this
+	guards it anyway, matching this module's existing graceful-degradation convention)."""
+	try:
+		forwarded = request.headers.get("X-Forwarded-For", "")
+		if forwarded:
+			return forwarded.split(",")[0].strip() or None
+		return request.remote_addr
+	except Exception:
+		return None
+
+
 def log_activity(connection, user_id, event_type, details=None):
 	"""Record one row in the activity log. Deliberately bounded to meaningful events -- logins,
 	logouts, real page views (see the after_request hook in create_app()), post reviews,
@@ -1495,8 +1513,8 @@ def log_activity(connection, user_id, event_type, details=None):
 	small dict, serialised as JSON. Auto-prunes anything older than ACTIVITY_LOG_RETENTION_DAYS
 	on every write so this can't grow without bound against the disk quota."""
 	connection.execute(
-		"INSERT INTO activity_log (user_id, event_type, details) VALUES (?, ?, ?)",
-		(user_id, event_type, json.dumps(details or {})),
+		"INSERT INTO activity_log (user_id, event_type, details, ip_address) VALUES (?, ?, ?, ?)",
+		(user_id, event_type, json.dumps(details or {}), get_client_ip()),
 	)
 	connection.execute("DELETE FROM activity_log WHERE created_at < datetime('now', ?)", (f"-{ACTIVITY_LOG_RETENTION_DAYS} days",))
 
@@ -1603,6 +1621,74 @@ def record_system_snapshot(connection):
 		"cpu_used_seconds": cpu_used, "cpu_limit_seconds": cpu_limit,
 		"disk_used_bytes": disk_used, "disk_quota_bytes": disk_quota,
 		"worker_memory_bytes": worker_memory, "db_size_bytes": db_size, "healthy": healthy,
+	}
+
+
+def get_engagement_analytics_data(connection, days=30, weeks=12):
+	"""Login/visit engagement analytics for the System & activity page.
+
+	total_unique_users_ever comes from users.last_login_at (set once, on every login -- see
+	home()) rather than activity_log, because activity_log is pruned after 90 days
+	(ACTIVITY_LOG_RETENTION_DAYS): fine for the trend series below, wrong for an all-time count.
+
+	daily_trend/weekly_trend are zero-filled across every day/week in the window (not just the
+	ones with a matching row), so a quiet day or week reads as an honest 0 in the chart rather
+	than a gap. by_department/by_location use each user's existing Department/Office Location
+	master data -- not IP geolocation -- to answer "which teams/offices are most engaged"."""
+	import datetime
+	total_unique_users_ever = connection.execute("SELECT COUNT(*) AS n FROM users WHERE last_login_at IS NOT NULL").fetchone()["n"]
+	active_users_week = connection.execute(
+		"SELECT COUNT(DISTINCT user_id) AS n FROM activity_log WHERE user_id IS NOT NULL AND created_at >= datetime('now', '-7 days')"
+	).fetchone()["n"]
+
+	daily_counts = {
+		row["d"]: row["n"] for row in connection.execute(
+			"""SELECT date(created_at) AS d, COUNT(DISTINCT user_id) AS n FROM activity_log
+			   WHERE user_id IS NOT NULL AND created_at >= datetime('now', ?) GROUP BY d""",
+			(f"-{days} days",),
+		).fetchall()
+	}
+	today = datetime.date.today()
+	daily_trend = [
+		{"date": (today - datetime.timedelta(days=i)).isoformat(), "active_users": daily_counts.get((today - datetime.timedelta(days=i)).isoformat(), 0)}
+		for i in range(days - 1, -1, -1)
+	]
+	daily_average_active_users = round(sum(row["active_users"] for row in daily_trend) / len(daily_trend), 1) if daily_trend else 0
+
+	weekly_counts = {
+		row["week_start"]: row["n"] for row in connection.execute(
+			"""SELECT date(created_at, '-' || strftime('%w', created_at) || ' days') AS week_start, COUNT(DISTINCT user_id) AS n
+			   FROM activity_log WHERE user_id IS NOT NULL AND created_at >= datetime('now', ?) GROUP BY week_start""",
+			(f"-{weeks * 7} days",),
+		).fetchall()
+	}
+	this_week_start = today - datetime.timedelta(days=(today.isoweekday() % 7))  # most recent Sunday
+	weekly_trend = [
+		{"week_start": (this_week_start - datetime.timedelta(days=i * 7)).isoformat(), "active_users": weekly_counts.get((this_week_start - datetime.timedelta(days=i * 7)).isoformat(), 0)}
+		for i in range(weeks - 1, -1, -1)
+	]
+
+	by_department = connection.execute(
+		"""SELECT COALESCE(d.department_name, 'Unassigned') AS label, COUNT(DISTINCT al.user_id) AS n
+		   FROM activity_log al JOIN users u ON u.id = al.user_id LEFT JOIN departments d ON d.department_id = u.department_id
+		   WHERE al.user_id IS NOT NULL AND al.created_at >= datetime('now', ?) GROUP BY label ORDER BY n DESC LIMIT 10""",
+		(f"-{days} days",),
+	).fetchall()
+	by_location = connection.execute(
+		"""SELECT COALESCE(l.location_name, 'Unassigned') AS label, COUNT(DISTINCT al.user_id) AS n
+		   FROM activity_log al JOIN users u ON u.id = al.user_id LEFT JOIN locations l ON l.location_id = u.location_id
+		   WHERE al.user_id IS NOT NULL AND al.created_at >= datetime('now', ?) GROUP BY label ORDER BY n DESC LIMIT 10""",
+		(f"-{days} days",),
+	).fetchall()
+
+	return {
+		"total_unique_users_ever": total_unique_users_ever,
+		"active_users_week": active_users_week,
+		"daily_average_active_users": daily_average_active_users,
+		"daily_trend": daily_trend,
+		"weekly_trend": weekly_trend,
+		"by_department": [dict(row) for row in by_department],
+		"by_location": [dict(row) for row in by_location],
 	}
 
 
@@ -1865,6 +1951,12 @@ def create_app():
                 )
 				with get_db() as connection:
 					log_activity(connection, user["id"], "login_success", {"username": username})
+					# Durable (never pruned) -- powers the all-time "unique users" KPI on
+					# System & activity, independent of activity_log's 90-day retention.
+					connection.execute(
+						"UPDATE users SET last_login_at = CURRENT_TIMESTAMP, first_login_at = COALESCE(first_login_at, CURRENT_TIMESTAMP) WHERE id = ?",
+						(user["id"],),
+					)
 				return redirect(url_for("home"))
 			with get_db() as connection:
 				log_activity(connection, user["id"] if user else None, "login_failure", {"username": username})
@@ -2302,6 +2394,7 @@ def create_app():
 			active_users_today = connection.execute(
 				"SELECT COUNT(DISTINCT user_id) AS n FROM activity_log WHERE user_id IS NOT NULL AND created_at >= datetime('now', '-1 day')"
 			).fetchone()["n"]
+			engagement = get_engagement_analytics_data(connection)
 
 			page = max(1, request.args.get("page", 1, type=int))
 			page_size = 25
@@ -2333,6 +2426,7 @@ def create_app():
 			event_counts=[dict(row) for row in event_counts],
 			logins_today=logins_today,
 			active_users_today=active_users_today,
+			engagement=engagement,
 			activity=activity,
 			activity_total=activity_total,
 			page=page,

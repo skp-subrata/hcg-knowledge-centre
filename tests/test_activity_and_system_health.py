@@ -31,7 +31,7 @@ def test_log_activity_writes_a_row_with_json_details(db_path, db):
 
 def test_log_activity_accepts_no_details():
 	connection = sqlite3.connect(":memory:")
-	connection.execute("CREATE TABLE activity_log (id INTEGER PRIMARY KEY, created_at TEXT DEFAULT CURRENT_TIMESTAMP, user_id INTEGER, event_type TEXT, details TEXT)")
+	connection.execute("CREATE TABLE activity_log (id INTEGER PRIMARY KEY, created_at TEXT DEFAULT CURRENT_TIMESTAMP, user_id INTEGER, event_type TEXT, details TEXT, ip_address TEXT)")
 	with connection:
 		app_module.log_activity(connection, None, "logout")
 	row = connection.execute("SELECT * FROM activity_log").fetchone()
@@ -210,3 +210,148 @@ def test_system_page_paginates_the_activity_log(db_path, db, admin):
 	assert "Page 1 of" in first_page
 	second_page = admin.get("/admin/system?page=2").get_data(as_text=True)
 	assert "Page 2 of" in second_page
+
+
+# ---------------------------------------------------------------------------
+# get_client_ip(): best-effort client IP for the activity log
+# ---------------------------------------------------------------------------
+def test_get_client_ip_prefers_the_first_hop_in_x_forwarded_for():
+	with app_module.app.test_request_context("/", headers={"X-Forwarded-For": "203.0.113.5, 10.0.0.1"}):
+		assert app_module.get_client_ip() == "203.0.113.5"
+
+
+def test_get_client_ip_falls_back_to_remote_addr_without_the_header():
+	with app_module.app.test_request_context("/", environ_overrides={"REMOTE_ADDR": "192.0.2.9"}):
+		assert app_module.get_client_ip() == "192.0.2.9"
+
+
+def test_get_client_ip_returns_none_outside_a_request_context():
+	assert app_module.get_client_ip() is None
+
+
+# ---------------------------------------------------------------------------
+# Durable login tracking: users.first_login_at / last_login_at, and IP capture
+# ---------------------------------------------------------------------------
+def test_login_success_is_captured_with_the_forwarded_ip(anon, db):
+	anon.post("/", data={"username": "admin", "password": "admin"}, headers={"X-Forwarded-For": "198.51.100.7"})
+	rows = _events(db, "login_success")
+	assert len(rows) == 1 and rows[0]["ip_address"] == "198.51.100.7"
+
+
+def test_login_success_sets_first_and_last_login_at(anon, world, db):
+	admin_id = world.users["admin"]
+	assert db("SELECT first_login_at, last_login_at FROM users WHERE id = ?", (admin_id,))[0]["first_login_at"] is None
+	anon.post("/", data={"username": "admin", "password": "admin"})
+	row = db("SELECT first_login_at, last_login_at FROM users WHERE id = ?", (admin_id,))[0]
+	assert row["first_login_at"] is not None and row["first_login_at"] == row["last_login_at"]
+
+
+def test_second_login_updates_last_login_at_but_not_first_login_at(anon, world, db):
+	admin_id = world.users["admin"]
+	anon.post("/", data={"username": "admin", "password": "admin"})
+	first = db("SELECT first_login_at, last_login_at FROM users WHERE id = ?", (admin_id,))[0]["first_login_at"]
+	anon.get("/logout")
+	anon.post("/", data={"username": "admin", "password": "admin"})
+	row = db("SELECT first_login_at, last_login_at FROM users WHERE id = ?", (admin_id,))[0]
+	assert row["first_login_at"] == first, "first_login_at is set once, never overwritten"
+
+
+def test_failed_login_does_not_set_last_login_at(anon, world, db):
+	admin_id = world.users["admin"]
+	anon.post("/", data={"username": "admin", "password": "wrong-password"})
+	assert db("SELECT last_login_at FROM users WHERE id = ?", (admin_id,))[0]["last_login_at"] is None
+
+
+# ---------------------------------------------------------------------------
+# get_engagement_analytics_data(): the KPIs and chart series behind System & activity
+# ---------------------------------------------------------------------------
+def test_total_unique_users_ever_counts_only_users_who_have_logged_in(db_path, db, world):
+	connection = sqlite3.connect(db_path)
+	connection.row_factory = sqlite3.Row
+	with connection:
+		connection.execute("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id IN (?, ?)", (world.users["admin"], world.users["student"]))
+		data = app_module.get_engagement_analytics_data(connection)
+	connection.close()
+	assert data["total_unique_users_ever"] == 2
+
+
+def test_daily_trend_is_zero_filled_across_the_full_window(db_path, db, world):
+	connection = sqlite3.connect(db_path)
+	connection.row_factory = sqlite3.Row
+	with connection:
+		app_module.log_activity(connection, world.users["student"], "page_view", {"path": "/"})
+		data = app_module.get_engagement_analytics_data(connection, days=7, weeks=2)
+	connection.close()
+	assert len(data["daily_trend"]) == 7
+	assert sum(row["active_users"] for row in data["daily_trend"]) == 1  # only today has any activity
+	assert data["daily_trend"][-1]["active_users"] == 1  # today is the last entry
+	assert data["daily_average_active_users"] == round(1 / 7, 1)
+
+
+def test_weekly_trend_buckets_active_users_by_week(db_path, db, world):
+	connection = sqlite3.connect(db_path)
+	connection.row_factory = sqlite3.Row
+	with connection:
+		app_module.log_activity(connection, world.users["student"], "page_view", {"path": "/"})
+		data = app_module.get_engagement_analytics_data(connection, days=1, weeks=4)
+	connection.close()
+	assert len(data["weekly_trend"]) == 4
+	assert data["weekly_trend"][-1]["active_users"] == 1  # this week is the last entry
+
+
+def test_active_users_week_counts_distinct_users_in_the_last_7_days(db_path, db, world):
+	connection = sqlite3.connect(db_path)
+	connection.row_factory = sqlite3.Row
+	with connection:
+		app_module.log_activity(connection, world.users["student"], "page_view", {"path": "/"})
+		app_module.log_activity(connection, world.users["admin"], "page_view", {"path": "/"})
+		connection.execute(
+			"INSERT INTO activity_log (user_id, event_type, details, created_at) VALUES (?, 'page_view', '{}', datetime('now', '-40 days'))",
+			(world.users["mod"],),
+		)
+		data = app_module.get_engagement_analytics_data(connection)
+	connection.close()
+	assert data["active_users_week"] == 2  # the 40-day-old row for 'mod' must not count
+
+
+def test_engagement_breaks_down_by_department_and_location(db_path, db, world):
+	connection = sqlite3.connect(db_path)
+	connection.row_factory = sqlite3.Row
+	with connection:
+		connection.execute("UPDATE users SET department_id = ?, location_id = ? WHERE id = ?", (world.department_id, world.location_id, world.users["student"]))
+		app_module.log_activity(connection, world.users["student"], "page_view", {"path": "/"})
+		dept_name = connection.execute("SELECT department_name FROM departments WHERE department_id = ?", (world.department_id,)).fetchone()["department_name"]
+		loc_name = connection.execute("SELECT location_name FROM locations WHERE location_id = ?", (world.location_id,)).fetchone()["location_name"]
+		data = app_module.get_engagement_analytics_data(connection)
+	connection.close()
+	assert any(row["label"] == dept_name and row["n"] >= 1 for row in data["by_department"])
+	assert any(row["label"] == loc_name and row["n"] >= 1 for row in data["by_location"])
+
+
+def test_users_with_no_department_or_location_are_grouped_as_unassigned(db_path, db, world):
+	connection = sqlite3.connect(db_path)
+	connection.row_factory = sqlite3.Row
+	with connection:
+		connection.execute("UPDATE users SET department_id = NULL, location_id = NULL WHERE id = ?", (world.users["student"],))
+		app_module.log_activity(connection, world.users["student"], "page_view", {"path": "/"})
+		data = app_module.get_engagement_analytics_data(connection)
+	connection.close()
+	assert any(row["label"] == "Unassigned" for row in data["by_department"])
+	assert any(row["label"] == "Unassigned" for row in data["by_location"])
+
+
+# ---------------------------------------------------------------------------
+# The page renders the new KPIs, charts and IP column
+# ---------------------------------------------------------------------------
+def test_system_page_shows_the_new_engagement_kpis_and_charts(admin):
+	admin.get("/profile")  # commits at least one activity_log row before the page below renders its table
+	html = admin.get("/admin/system").get_data(as_text=True)
+	assert "Unique users, all-time" in html and "Active this week" in html and "Daily average" in html
+	assert 'id="dailyTrendChart"' in html and 'id="weeklyTrendChart"' in html
+	assert "IP address" in html
+
+
+def test_system_page_shows_the_captured_ip_in_the_event_log(anon, admin):
+	anon.post("/", data={"username": "admin", "password": "admin"}, headers={"X-Forwarded-For": "198.51.100.42"})
+	html = admin.get("/admin/system").get_data(as_text=True)
+	assert "198.51.100.42" in html
