@@ -57,12 +57,12 @@ def test_view_as_link_only_appears_while_actually_in_the_admin_view(admin):
 	role, so clicking it while in Student view silently redirected home with no explanation.
 	The link must track the same effective-role gate the route itself enforces (matching how
 	the "Manage" nav dropdown that also links here already behaves)."""
-	assert "View as another user" in admin.get("/").get_data(as_text=True)
+	assert 'href="/view-as"' in admin.get("/").get_data(as_text=True)
 	admin.post("/switch-role")  # admin -> student view, actual_role unchanged
 	with admin.session_transaction() as sess:
 		assert sess["role"] == "basic user" and sess["actual_role"] == "admin"
 	page = admin.get("/").get_data(as_text=True)
-	assert "View as another user" not in page
+	assert 'href="/view-as"' not in page, "the actual menu link must be gone, not just checking prose text (which can appear elsewhere, e.g. release notes)"
 	assert admin.get("/view-as").status_code == 302, "the route itself denies this exact state -- the link must not dangle"
 	admin.post("/switch-role")  # back to admin view
 	assert "View as another user" in admin.get("/").get_data(as_text=True)
