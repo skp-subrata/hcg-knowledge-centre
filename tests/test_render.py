@@ -168,3 +168,22 @@ def test_flash_categories_reach_the_toast(anon, login):
 	response = login(anon, "admin", "wrong-password")
 	html = response.get_data(as_text=True)
 	assert 'data-kind="error"' in html and 'role="alert"' in html
+
+
+def test_hairline_only_colors_whichever_side_a_border_utility_already_set(anon):
+	"""Regression test: .hairline used to be `border: 1px solid var(--hairline)`, a shorthand
+	that forces ALL FOUR sides to 1px regardless of which side a paired Tailwind utility asked
+	for -- so every one of the ~24 "border-t hairline" / "border-b hairline" / "border-l
+	hairline" combinations across the templates (e.g. the certificate page's stat row, spotted
+	live as a stray box where only a top divider was intended) rendered a full box instead of a
+	single line. Every real usage pairs .hairline with a directional (or plain `border`, all
+	sides intended) Tailwind utility -- none rely on .hairline alone for width -- so it must only
+	ever set border-color, letting the paired utility (and Tailwind's own preflight, which zeros
+	border-width on every side by default) decide which side(s) actually show."""
+	css = anon.get("/static/css/app.css").get_data(as_text=True)
+	match = re.search(r"\.hairline\s*\{([^}]*)\}", css)
+	assert match, ".hairline rule not found in app.css"
+	declaration = match.group(1)
+	assert "border-color" in declaration
+	assert re.search(r"\bborder\s*:", declaration) is None, "must not use the `border` shorthand (forces all four sides)"
+	assert "border-width" not in declaration and "border-style" not in declaration

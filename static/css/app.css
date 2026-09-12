@@ -105,7 +105,12 @@ h3 { font-size: 1.0625rem; line-height: 1.3; letter-spacing: -.01em; }
 .skip-link { position: absolute; left: 1rem; top: -100px; z-index: 100; padding: .5rem .75rem; border-radius: var(--r-sm); background: rgb(var(--c-surface)); color: rgb(var(--c-fg)); box-shadow: var(--shadow-pop); }
 .skip-link:focus { top: 1rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.hairline { border: 1px solid var(--hairline); }
+/* Color-only: every real usage pairs this with a Tailwind border/border-t/border-b/border-l
+   utility (which supplies the width+side, on top of Tailwind's own preflight reset that zeroes
+   border-width on every side by default) -- .hairline used to be `border: 1px solid ...`, whose
+   shorthand forces ALL FOUR sides to 1px regardless of which side the paired utility asked for,
+   so e.g. "border-t hairline" rendered as a full box instead of a single top divider line. */
+.hairline { border-color: var(--hairline); }
 .divider { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
 
 /* rich text (Quill output) */
