@@ -28,37 +28,132 @@
   <div class="mt-6 flex flex-col sm:flex-row justify-center gap-2 no-print" data-html2canvas-ignore="true">
     {{ btn("Review the course", "secondary", href=url_for('course_detail', course_id=course.id)) }}
     {{ btn("Download as PNG", "primary", type="button", icon_name="download", attrs='id="download-png-btn"') }}
+    {{ btn("Download as PDF", "secondary", type="button", icon_name="document", attrs='id="download-pdf-btn"') }}
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
   (function () {
-    const button = document.getElementById('download-png-btn');
+    const pngButton = document.getElementById('download-png-btn');
+    const pdfButton = document.getElementById('download-pdf-btn');
     const card = document.getElementById('certificate-card');
-    if (!button || !card) return;
-    const filename = 'Certificate_' + {{ course.name|tojson }}.replace(/[^a-zA-Z0-9]/g, '_').replace(/__+/g, '_') + '.png';
-    button.addEventListener('click', function () {
+    if (!card || (!pngButton && !pdfButton)) return;
+    const baseName = 'Certificate_' + {{ course.name|tojson }}.replace(/[^a-zA-Z0-9]/g, '_').replace(/__+/g, '_');
+
+    // html2canvas evaluates viewport units (the title's clamp(...,3vw,...)) and media queries
+    // (p-8/md:p-14, the name's @media breakpoint, dl's sm:grid-cols-3) against its own internal
+    // virtual window (windowWidth/windowHeight below), decoupled from the real browser window
+    // the page happens to be open at -- so what renders on screen and what gets captured can
+    // disagree, producing a slightly shifted PNG/PDF depending on the downloader's own window
+    // size. The .is-capturing class (app.css) pins every one of those to its widest "desktop"
+    // resting state for the instant of capture, so a download always looks the same regardless
+    // of the real viewport -- consistent with forcing the card to a fixed 1024px width below.
+    //
+    // Separately: the tier badge is an inline <svg> coloured entirely by CSS classes (which
+    // themselves resolve --tier-1/--tier-2, a second-level var() chain -- see app.css). Tested
+    // directly against html2canvas 1.4.1: it serializes the <svg> into a standalone
+    // data:image/svg+xml image with no access to app.css at all, so the whole badge -- glow,
+    // ring and star alike -- renders as blank empty space, not merely mis-coloured. Flattening
+    // the custom properties (below) fixes every *other* consumer of --tier-1/--tier-2 (the
+    // border under the name, the tier label text, the background tint), all ordinary HTML/CSS
+    // that html2canvas resolves correctly -- but the SVG itself needs a different fix: it is
+    // swapped out for a plain <img> (a PNG rendered to an offscreen <canvas>, using the same
+    // resolved colours) just for the capture, since html2canvas handles <img> tags reliably.
+    // Confirmed by direct before/after comparison of html2canvas's own raw output, not just the
+    // on-screen DOM (which looked fine even before this fix -- the bug only ever showed up in
+    // the actual downloaded file).
+    function resolveTierColors() {
+      const style = getComputedStyle(card);
+      return { tier1: style.getPropertyValue('--tier-1').trim(), tier2: style.getPropertyValue('--tier-2').trim() };
+    }
+
+    function renderBadgeToDataURL(tier1, tier2, sizePx) {
+      const dpr = 3; // oversample so the swapped-in <img> stays crisp at html2canvas's own scale:2
+      const canvas = document.createElement('canvas');
+      canvas.width = sizePx * dpr; canvas.height = sizePx * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale((sizePx * dpr) / 100, (sizePx * dpr) / 100); // map the badge's own 0-100 viewBox onto the canvas
+      ctx.beginPath(); ctx.arc(50, 50, 46, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgb(' + tier1 + ' / 0.22)'; ctx.fill(); // .cert-badge-glow
+      ctx.beginPath(); ctx.arc(50, 50, 38, 0, Math.PI * 2);
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgb(' + tier2 + ')'; ctx.stroke(); // .cert-badge-ring
+      ctx.fillStyle = 'rgb(' + tier2 + ')';
+      ctx.fill(new Path2D('M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z')); // .cert-badge-fill
+      return canvas.toDataURL('image/png');
+    }
+
+    async function captureCard() {
       const html = document.documentElement;
       const wasDark = html.classList.contains('dark');
       if (wasDark) html.classList.remove('dark');
-      const originalStyle = card.getAttribute('style') || '';
+      const originalCardStyle = card.getAttribute('style') || '';
+      const { tier1, tier2 } = resolveTierColors();
+      if (tier1) card.style.setProperty('--tier-1', tier1);
+      if (tier2) card.style.setProperty('--tier-2', tier2);
       const fg = getComputedStyle(document.documentElement).getPropertyValue('--c-fg').trim();
       if (fg) card.style.color = 'rgb(' + fg + ')';
       card.style.width = '1024px'; card.style.maxWidth = '1024px';
-      const label = button.innerHTML;
+      card.classList.add('is-capturing');
+
+      const svgBadge = card.querySelector('svg[role="img"]');
+      let badgeImg = null;
+      if (svgBadge && tier1 && tier2) {
+        const sizePx = Math.round(svgBadge.getBoundingClientRect().width) || 112;
+        badgeImg = document.createElement('img');
+        badgeImg.src = renderBadgeToDataURL(tier1, tier2, sizePx);
+        badgeImg.width = sizePx; badgeImg.height = sizePx;
+        badgeImg.className = svgBadge.getAttribute('class') || '';
+        badgeImg.alt = svgBadge.getAttribute('aria-label') || '';
+        svgBadge.replaceWith(badgeImg);
+      }
+
+      try {
+        return await html2canvas(card, { scale: 2, useCORS: true, logging: false, windowWidth: 1200, windowHeight: 800 });
+      } finally {
+        if (wasDark) html.classList.add('dark');
+        card.setAttribute('style', originalCardStyle);
+        card.classList.remove('is-capturing');
+        if (badgeImg) badgeImg.replaceWith(svgBadge);
+      }
+    }
+
+    async function withBusyButton(button, run) {
+      if (!button) return;
+      const original = button.innerHTML;
       button.disabled = true; button.innerHTML = '<span>Generating…</span>';
-      const restore = () => { if (wasDark) html.classList.add('dark'); card.setAttribute('style', originalStyle); button.disabled = false; button.innerHTML = label; };
-      html2canvas(card, { scale: 2, useCORS: true, logging: false, windowWidth: 1200, windowHeight: 800 }).then((canvas) => {
-        restore();
+      try {
+        await run();
+      } catch (err) {
+        if (window.HKC) HKC.toast('The certificate could not be rendered. Please try again.', 'error');
+      } finally {
+        button.disabled = false; button.innerHTML = original;
+      }
+    }
+
+    if (pngButton) {
+      pngButton.addEventListener('click', () => withBusyButton(pngButton, async () => {
+        const canvas = await captureCard();
         const link = document.createElement('a');
-        link.download = filename; link.href = canvas.toDataURL('image/png');
+        link.download = baseName + '.png'; link.href = canvas.toDataURL('image/png');
         document.body.appendChild(link); link.click(); link.remove();
-      }).catch(() => { restore(); if (window.HKC) HKC.toast('The certificate could not be rendered. Please try again.', 'error'); });
-    });
-    {% if download_mode %}setTimeout(() => button.click(), 800);{% endif %}
+      }));
+    }
+
+    if (pdfButton) {
+      pdfButton.addEventListener('click', () => withBusyButton(pdfButton, async () => {
+        const canvas = await captureCard();
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: canvas.width >= canvas.height ? 'landscape' : 'portrait', unit: 'px', format: [canvas.width, canvas.height] });
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save(baseName + '.pdf');
+      }));
+    }
+
+    {% if download_mode %}setTimeout(() => pngButton && pngButton.click(), 800);{% endif %}
   })();
 </script>
 {% endblock %}

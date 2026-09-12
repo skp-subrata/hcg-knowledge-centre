@@ -319,6 +319,15 @@ body[data-modal-open] #app { transform: scale(.985); }
 .cert-badge-glow { fill: rgb(var(--tier-1)); opacity: .22; }
 .cert-badge-ring { fill: none; stroke: rgb(var(--tier-2)); stroke-width: 4; }
 .cert-badge-fill { fill: rgb(var(--tier-2)); }
+/* Pinned "desktop" appearance for html2canvas capture (see certificate.html's download script):
+   html2canvas evaluates viewport units/media queries against its own internal virtual window,
+   decoupled from the real browser window -- so p-8/md:p-14, the title's vw-based clamp(), the
+   name's @media breakpoint and dl's sm:grid-cols-3 could each resolve differently between what's
+   on screen and what gets captured. Toggled only for the instant of capture. */
+.certificate.is-capturing { padding: 3.5rem !important; }
+.certificate.is-capturing .certificate-title { font-size: 2.25rem !important; }
+.certificate.is-capturing .certificate-name { font-size: 2.25rem !important; }
+.certificate.is-capturing dl { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
 
 /* ---------------------------------------------------------------- motion */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

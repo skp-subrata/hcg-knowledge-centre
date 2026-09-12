@@ -189,9 +189,35 @@ def test_api_and_web_certification_share_one_reward_reference(student, anon, wor
 def test_certificate_page_exposes_elements_the_download_script_needs(make_client, world):
 	maya = make_client("maya.student")
 	html = maya.get(f"/course/{world.certified_course_id}/certificate").get_data(as_text=True)
-	assert 'id="certificate-card"' in html and 'id="download-png-btn"' in html
-	assert "html2canvas" in html
-	assert "setTimeout(() => button.click(), 800)" not in html, "a plain page view must not auto-trigger the download"
+	assert 'id="certificate-card"' in html and 'id="download-png-btn"' in html and 'id="download-pdf-btn"' in html
+	assert "html2canvas" in html and "jspdf" in html.lower()
+	assert "setTimeout(() => pngButton" not in html, "a plain page view must not auto-trigger the download"
+
+
+def test_certificate_capture_pins_viewport_dependent_styles_and_tier_colors(make_client, world):
+	"""Regression coverage for a live report: the downloaded PNG/PDF showed text and the stat
+	grid slightly shifted from the on-screen page, and the gold/silver badge wasn't visible at
+	all. Root causes, confirmed by directly diffing html2canvas's own raw output before/after
+	(not just the on-screen DOM, which looked fine even before this fix): (1) html2canvas
+	evaluates media queries/vw units against its own internal virtual window rather than the
+	real one -- fixed by pinning every viewport-dependent rule to its widest state via
+	.is-capturing, only for the instant of capture; (2) html2canvas 1.4.1 serializes the inline,
+	CSS-class-styled <svg> badge into a standalone image with no access to app.css, so the whole
+	badge -- not just its colour -- renders as blank space; fixed by swapping in a plain <img>
+	(rendered to an offscreen <canvas> with the same resolved colours) just for the capture,
+	since html2canvas handles <img> tags reliably."""
+	maya = make_client("maya.student")
+	html = maya.get(f"/course/{world.certified_course_id}/certificate").get_data(as_text=True)
+	assert "captureCard" in html and "is-capturing" in html
+	assert "resolveTierColors" in html and "--tier-1" in html and "--tier-2" in html
+	assert "renderBadgeToDataURL" in html and "svgBadge" in html and "badgeImg" in html
+	assert "cert-badge-glow" in html and "cert-badge-ring" in html and "cert-badge-fill" in html
+
+	css = Path(app_module.__file__).resolve().parent.joinpath("static", "css", "app.css").read_text(encoding="utf-8")
+	assert ".certificate.is-capturing" in css
+	assert ".certificate.is-capturing .certificate-title" in css
+	assert ".certificate.is-capturing .certificate-name" in css
+	assert ".certificate.is-capturing dl" in css
 
 
 def test_download_certificate_route_triggers_download_mode(make_client, world):
@@ -200,7 +226,7 @@ def test_download_certificate_route_triggers_download_mode(make_client, world):
 	assert response.status_code == 200
 	body = response.get_data(as_text=True)
 	assert 'id="certificate-card"' in body and 'id="download-png-btn"' in body
-	assert "setTimeout(() => button.click(), 800)" in body
+	assert "setTimeout(() => pngButton && pngButton.click(), 800)" in body
 
 
 @pytest.mark.parametrize("tier", ["PLATINUM", "GOLD", "SILVER", "BRONZE"])
