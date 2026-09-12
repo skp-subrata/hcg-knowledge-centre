@@ -236,7 +236,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: rgb(var(--c-accent))
 .nav-link { display: inline-flex; align-items: center; gap: .5rem; height: 2.25rem; padding: 0 .75rem; border-radius: var(--r-sm); font-size: .9375rem; font-weight: 500; color: rgb(var(--c-fg-2)); text-decoration: none; transition: background-color var(--dur-fast), color var(--dur-fast); }
 .nav-link:hover { color: rgb(var(--c-fg)); background: rgb(var(--c-fg) / .05); }
 .nav-link[aria-current="page"] { color: rgb(var(--c-fg)); background: rgb(var(--c-fg) / .06); }
-.popover { position: absolute; z-index: 60; min-width: 220px; padding: .375rem; border-radius: var(--r-md); background: rgb(var(--c-surface) / .92); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: var(--shadow-pop); transform-origin: top right; opacity: 0; transform: scale(.96) translateY(-4px); transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); pointer-events: none; }
+/* True "frosted glass": a strong blur (not just translucency) is what actually keeps whatever
+   sits behind a popover (nav links, dashboard cards, page text) from reading through -- at a
+   shallower blur, high-contrast content close behind it still ghosts through even at fairly
+   high opacity, which is exactly what looked "distracting" before this. */
+.popover { position: absolute; z-index: 60; min-width: 220px; padding: .375rem; border-radius: var(--r-md); background: rgb(var(--c-surface) / .985); -webkit-backdrop-filter: blur(32px) saturate(180%); backdrop-filter: blur(32px) saturate(180%); box-shadow: var(--shadow-pop), inset 0 1px 0 var(--toolbar-edge); transform-origin: top right; opacity: 0; transform: scale(.96) translateY(-4px); transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); pointer-events: none; }
 .popover.is-open { opacity: 1; transform: none; pointer-events: auto; }
 .popover.is-closing { transition-duration: 140ms; transition-timing-function: var(--ease-in-out); }
 .popover-right { right: 0; top: calc(100% + .5rem); }

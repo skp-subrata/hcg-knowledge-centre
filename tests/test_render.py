@@ -187,3 +187,25 @@ def test_hairline_only_colors_whichever_side_a_border_utility_already_set(anon):
 	assert "border-color" in declaration
 	assert re.search(r"\bborder\s*:", declaration) is None, "must not use the `border` shorthand (forces all four sides)"
 	assert "border-width" not in declaration and "border-style" not in declaration
+
+
+def test_popovers_are_blurred_enough_to_actually_obscure_what_is_behind_them(anon):
+	"""Regression test: .popover (the Manage/Account dropdowns) used to be blur(20px) at 92%
+	opacity, which looked translucent in principle but in practice still let nearby high-contrast
+	content (dashboard quick-link cards, nav text) show through clearly enough to be distracting
+	-- confirmed directly via pixel sampling in a real browser, not just by reading the numbers.
+	Both a much larger blur radius and a near-opaque background turned out to matter: blur alone
+	had steeply diminishing returns once past ~40px, so opacity is the dominant lever here -- this
+	pins both so neither quietly regresses back toward "technically blurred, still readable"."""
+	css = anon.get("/static/css/app.css").get_data(as_text=True)
+	match = re.search(r"\.popover\s*\{([^}]*)\}", css)
+	assert match, ".popover rule not found in app.css"
+	declaration = match.group(1)
+
+	blur_match = re.search(r"backdrop-filter:\s*blur\((\d+)px\)", declaration)
+	assert blur_match, "no blur() found in .popover's backdrop-filter"
+	assert int(blur_match.group(1)) >= 32, "blur radius regressed back toward the too-faint original"
+
+	opacity_match = re.search(r"background:\s*rgb\(var\(--c-surface\)\s*/\s*([\d.]+)\)", declaration)
+	assert opacity_match, "no rgb(var(--c-surface) / <alpha>) background found on .popover"
+	assert float(opacity_match.group(1)) >= 0.97, "background opacity regressed back toward too-transparent"
