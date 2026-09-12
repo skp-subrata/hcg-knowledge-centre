@@ -220,6 +220,40 @@ def test_certificate_capture_pins_viewport_dependent_styles_and_tier_colors(make
 	assert ".certificate.is-capturing dl" in css
 
 
+@pytest.mark.parametrize("tier", ["PLATINUM", "GOLD", "SILVER", "BRONZE"])
+def test_certificate_badge_uses_gradient_defs_namespaced_per_tier(tier, make_client, world, db):
+	"""The badge's glow/ring/star each pull their colour from a <radialGradient>/<linearGradient>
+	defined inline (see certificate_badge() in _macros.html), not a flat fill -- the gradient ids
+	are namespaced by tier so two badges on one page (were this macro ever reused elsewhere)
+	could never collide and silently point at the wrong tier's colours."""
+	maya_id = world.users["maya.student"]
+	db("UPDATE course_certifications SET badge = ? WHERE user_id = ? AND course_id = ?", (tier, maya_id, world.certified_course_id))
+	maya = make_client("maya.student")
+	html = maya.get(f"/course/{world.certified_course_id}/certificate").get_data(as_text=True)
+	tier_lower = tier.lower()
+	for prefix in ("cert-badge-glow-", "cert-badge-ring-", "cert-badge-fill-"):
+		assert f'id="{prefix}{tier_lower}"' in html
+		assert f'url(#{prefix}{tier_lower})' in html
+
+
+def test_certificate_page_has_the_new_decorative_elements(make_client, world):
+	"""Regression coverage for the visual refresh: a gradient/glow background, an inset double
+	frame, a gradient title divider, a pill-styled tier label, and a drop-shadowed, gently
+	animated badge -- all proven html2canvas-safe (plain CSS gradients/shadows/pseudo-elements,
+	or the existing canvas-swap for the one inline <svg>), unlike a naive redesign that could
+	easily have reintroduced the exact blank-badge/box-instead-of-line bugs fixed earlier."""
+	maya = make_client("maya.student")
+	html = maya.get(f"/course/{world.certified_course_id}/certificate").get_data(as_text=True)
+	assert 'class="certificate-divider"' in html
+
+	css = Path(app_module.__file__).resolve().parent.joinpath("static", "css", "app.css").read_text(encoding="utf-8")
+	assert ".certificate::before" in css, "the inset double-frame pseudo-element"
+	assert ".certificate-divider" in css and "linear-gradient" in css
+	assert ".certificate-tier-label" in css and "border-radius: 999px" in css
+	assert "cert-badge-breathe" in css
+	assert "@media (prefers-reduced-motion: reduce)" in css and ".cert-badge-glow { animation: none; }" in css
+
+
 def test_download_certificate_route_triggers_download_mode(make_client, world):
 	maya = make_client("maya.student")
 	response = maya.get(f"/course/{world.certified_course_id}/certificate/download")

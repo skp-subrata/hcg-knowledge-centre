@@ -61,11 +61,32 @@
 
 {% macro certificate_badge(tier) -%}
 {#- Colored purely by the ancestor .certificate[data-tier]'s inherited --tier-1/--tier-2 custom
-   properties (see app.css) -- no per-tier markup here, so tier -> color has one source of truth. -#}
-<svg viewBox="0 0 100 100" class="w-28 h-28 mx-auto mt-10" role="img" aria-label="{{ tier|title }} badge">
-  <circle class="cert-badge-glow" cx="50" cy="50" r="46"/>
-  <circle class="cert-badge-ring" cx="50" cy="50" r="38"/>
-  <path class="cert-badge-fill" d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z"/>
+   properties (see app.css) -- no per-tier markup here, so tier -> color has one source of truth.
+   The glow/ring/star gradients live in this one <defs> block (ids namespaced by tier so multiple
+   badges on one page never collide) rather than as flat fills, for a richer "medallion" look;
+   the .cert-badge-* classes intentionally set no fill/stroke colour of their own so these
+   gradients aren't overridden (see app.css). Only rendered on screen -- certificate.html's
+   download script swaps this <svg> for a separately-drawn <canvas> image just for the capture,
+   since html2canvas can't rasterize an inline, CSS/gradient-styled <svg> at all. -#}
+<svg viewBox="0 0 100 100" class="w-28 h-28 mx-auto mt-10 cert-badge" role="img" aria-label="{{ tier|title }} badge">
+  <defs>
+    <radialGradient id="cert-badge-glow-{{ tier }}" cx="50%" cy="46%" r="55%">
+      <stop offset="0%" stop-color="rgb(var(--tier-1))" stop-opacity="1"/>
+      <stop offset="100%" stop-color="rgb(var(--tier-1))" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cert-badge-ring-{{ tier }}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgb(var(--tier-2))"/>
+      <stop offset="100%" stop-color="rgb(var(--tier-1))"/>
+    </linearGradient>
+    <linearGradient id="cert-badge-fill-{{ tier }}" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgb(var(--tier-2))"/>
+      <stop offset="100%" stop-color="rgb(var(--tier-1))"/>
+    </linearGradient>
+  </defs>
+  <circle class="cert-badge-glow" cx="50" cy="50" r="46" fill="url(#cert-badge-glow-{{ tier }})"/>
+  <circle class="cert-badge-ring-outer" cx="50" cy="50" r="43"/>
+  <circle class="cert-badge-ring" cx="50" cy="50" r="38" stroke="url(#cert-badge-ring-{{ tier }})"/>
+  <path class="cert-badge-fill" d="M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z" fill="url(#cert-badge-fill-{{ tier }})"/>
 </svg>
 {%- endmacro %}
 

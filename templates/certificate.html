@@ -10,6 +10,7 @@
   <div id="certificate-card" class="certificate p-8 md:p-14 text-center" data-tier="{{ tier }}">
     <p class="eyebrow">HCG Knowledge Centre</p>
     <h1 class="certificate-title mt-3">Certificate of Completion</h1>
+    <div class="certificate-divider" aria-hidden="true"></div>
     <p class="text-fg-2 mt-8">This certificate is proudly presented to</p>
     <h2 class="certificate-name mt-2">{{ user }}</h2>
     <p class="text-fg-2 mt-6">for successfully completing</p>
@@ -72,17 +73,39 @@
     }
 
     function renderBadgeToDataURL(tier1, tier2, sizePx) {
+      // Mirrors the on-screen <svg> in _macros.html's certificate_badge() macro (soft radial
+      // glow, a diagonal-gradient ring, a vertical-gradient star, a thin outer accent ring and a
+      // soft drop shadow) using Canvas 2D gradients/shadows instead of SVG <defs> -- since this
+      // is the image html2canvas actually captures, not the live SVG (see captureCard() below).
       const dpr = 3; // oversample so the swapped-in <img> stays crisp at html2canvas's own scale:2
       const canvas = document.createElement('canvas');
       canvas.width = sizePx * dpr; canvas.height = sizePx * dpr;
       const ctx = canvas.getContext('2d');
       ctx.scale((sizePx * dpr) / 100, (sizePx * dpr) / 100); // map the badge's own 0-100 viewBox onto the canvas
+
+      const glow = ctx.createRadialGradient(50, 47, 0, 50, 47, 46); // .cert-badge-glow
+      glow.addColorStop(0, 'rgb(' + tier1 + ' / 0.42)');
+      glow.addColorStop(1, 'rgb(' + tier1 + ' / 0)');
       ctx.beginPath(); ctx.arc(50, 50, 46, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgb(' + tier1 + ' / 0.22)'; ctx.fill(); // .cert-badge-glow
+      ctx.fillStyle = glow; ctx.fill();
+
+      ctx.beginPath(); ctx.arc(50, 50, 43, 0, Math.PI * 2); // .cert-badge-ring-outer
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgb(' + tier1 + ' / 0.35)'; ctx.stroke();
+
+      ctx.save();
+      ctx.shadowColor = 'rgb(' + tier1 + ' / 0.35)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4; // .cert-badge's drop-shadow filter
+
+      const ring = ctx.createLinearGradient(12, 12, 88, 88); // .cert-badge-ring
+      ring.addColorStop(0, 'rgb(' + tier2 + ')'); ring.addColorStop(1, 'rgb(' + tier1 + ')');
       ctx.beginPath(); ctx.arc(50, 50, 38, 0, Math.PI * 2);
-      ctx.lineWidth = 4; ctx.strokeStyle = 'rgb(' + tier2 + ')'; ctx.stroke(); // .cert-badge-ring
-      ctx.fillStyle = 'rgb(' + tier2 + ')';
-      ctx.fill(new Path2D('M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z')); // .cert-badge-fill
+      ctx.lineWidth = 4; ctx.strokeStyle = ring; ctx.stroke();
+
+      const star = ctx.createLinearGradient(50, 23, 50, 77); // .cert-badge-fill
+      star.addColorStop(0, 'rgb(' + tier2 + ')'); star.addColorStop(1, 'rgb(' + tier1 + ')');
+      ctx.fillStyle = star;
+      ctx.fill(new Path2D('M50 23l10 18 20 3-15 14 4 20-19-10-19 10 4-20-15-14 20-3 10-18z'));
+      ctx.restore();
+
       return canvas.toDataURL('image/png');
     }
 

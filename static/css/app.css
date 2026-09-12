@@ -307,23 +307,47 @@ body[data-modal-open] #app { transform: scale(.985); }
 .breadcrumb li + li::before { content: "/"; margin-right: .375rem; color: rgb(var(--c-fg-3)); }
 .certificate {
   position: relative;
+  overflow: hidden;
   --tier-1: var(--c-accent); --tier-2: var(--c-accent);
-  background: rgb(var(--c-surface)) radial-gradient(900px 260px at 50% -160px, rgb(var(--tier-1) / .16), transparent 72%) no-repeat;
-  border: 1px solid var(--hairline);
+  background:
+    radial-gradient(1000px 340px at 18% -12%, rgb(var(--tier-2) / .24), transparent 60%),
+    radial-gradient(760px 280px at 88% 108%, rgb(var(--tier-1) / .16), transparent 65%),
+    rgb(var(--c-surface));
+  border: 1px solid rgb(var(--tier-2) / .4);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-pop), 0 0 0 1.5px rgb(var(--tier-2) / .55);
+  box-shadow: var(--shadow-pop), 0 0 0 1.5px rgb(var(--tier-2) / .55), 0 0 70px rgb(var(--tier-1) / .16);
+}
+/* A slim inset frame, echoing a classic certificate border -- purely decorative, kept as a
+   pseudo-element (not a real box-model border) so it never competes with the card's own layout. */
+.certificate::before {
+  content: "";
+  position: absolute;
+  inset: 14px;
+  border: 1px solid rgb(var(--tier-2) / .3);
+  border-radius: calc(var(--r-lg) - 8px);
+  pointer-events: none;
 }
 .certificate[data-tier="platinum"] { --tier-1: var(--tier-platinum-1); --tier-2: var(--tier-platinum-2); }
 .certificate[data-tier="gold"]     { --tier-1: var(--tier-gold-1);     --tier-2: var(--tier-gold-2); }
 .certificate[data-tier="silver"]   { --tier-1: var(--tier-silver-1);   --tier-2: var(--tier-silver-2); }
 .certificate[data-tier="bronze"]   { --tier-1: var(--tier-bronze-1);   --tier-2: var(--tier-bronze-2); }
-.certificate-title { font-size: clamp(1.75rem, 3vw, 2.25rem); }
+.certificate-title { position: relative; font-size: clamp(1.75rem, 3vw, 2.25rem); }
+.certificate-divider { width: 64px; height: 3px; margin: .85rem auto 0; border-radius: 999px; background: linear-gradient(90deg, transparent, rgb(var(--tier-1)), rgb(var(--tier-2)), transparent); }
 .certificate-name { display: inline-block; margin-top: .5rem; padding-bottom: .3rem; font-size: 1.75rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; border-bottom: 3px solid rgb(var(--tier-2) / .6); }
 @media (min-width: 768px) { .certificate-name { font-size: 2.25rem; } }
-.certificate-tier-label { color: rgb(var(--tier-1)); }
-.cert-badge-glow { fill: rgb(var(--tier-1)); opacity: .22; }
-.cert-badge-ring { fill: none; stroke: rgb(var(--tier-2)); stroke-width: 4; }
-.cert-badge-fill { fill: rgb(var(--tier-2)); }
+.certificate-tier-label { display: inline-flex; align-items: center; gap: .375rem; padding: .3rem 1rem; border-radius: 999px; background: rgb(var(--tier-1) / .12); border: 1px solid rgb(var(--tier-2) / .45); color: rgb(var(--tier-1)); letter-spacing: .02em; }
+.cert-badge { filter: drop-shadow(0 6px 16px rgb(var(--tier-1) / .35)); }
+/* .cert-badge-glow/-ring/-fill deliberately carry no fill/stroke color here -- each shape sets
+   its own via a `fill`/`stroke` attribute pointing at a <radialGradient>/<linearGradient> defined
+   inline in the certificate_badge() macro (see _macros.html), so a flat class-level colour here
+   would just override the gradient (a plain CSS rule always wins over an SVG presentation
+   attribute). Only the non-colour styling (opacity, animation, line width) lives here. */
+.cert-badge-glow { opacity: .3; transform-origin: 50px 50px; animation: cert-badge-breathe 3.6s ease-in-out infinite; }
+.cert-badge-ring-outer { fill: none; stroke: rgb(var(--tier-1) / .35); stroke-width: 1.5; }
+.cert-badge-ring { fill: none; stroke-width: 4; }
+.cert-badge-fill { filter: drop-shadow(0 1px 1px rgb(0 0 0 / .15)); }
+@keyframes cert-badge-breathe { 0%, 100% { opacity: .24; transform: scale(1); } 50% { opacity: .4; transform: scale(1.05); } }
+@media (prefers-reduced-motion: reduce) { .cert-badge-glow { animation: none; } }
 /* Pinned "desktop" appearance for html2canvas capture (see certificate.html's download script):
    html2canvas evaluates viewport units/media queries against its own internal virtual window,
    decoupled from the real browser window -- so p-8/md:p-14, the title's vw-based clamp(), the
