@@ -83,6 +83,27 @@ def test_api_docs_only_lists_endpoints_that_exist():
 		assert any(m == method and re.match(pattern, rule) for m, rule in rules), f"documented but missing: {method} {path}"
 
 
+def test_every_real_api_v1_endpoint_is_documented():
+	"""The reverse of test_api_docs_only_lists_endpoints_that_exist(): every real /api/v1/*
+	route (the X-API-Key/X-API-Secret developer surface) must have a card in api_docs.html, so a
+	new endpoint can't silently ship undocumented. Deliberately scoped to /api/v1/* only -- the
+	session/staff-only AJAX helpers under /api/admin/* and /api/support/* use a different auth
+	model (browser session, not an API key) and were never meant to be part of this doc."""
+	html = (ROOT / "templates" / "api_docs.html").read_text(encoding="utf-8")
+	documented = {
+		(method, "^" + re.sub(r"\{(\w+)\}", r"<int:\1>", path) + "$")
+		for method, path in re.findall(r'(?:render_)?api_card\("(GET|POST|PUT|DELETE)",\s*"([^"]+)"', html)
+	}
+	undocumented = []
+	for rule in app_module.app.url_map.iter_rules():
+		if not rule.rule.startswith("/api/v1/") or rule.rule == "/api/v1/docs":
+			continue
+		for method in rule.methods & {"GET", "POST", "PUT", "DELETE"}:
+			if not any(method == m and re.match(pattern, rule.rule) for m, pattern in documented):
+				undocumented.append(f"{method} {rule.rule}")
+	assert not undocumented, f"real /api/v1 endpoints missing a card in api_docs.html: {undocumented}"
+
+
 def test_context_processor_provides_only_the_active_release(student, world):
 	captured = []
 
